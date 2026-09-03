@@ -1,0 +1,56 @@
+# General
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.sqlite
+.env
+.env.*
+!.env.example
+
+# Node / JS / TypeScript (React, APIs, Packages)
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.turbo/
+
+# Python (AI Services)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+env/
+.venv/
+.env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Flutter / Dart (Citizen App)
+# Note: 'flutter create' will also generate a detailed .gitignore inside apps/citizen
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+apps/citizen/build/
+apps/citizen/android/.gradle
+apps/citizen/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+apps/citizen/ios/Flutter/Generated.xcconfig
+apps/citizen/ios/Flutter/app.flx
+apps/citizen/ios/Flutter/app.zip
+apps/citizen/ios/Flutter/flutter_assets/
+apps/citizen/ios/Flutter/flutter_export_environment.sh
+apps/citizen/ios/ServiceDefinitions.json
+apps/citizen/ios/Runner/GeneratedPluginRegistrant.*
+*.jks
+*.keystore
+
+# OS generated files
+Thumbs.db
