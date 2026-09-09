@@ -13,10 +13,16 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 
 ### Phase 1: Foundation (In Progress)
 - [x] Repository Architecture
-- [ ] Database (PostgreSQL/PostGIS setup, Users table)
-- [ ] Authentication (API setup)
+- [x] Database (PostgreSQL setup, Users table)
+- [x] Authentication (API setup)
+  - Citizen: `/api/auth/register`, `/login`, `/refresh`, `/logout`, `/me`
+  - Refresh token rotation strategy (SHA-256 hashed, 30-day TTL, per-device revocation)
+  - JWT `authenticate` preHandler decorator for protected routes
 - [ ] Object Storage integration
-- [ ] Government Authentication
+- [x] Government Authentication
+  - Invite-code gated registration (`gov_invite_codes` table)
+  - Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
+  - `/logout-all` for full session revocation
 
 ### Phase 2: Citizen Reporting (Pending)
 - [ ] Create report API endpoint

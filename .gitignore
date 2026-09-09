@@ -5,8 +5,6 @@
 *.log
 *.sqlite
 .env
-.env.*
-!.env.example
 
 # Node / JS / TypeScript (React, APIs, Packages)
 node_modules/

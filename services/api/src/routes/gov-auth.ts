@@ -2,43 +2,84 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { query } from '../db';
-import { registerSchema, loginSchema, refreshSchema } from '../schemas/auth';
+import { govRegisterSchema, govLoginSchema } from '../schemas/gov';
+import { refreshSchema } from '../schemas/auth';
 import {
   createRefreshToken,
   verifyRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
+  revokeAllRefreshTokens,
 } from '../lib/tokens';
 
-export default async function authRoutes(fastify: FastifyInstance) {
+/**
+ * Government auth routes — mounted at /api/gov/auth
+ *
+ * Key difference from citizen auth:
+ *  - Registration requires a valid, unused, non-expired invite code.
+ *  - Only OPERATOR and ADMIN roles are accepted here.
+ *  - Login enforces role guard: CITIZEN accounts cannot use this endpoint.
+ *  - /logout-all revokes every session for the user (admin utility).
+ */
+export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
-  // POST /api/auth/register
+  // POST /api/gov/auth/register
+  // Invite-only: validates invite code before creating the account.
   // ---------------------------------------------------------------------------
   fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { email, password, phone, nin } = registerSchema.parse(request.body);
+      const { email, password, nin, inviteCode, role } = govRegisterSchema.parse(request.body);
 
+      // Validate invite code
+      const codeHash = hashCode(inviteCode);
+      const inviteResult = await query(
+        `SELECT id, role FROM gov_invite_codes
+         WHERE code_hash = $1
+           AND used_by   IS NULL
+           AND expires_at > NOW()`,
+        [codeHash],
+      );
+
+      if (inviteResult.rows.length === 0) {
+        return reply.status(400).send({ error: 'Invalid or expired invite code' });
+      }
+
+      const invite = inviteResult.rows[0];
+
+      // The role in the invite takes precedence — prevents escalation via payload
+      const assignedRole: string = invite.role;
+
+      // Check email uniqueness
       const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
       if (existing.rows.length > 0) {
         return reply.status(400).send({ error: 'User with this email already exists' });
       }
 
+      // Check NIN uniqueness
       const existingNin = await query('SELECT id FROM users WHERE nin = $1', [nin]);
       if (existingNin.rows.length > 0) {
         return reply.status(400).send({ error: 'An account with this NIN already exists' });
       }
 
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, 12); // higher cost for gov accounts
       const publicId = crypto.randomUUID();
 
-      const result = await query(
-        `INSERT INTO users (public_id, email, phone, password_hash, nin, role)
-         VALUES ($1, $2, $3, $4, $5, 'CITIZEN')
+      const userResult = await query(
+        `INSERT INTO users (public_id, email, password_hash, nin, role)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, public_id, email, role`,
-        [publicId, email, phone ?? null, passwordHash, nin],
+        [publicId, email, passwordHash, nin, assignedRole],
       );
 
-      const user = result.rows[0];
+      const user = userResult.rows[0];
+
+      // Mark invite as consumed
+      await query(
+        `UPDATE gov_invite_codes
+         SET used_by = $1, used_at = NOW()
+         WHERE id = $2`,
+        [user.id, invite.id],
+      );
 
       const accessToken = fastify.jwt.sign(
         { id: user.id, public_id: user.public_id, email: user.email, role: user.role },
@@ -55,11 +96,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /api/auth/login
+  // POST /api/gov/auth/login
+  // Same flow as citizen login but enforces that the account is OPERATOR/ADMIN.
   // ---------------------------------------------------------------------------
   fastify.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { email, password } = loginSchema.parse(request.body);
+      const { email, password } = govLoginSchema.parse(request.body);
 
       const result = await query('SELECT * FROM users WHERE email = $1', [email]);
       if (result.rows.length === 0) {
@@ -67,6 +109,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       const user = result.rows[0];
+
+      // Role guard — citizens must not be able to log in via the gov endpoint
+      if (user.role === 'CITIZEN') {
+        return reply.status(403).send({ error: 'Access denied' });
+      }
 
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) {
@@ -101,17 +148,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /api/auth/refresh
-  // Accepts { userId, refreshToken }, verifies, rotates, and issues new tokens.
+  // POST /api/gov/auth/refresh  (same mechanics as citizen, separate endpoint)
   // ---------------------------------------------------------------------------
   fastify.post('/refresh', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId, refreshToken: rawToken } = refreshSchema.parse(request.body);
 
-      // Will throw if token is invalid, revoked, or expired
       await verifyRefreshToken(rawToken, userId);
 
-      // Fetch current user to include up-to-date role/status in new JWT
       const result = await query(
         'SELECT id, public_id, email, role, status FROM users WHERE id = $1',
         [userId],
@@ -121,13 +165,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       const user = result.rows[0];
+
+      if (user.role === 'CITIZEN') {
+        return reply.status(403).send({ error: 'Access denied' });
+      }
+
       if (user.status !== 'ACTIVE') {
         return reply.status(403).send({ error: `Account is ${user.status.toLowerCase()}` });
       }
 
-      // Rotate: revoke old token, issue new one
       const newRefreshToken = await rotateRefreshToken(rawToken, userId);
-
       const accessToken = fastify.jwt.sign(
         { id: user.id, public_id: user.public_id, email: user.email, role: user.role },
         { expiresIn: '15m' },
@@ -145,8 +192,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /api/auth/logout
-  // Revokes the supplied refresh token (single-device logout).
+  // POST /api/gov/auth/logout  — single-device logout
   // ---------------------------------------------------------------------------
   fastify.post(
     '/logout',
@@ -168,8 +214,25 @@ export default async function authRoutes(fastify: FastifyInstance) {
   );
 
   // ---------------------------------------------------------------------------
-  // GET /api/auth/me  — protected
-  // Returns the authenticated user's profile.
+  // POST /api/gov/auth/logout-all  — revoke all sessions (admin utility)
+  // ---------------------------------------------------------------------------
+  fastify.post(
+    '/logout-all',
+    { preHandler: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const payload = request.user as { id: string };
+        await revokeAllRefreshTokens(payload.id);
+        return reply.status(200).send({ message: 'All sessions revoked' });
+      } catch (err: any) {
+        fastify.log.error(err);
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // GET /api/gov/auth/me  — protected
   // ---------------------------------------------------------------------------
   fastify.get(
     '/me',
@@ -179,7 +242,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         const payload = request.user as { id: string };
 
         const result = await query(
-          `SELECT id, public_id, email, phone, nin, role, status, created_at
+          `SELECT id, public_id, email, nin, role, status, created_at
            FROM users
            WHERE id = $1`,
           [payload.id],
@@ -189,11 +252,24 @@ export default async function authRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: 'User not found' });
         }
 
-        return reply.status(200).send({ user: result.rows[0] });
+        const user = result.rows[0];
+
+        if (user.role === 'CITIZEN') {
+          return reply.status(403).send({ error: 'Access denied' });
+        }
+
+        return reply.status(200).send({ user });
       } catch (err: any) {
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function hashCode(raw: string): string {
+  return crypto.createHash('sha256').update(raw).digest('hex');
 }

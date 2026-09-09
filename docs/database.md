@@ -11,7 +11,7 @@
 ## Core Domains & Entities
 
 ### 1. Users
-- `id` (UUID), `public_id`, `email`, `phone`, `password_hash`, `role` (CITIZEN, OPERATOR, ADMIN), `status`
+- `id` (UUID), `public_id`, `email`, `phone`, `nin`, `password_hash`, `role` (CITIZEN, OPERATOR, ADMIN), `status`
 
 ### 2. Reports (Citizen Submissions)
 - **Note:** A report is an observation, not the issue itself.
