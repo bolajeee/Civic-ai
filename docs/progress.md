@@ -18,7 +18,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - Citizen: `/api/auth/register`, `/login`, `/refresh`, `/logout`, `/me`
   - Refresh token rotation strategy (SHA-256 hashed, 30-day TTL, per-device revocation)
   - JWT `authenticate` preHandler decorator for protected routes
-- [ ] Object Storage integration
+- [x] Object Storage integration
 - [x] Government Authentication
   - Invite-code gated registration (`gov_invite_codes` table)
   - Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import dotenv from 'dotenv';
+import fastifyMultipart from '@fastify/multipart';
 
 import authenticatePlugin from './plugins/authenticate';
 import authRoutes from './routes/auth';
@@ -23,6 +24,13 @@ fastify.register(fastifyJwt, {
   secret: process.env.JWT_SECRET || 'supersecretcivicaikey2026',
 });
 
+// File upload support
+fastify.register(fastifyMultipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+});
+
 // Registers fastify.authenticate decorator — must come after JWT plugin
 fastify.register(authenticatePlugin);
 
@@ -41,6 +49,34 @@ fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 // ---------------------------------------------------------------------------
 
 fastify.get('/api/health', async () => ({ status: 'ok' }));
+
+// ---------------------------------------------------------------------------
+// Test Upload Route
+// ---------------------------------------------------------------------------
+
+import { uploadImage, getImageUrl } from './lib/storage';
+
+fastify.post('/api/test-upload', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  const data = await request.file();
+  
+  if (!data) {
+    return reply.status(400).send({ error: 'No file provided' });
+  }
+
+  try {
+    const buffer = await data.toBuffer();
+    // Use a unique name for the test upload
+    const filename = `test-${Date.now()}-${data.filename}`;
+    
+    await uploadImage(filename, buffer, data.mimetype);
+    const url = await getImageUrl(filename);
+    
+    return { success: true, filename, url };
+  } catch (error: any) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: error.message });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Start
