@@ -24,8 +24,18 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
   - `/logout-all` for full session revocation
 
-### Phase 2: Citizen Reporting (Pending)
+### Phase 2: Citizen Reporting (In Progress)
 - [ ] Create report API endpoint
+- [x] Flutter citizen app scaffolded (`apps/citizen`)
+  - Splash screen (animated, dark green, shield icon)
+  - Login screen (email + password, validation, social login stubs)
+  - Sign-up screen (Full Name, NIN, Email, Phone, Password, T&C checkbox)
+  - `AuthProvider` (ChangeNotifier) — session restore, login, register, logout
+  - `ApiClient` (Dio) — Bearer token injection + silent refresh interceptor
+  - `TokenStorageService` — flutter_secure_storage (keychain/keystore)
+  - `GoRouter` — redirect-based auth guard, refreshListenable wired to provider
+  - Shared widgets: `PrimaryButton`, `AppTextField`, `ErrorBanner`
+  - Placeholder `HomeScreen` (to be replaced in Phase 2)
 - [ ] Camera/Gallery integration (Flutter)
 - [ ] GPS capture
 - [ ] Description submission

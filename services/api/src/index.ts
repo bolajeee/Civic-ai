@@ -1,14 +1,12 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
-import dotenv from 'dotenv';
 import fastifyMultipart from '@fastify/multipart';
 
 import authenticatePlugin from './plugins/authenticate';
 import authRoutes from './routes/auth';
 import govAuthRoutes from './routes/gov-auth';
-
-dotenv.config();
+import { uploadImage, getImageUrl } from './lib/storage';
 
 const fastify = Fastify({ logger: true });
 
@@ -24,58 +22,54 @@ fastify.register(fastifyJwt, {
   secret: process.env.JWT_SECRET || 'supersecretcivicaikey2026',
 });
 
-// File upload support
 fastify.register(fastifyMultipart, {
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-  },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
 
-// Registers fastify.authenticate decorator — must come after JWT plugin
+// Must be registered before any route that uses fastify.authenticate
 fastify.register(authenticatePlugin);
 
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
-// Citizen auth  →  /api/auth/*
 fastify.register(authRoutes, { prefix: '/api/auth' });
-
-// Government auth  →  /api/gov/auth/*
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 
-// ---------------------------------------------------------------------------
-// Health check
-// ---------------------------------------------------------------------------
-
+// Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));
 
 // ---------------------------------------------------------------------------
-// Test Upload Route
+// Protected routes
+// Wrapped in fastify.register() so fastify.authenticate is fully loaded
+// before these route definitions are evaluated.
 // ---------------------------------------------------------------------------
 
-import { uploadImage, getImageUrl } from './lib/storage';
+fastify.register(async (app: FastifyInstance) => {
+  app.post(
+    '/api/test-upload',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const data = await request.file();
 
-fastify.post('/api/test-upload', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-  const data = await request.file();
-  
-  if (!data) {
-    return reply.status(400).send({ error: 'No file provided' });
-  }
+      if (!data) {
+        return reply.status(400).send({ error: 'No file provided' });
+      }
 
-  try {
-    const buffer = await data.toBuffer();
-    // Use a unique name for the test upload
-    const filename = `test-${Date.now()}-${data.filename}`;
-    
-    await uploadImage(filename, buffer, data.mimetype);
-    const url = await getImageUrl(filename);
-    
-    return { success: true, filename, url };
-  } catch (error: any) {
-    fastify.log.error(error);
-    return reply.status(500).send({ error: error.message });
-  }
+      try {
+        const buffer = await data.toBuffer();
+        const filename = `test-${Date.now()}-${data.filename}`;
+
+        await uploadImage(filename, buffer, data.mimetype);
+        const url = await getImageUrl(filename);
+
+        return { success: true, filename, url };
+      } catch (error: any) {
+        app.log.error(error);
+        return reply.status(500).send({ error: error.message });
+      }
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
