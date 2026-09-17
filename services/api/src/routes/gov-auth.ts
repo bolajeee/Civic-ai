@@ -196,7 +196,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.post(
     '/logout',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { refreshToken: rawToken } = refreshSchema
@@ -218,7 +218,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.post(
     '/logout-all',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const payload = request.user as { id: string };
@@ -236,7 +236,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.get(
     '/me',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const payload = request.user as { id: string };
@@ -254,10 +254,6 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
         const user = result.rows[0];
 
-        if (user.role === 'CITIZEN') {
-          return reply.status(403).send({ error: 'Access denied' });
-        }
-
         return reply.status(200).send({ user });
       } catch (err: any) {
         fastify.log.error(err);
@@ -270,6 +266,24 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/**
+ * Ensures protected government-auth routes remain inaccessible to citizen
+ * accounts. The role is read from the database rather than trusting the JWT
+ * claim, so a role change takes effect immediately for an existing token.
+ */
+async function requireGovernmentAccount(request: FastifyRequest, reply: FastifyReply) {
+  const payload = request.user as { id: string };
+  const result = await query('SELECT role, status FROM users WHERE id = $1', [payload.id]);
+
+  if (result.rows.length === 0 || result.rows[0].role === 'CITIZEN') {
+    return reply.status(403).send({ error: 'Access denied' });
+  }
+
+  if (result.rows[0].status !== 'ACTIVE') {
+    return reply.status(403).send({ error: `Account is ${result.rows[0].status.toLowerCase()}` });
+  }
+}
+
 function hashCode(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
