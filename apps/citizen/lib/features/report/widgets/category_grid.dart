@@ -4,13 +4,16 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../shared/data/report_categories.dart';
 import '../providers/report_draft_provider.dart';
 
 /// The category picker.
 ///
 /// The list comes from the API rather than a hardcoded table, because the
 /// submission carries the server's category UUID. What is hardcoded is the
-/// icon — a presentation detail the API has no business knowing.
+/// icon — a presentation detail the API has no business knowing — and that
+/// table lives in `shared/data/report_categories.dart` so the report cards and
+/// this grid cannot disagree about which icon a pothole gets.
 class CategoryGrid extends StatelessWidget {
   const CategoryGrid({super.key});
 
@@ -73,32 +76,13 @@ class CategoryGrid extends StatelessWidget {
         for (final category in categories)
           _CategoryTile(
             label: category.label,
-            icon: _iconFor(category.slug),
+            icon: reportCategoryById(category.slug).icon,
             isSelected: draft.category == category,
             onTap: () =>
                 context.read<ReportDraftProvider>().selectCategory(category),
           ),
       ],
     );
-  }
-
-  /// Icons are keyed by the stable slug, not the label, so renaming a label in
-  /// the database never silently swaps an icon.
-  static IconData _iconFor(String slug) {
-    switch (slug.toUpperCase()) {
-      case 'POTHOLE':
-        return Icons.add_road_outlined;
-      case 'FLOODING':
-        return Icons.water_drop_outlined;
-      case 'STREETLIGHT':
-        return Icons.lightbulb_outline;
-      case 'WASTE':
-        return Icons.delete_outline;
-      case 'WATER_LEAK':
-        return Icons.water_damage_outlined;
-      default:
-        return Icons.more_horiz_rounded;
-    }
   }
 }
 

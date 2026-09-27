@@ -37,9 +37,9 @@ class CivicReportApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
-        // Owns the in-progress report. Registered app-wide so a draft survives
-        // navigation within the report flow; ReportIssueScreen resets it on
-        // entry, so leaving the form discards the staged photos.
+        // Owns the in-progress report. Registered app-wide so the form and its
+        // fields share one draft; ReportScreen resets it on entry, so leaving
+        // the form discards the staged photos.
         ChangeNotifierProvider<ReportDraftProvider>(
           create: (_) => ReportDraftProvider(),
         ),

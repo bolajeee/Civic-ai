@@ -5,8 +5,9 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/app_router.dart';
-import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/data/mock_reports.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../report/models/submitted_report.dart';
+import '../../report/providers/report_history_provider.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/report_card.dart';
 
@@ -29,6 +30,17 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+
+    // Deferred to after the first frame: `load()` notifies its listeners, and
+    // the provider sits above this route.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final history = context.read<ReportHistoryProvider>();
+      // Home shows the newest three, so it needs the list whether or not the
+      // citizen has opened History yet. Skipped when it is already in hand —
+      // returning from the Report tab must not re-fetch what we just refreshed.
+      if (!history.hasLoaded) history.load();
+    });
   }
 
   @override
@@ -40,15 +52,31 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
+    final history = context.watch<ReportHistoryProvider>();
     final String initials = _initials(user?.email ?? '');
     final String firstName = _firstName(user?.email ?? '');
+
+    // Mapped through the same adapter History and Details use, so a report
+    // cannot read one way here and another way there.
+    final allReports = history.reports
+        .map(ReportCardData.fromSubmittedReport)
+        .toList();
+
     final query = _query.trim().toLowerCase();
-    final reports = kMockReports.where((report) {
+    final reports = allReports.where((report) {
       return query.isEmpty ||
           report.title.toLowerCase().contains(query) ||
           report.category.toLowerCase().contains(query) ||
           report.location.toLowerCase().contains(query);
     }).take(3).toList();
+
+    // Counted from the loaded page, which `fetchHistory` caps at twenty. These
+    // become server-side aggregates the day the history pages; until then,
+    // counting what the app actually holds beats showing invented numbers.
+    final resolved =
+        allReports.where((r) => r.status == ReportStatus.resolved).length;
+    final pending =
+        allReports.where((r) => r.status == ReportStatus.pending).length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -76,7 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         onChanged: (value) => setState(() => _query = value),
                       ),
                       const SizedBox(height: 20),
-                      const _StatsRow(),
+                      _StatsRow(
+                        total: allReports.length,
+                        resolved: resolved,
+                        pending: pending,
+                      ),
                       const SizedBox(height: 24),
                       _SectionHeader(
                         title: 'Recent Reports',
@@ -84,22 +116,42 @@ class _HomeScreenState extends State<HomeScreen> {
                         onAction: () => context.go(AppRoutes.history),
                       ),
                       const SizedBox(height: 12),
-                      // Show only the 3 most recent reports on Home
-                      ...reports.map(
-                        (report) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: ReportCard(
-                            data: report,
-                            onTap: () => context.push(
-                              AppRoutes.reportDetails.replaceFirst(':id', report.id),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (reports.isEmpty)
+                      // The three most recent, narrowed by the search box.
+                      if (!history.hasLoaded)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(child: Text('No reports match your search.')),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        )
+                      else if (reports.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text(
+                              _query.isEmpty
+                                  ? 'No reports yet. Tap “Report Issue” to '
+                                      'file your first one.'
+                                  : 'No reports match your search.',
+                            ),
+                          ),
+                        )
+                      else
+                        ...reports.map(
+                          (report) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: ReportCard(
+                              data: report,
+                              onTap: () => context.push(
+                                AppRoutes.reportDetails.replaceFirst(
+                                  ':id',
+                                  report.id,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                     ]),
                   ),
@@ -280,7 +332,15 @@ class _SearchBar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+  const _StatsRow({
+    required this.total,
+    required this.resolved,
+    required this.pending,
+  });
+
+  final int total;
+  final int resolved;
+  final int pending;
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +351,7 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.description_outlined,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '12',
+            value: '$total',
             label: 'Submitted',
             // All reports
             onTap: () => context.go(AppRoutes.history),
@@ -303,11 +363,11 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.check_circle_outline_rounded,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '8',
+            value: '$resolved',
             label: 'Resolved',
             // Pre-filtered to Resolved
             onTap: () => context.go(
-              '${AppRoutes.history}?filter=resolved',
+              '${AppRoutes.history}?filter=${ReportStatus.resolved.name}',
             ),
           ),
         ),
@@ -317,11 +377,11 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.access_time_rounded,
             iconColor: AppColors.statusPendingIcon,
             iconBgColor: AppColors.statusPendingBg,
-            value: '4',
+            value: '$pending',
             label: 'Pending',
             // Pre-filtered to Pending
             onTap: () => context.go(
-              '${AppRoutes.history}?filter=pending',
+              '${AppRoutes.history}?filter=${ReportStatus.pending.name}',
             ),
           ),
         ),

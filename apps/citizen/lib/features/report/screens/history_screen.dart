@@ -1,70 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../../shared/data/mock_reports.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
+import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/report_card.dart';
+import '../models/submitted_report.dart';
+import '../providers/report_history_provider.dart';
 
 // ---------------------------------------------------------------------------
-// _FilterOption — the four chip states
+// Filtering
+//
+// The filter is a nullable ReportStatus: null is "All". There is deliberately
+// no separate filter enum. The one that used to live here had five values —
+// all / pending / inReview / assigned / resolved — two of which ("In Review",
+// "Assigned") the server has never had, so a citizen could narrow the list to
+// a state no report could ever be in.
+//
+// The server has no status query parameter either, so this filters the loaded
+// page client-side. With `fetchHistory` capped at the first twenty reports that
+// is honest; it becomes wrong the day the list pages.
 // ---------------------------------------------------------------------------
 
-enum _FilterOption { all, pending, inReview, assigned, resolved }
+/// Maps a `?filter=` query value to a status.
+///
+/// Matched against the enum's own `name`, so `/history?filter=pending` and
+/// `/history?filter=resolved` — the two links Home's stat cards have always
+/// used — keep working, and a future status needs no change here.
+ReportStatus? _statusFromQuery(String? raw) {
+  if (raw == null) return null;
 
-extension _FilterOptionX on _FilterOption {
-  String get label {
-    switch (this) {
-      case _FilterOption.all:
-        return 'All';
-      case _FilterOption.pending:
-        return 'Pending';
-      case _FilterOption.inReview:
-        return 'In Review';
-      case _FilterOption.assigned:
-        return 'Assigned';
-      case _FilterOption.resolved:
-        return 'Resolved';
-    }
+  for (final status in ReportStatus.values) {
+    // `unknown` is not offered as a chip, so honouring it from the query would
+    // strand the citizen on a filter they cannot see or clear.
+    if (status != ReportStatus.unknown && status.name == raw) return status;
   }
 
-  /// Maps a GoRouter query-param string back to the enum value.
-  static _FilterOption fromQuery(String? raw) {
-    switch (raw) {
-      case 'pending':
-        return _FilterOption.pending;
-      case 'inReview':
-        return _FilterOption.inReview;
-      case 'assigned':
-        return _FilterOption.assigned;
-      case 'resolved':
-        return _FilterOption.resolved;
-      default:
-        return _FilterOption.all;
-    }
-  }
-
-  /// Applies this filter to a list of reports.
-  List<ReportCardData> apply(List<ReportCardData> reports) {
-    switch (this) {
-      case _FilterOption.all:
-        return reports;
-      case _FilterOption.pending:
-        return reports
-            .where((r) => r.status == ReportStatus.pending)
-            .toList();
-      case _FilterOption.inReview:
-        return reports.where((r) => r.status == ReportStatus.inReview).toList();
-      case _FilterOption.assigned:
-        return reports.where((r) => r.status == ReportStatus.assigned).toList();
-      case _FilterOption.resolved:
-        return reports
-            .where((r) => r.status == ReportStatus.resolved)
-            .toList();
-    }
-  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,35 +60,47 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  late _FilterOption _activeFilter;
+  /// null means "All".
+  ReportStatus? _activeFilter;
 
   @override
   void initState() {
     super.initState();
-    _activeFilter = _FilterOptionX.fromQuery(widget.initialFilter);
+    _activeFilter = _statusFromQuery(widget.initialFilter);
+
+    // Loaded after the first frame so the spinner is mounted before the request
+    // starts, and so nothing notifies listeners during this widget's build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final history = context.read<ReportHistoryProvider>();
+      if (!history.hasLoaded) history.load();
+    });
   }
 
   @override
   void didUpdateWidget(HistoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // The same route rebuilt with a different query — Home's "Pending" stat
+    // card pushing onto a History that is already open, for instance.
     if (widget.initialFilter != oldWidget.initialFilter) {
-      setState(() {
-        _activeFilter = _FilterOptionX.fromQuery(widget.initialFilter);
-      });
+      setState(() => _activeFilter = _statusFromQuery(widget.initialFilter));
     }
   }
 
-  void _setFilter(_FilterOption f) {
-    if (_activeFilter == f) return;
-    setState(() => _activeFilter = f);
+  void _setFilter(ReportStatus? value) {
+    if (_activeFilter == value) return;
+    setState(() => _activeFilter = value);
   }
 
-  List<ReportCardData> get _filtered =>
-      _activeFilter.apply(kMockReports.toList());
+  List<SubmittedReport> _apply(List<SubmittedReport> reports) {
+    final filter = _activeFilter;
+    if (filter == null) return reports;
+    return reports.where((report) => report.status == filter).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    final history = context.watch<ReportHistoryProvider>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -140,43 +128,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Filter chip row
-          _FilterChipRow(
-            active: _activeFilter,
-            onSelected: _setFilter,
-          ),
+          _FilterChipRow(active: _activeFilter, onSelected: _setFilter),
 
-          // Divider below chips
           const Divider(height: 1),
 
-          // Report list or empty state
-          Expanded(
-            child: filtered.isEmpty
-                ? _EmptyState(filter: _activeFilter)
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final report = filtered[i];
-                      final isHighlighted = widget.highlightId != null &&
-                          report.id == widget.highlightId;
-                      return ReportCard(
-                        data: report.copyWith(highlighted: isHighlighted),
-                        showChevron: true,
-                        onTap: () {
-                          context.push(
-                            AppRoutes.reportDetails.replaceFirst(':id', report.id),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _body(history)),
         ],
       ),
       // -----------------------------------------------------------------------
@@ -199,6 +155,59 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
     );
   }
+
+  Widget _body(ReportHistoryProvider history) {
+    // The spinner owns the screen only on the very first load. Afterwards the
+    // list stays put and the refresh indicator does the talking.
+    if (history.isLoading && !history.hasLoaded) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    final reports = _apply(history.reports);
+
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () => context.read<ReportHistoryProvider>().refresh(),
+      child: reports.isEmpty
+          ? _EmptyState(
+              filter: _activeFilter,
+              errorMessage: history.errorMessage,
+            )
+          : ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              // One extra leading row when a refresh failed, so the error sits
+              // above the reports rather than replacing them.
+              itemCount: reports.length + (history.errorMessage != null ? 1 : 0),
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, index) {
+                if (history.errorMessage != null) {
+                  if (index == 0) {
+                    return ErrorBanner(message: history.errorMessage!);
+                  }
+                  return _card(reports[index - 1]);
+                }
+                return _card(reports[index]);
+              },
+            ),
+    );
+  }
+
+  Widget _card(SubmittedReport report) {
+    final isHighlighted =
+        widget.highlightId != null && report.publicId == widget.highlightId;
+
+    return ReportCard(
+      data: ReportCardData.fromSubmittedReport(report)
+          .copyWith(highlighted: isHighlighted),
+      showChevron: true,
+      onTap: () => context.push(
+        AppRoutes.reportDetails.replaceFirst(':id', report.publicId),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -206,13 +215,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
 // ---------------------------------------------------------------------------
 
 class _FilterChipRow extends StatelessWidget {
-  const _FilterChipRow({
-    required this.active,
-    required this.onSelected,
-  });
+  const _FilterChipRow({required this.active, required this.onSelected});
 
-  final _FilterOption active;
-  final ValueChanged<_FilterOption> onSelected;
+  /// null is the "All" chip.
+  final ReportStatus? active;
+  final ValueChanged<ReportStatus?> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -220,23 +227,28 @@ class _FilterChipRow extends StatelessWidget {
       color: AppColors.surface,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
-          children: _FilterOption.values.map((option) {
-            final isActive = option == active;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _FilterChip(
-                label: option.label,
-                isActive: isActive,
-                onTap: () => onSelected(option),
-              ),
-            );
-          }).toList(),
+          children: [
+            _chip(label: 'All', value: null),
+            // `unknown` is skipped: it is what the app shows for a status it
+            // does not recognise, not something a citizen can filter by.
+            for (final status in ReportStatus.values)
+              if (status != ReportStatus.unknown)
+                _chip(label: status.label, value: status),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _chip({required String label, required ReportStatus? value}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: _FilterChip(
+        label: label,
+        isActive: value == active,
+        onTap: () => onSelected(value),
       ),
     );
   }
@@ -282,57 +294,69 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// _EmptyState — shown when a filter returns no results
+// _EmptyState — nothing to show, whether from an empty history or a filter
+// that matched none of it, or because the load failed outright.
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filter});
+  const _EmptyState({required this.filter, this.errorMessage});
 
-  final _FilterOption filter;
+  final ReportStatus? filter;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    final String label = filter == _FilterOption.all
+    final String label = filter == null
         ? 'No reports yet'
-        : 'No ${filter.label.toLowerCase()} reports';
+        : 'No ${filter!.label.toLowerCase()} reports';
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spacingXl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
-                color: AppColors.primaryLight,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.inbox_rounded,
-                size: 30,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Reports you submit will appear here.',
-              style: AppTextStyles.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    // A scroll view rather than a centred column, so pull-to-refresh still
+    // works when there is nothing in the list to pull — which is exactly the
+    // state a failed load leaves behind.
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacingXl,
+        vertical: AppConstants.spacingLg,
       ),
+      children: [
+        if (errorMessage != null) ...[
+          ErrorBanner(message: errorMessage!),
+          const SizedBox(height: AppConstants.spacingXl),
+        ],
+        const SizedBox(height: 40),
+        Center(
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: AppColors.primaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.inbox_rounded,
+              size: 30,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Reports you submit will appear here.',
+          style: AppTextStyles.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

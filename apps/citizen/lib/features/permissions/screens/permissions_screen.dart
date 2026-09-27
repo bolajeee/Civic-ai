@@ -141,7 +141,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // A permanently denied permission should not trap the citizen on
+              // onboarding. The feature can request access again when used.
+              _proceed();
+            },
             child: const Text('Skip'),
           ),
           TextButton(

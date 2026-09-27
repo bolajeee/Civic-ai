@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
+import '../../../shared/data/report_categories.dart';
 import '../../../shared/widgets/report_card.dart';
+import '../models/relative_time.dart';
+import '../models/submitted_report.dart';
 
+/// One report, in full.
+///
+/// Takes the API model rather than the card's view object: this is the screen
+/// where the real fields matter, and `SubmittedReport` carries all of them.
 class ReportDetailsScreen extends StatelessWidget {
   const ReportDetailsScreen({super.key, required this.report});
 
-  final ReportCardData report;
+  final SubmittedReport report;
 
   @override
   Widget build(BuildContext context) {
+    final visual = reportCategoryById(report.category.slug);
+    final description = report.description?.trim() ?? '';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -22,7 +34,11 @@ class ReportDetailsScreen extends StatelessWidget {
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          // Guarded: a report opened from a deep link has nothing to pop back
+          // to, and `pop()` with an empty stack throws.
+          onPressed: () => context.canPop()
+              ? context.pop()
+              : context.go(AppRoutes.history),
         ),
         actions: [
           IconButton(
@@ -36,7 +52,7 @@ class ReportDetailsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: AppConstants.spacingXl),
           children: [
-            _EvidenceImage(report: report),
+            _EvidenceImage(report: report, visual: visual),
             Padding(
               padding: const EdgeInsets.all(AppConstants.spacingMd),
               child: Column(
@@ -45,21 +61,36 @@ class ReportDetailsScreen extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // The category, not the first line of the description:
+                      // the API serves no title, and the description is
+                      // rendered in full directly below — using it as a heading
+                      // too would print the same sentence twice.
                       Expanded(
-                        child: Text(report.title, style: AppTextStyles.heading2),
+                        child: Text(
+                          report.category.label,
+                          style: AppTextStyles.heading2,
+                        ),
                       ),
                       const SizedBox(width: AppConstants.spacingSm),
-                      _StatusBadge(status: report.status),
+                      StatusBadge(status: report.status),
                     ],
                   ),
                   const SizedBox(height: AppConstants.spacingSm),
-                  Text(report.description, style: AppTextStyles.bodyMedium),
+                  Text(
+                    description.isEmpty
+                        ? 'No additional details were provided.'
+                        : description,
+                    style: AppTextStyles.bodyMedium,
+                  ),
                   const SizedBox(height: AppConstants.spacingLg),
                   _DetailsCard(report: report),
                   const SizedBox(height: AppConstants.spacingLg),
-                  Text('Progress timeline', style: AppTextStyles.heading2.copyWith(fontSize: 18)),
+                  Text(
+                    'Progress timeline',
+                    style: AppTextStyles.heading2.copyWith(fontSize: 18),
+                  ),
                   const SizedBox(height: AppConstants.spacingSm),
-                  _Timeline(report: report),
+                  _Timeline(status: report.status),
                   const SizedBox(height: AppConstants.spacingLg),
                   SizedBox(
                     width: double.infinity,
@@ -81,7 +112,7 @@ class ReportDetailsScreen extends StatelessWidget {
   void _showReceiptMessage(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Receipt ${report.citizenReference} is ready to share.'),
+        content: Text('Receipt ${report.publicId} is ready to share.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -89,28 +120,31 @@ class ReportDetailsScreen extends StatelessWidget {
 }
 
 class _EvidenceImage extends StatelessWidget {
-  const _EvidenceImage({required this.report});
+  const _EvidenceImage({required this.report, required this.visual});
 
-  final ReportCardData report;
+  final SubmittedReport report;
+  final ReportCategoryVisual visual;
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = report.imageUrl;
+    final imageUrl = report.thumbnailUrl;
+
+    // The signed URL expires after a day, so a report opened from a stale list
+    // can fail to load. The category icon stands in, as it does on the card.
+    Widget fallback() => ColoredBox(
+          color: visual.accentLight,
+          child: Icon(visual.icon, size: 72, color: visual.accent),
+        );
+
     return SizedBox(
       height: 230,
       width: double.infinity,
       child: imageUrl == null
-          ? ColoredBox(
-              color: report.iconBgColor,
-              child: Icon(report.categoryIcon, size: 72, color: report.iconColor),
-            )
+          ? fallback()
           : Image.network(
               imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => ColoredBox(
-                color: report.iconBgColor,
-                child: Icon(report.categoryIcon, size: 72, color: report.iconColor),
-              ),
+              errorBuilder: (_, __, ___) => fallback(),
             ),
     );
   }
@@ -119,7 +153,7 @@ class _EvidenceImage extends StatelessWidget {
 class _DetailsCard extends StatelessWidget {
   const _DetailsCard({required this.report});
 
-  final ReportCardData report;
+  final SubmittedReport report;
 
   @override
   Widget build(BuildContext context) {
@@ -132,14 +166,57 @@ class _DetailsCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _InfoRow(icon: Icons.category_outlined, label: 'Category', value: report.category),
-          _InfoRow(icon: Icons.tag_outlined, label: 'Report ID', value: report.id),
-          _InfoRow(icon: Icons.calendar_today_outlined, label: 'Date submitted', value: report.dateSubmitted),
-          _InfoRow(icon: Icons.schedule_outlined, label: 'Time submitted', value: report.timeSubmitted),
-          _InfoRow(icon: Icons.location_on_outlined, label: 'Location', value: report.location),
-          _InfoRow(icon: Icons.flag_outlined, label: 'Priority', value: report.priority),
-          _InfoRow(icon: Icons.account_balance_outlined, label: 'Assigned agency', value: report.assignedAgency),
-          _InfoRow(icon: Icons.person_pin_outlined, label: 'Citizen reference', value: report.citizenReference),
+          _InfoRow(
+            icon: Icons.category_outlined,
+            label: 'Category',
+            value: report.category.label,
+          ),
+          _InfoRow(
+            icon: Icons.tag_outlined,
+            label: 'Report ID',
+            value: report.publicId,
+          ),
+          _InfoRow(
+            icon: Icons.calendar_today_outlined,
+            label: 'Date submitted',
+            value: formatDate(report.submittedAt),
+          ),
+          _InfoRow(
+            icon: Icons.schedule_outlined,
+            label: 'Time submitted',
+            value: formatTime(report.submittedAt),
+          ),
+          _InfoRow(
+            icon: Icons.photo_outlined,
+            label: 'Photos',
+            value: '${report.photoCount}',
+          ),
+          _InfoRow(
+            icon: Icons.location_on_outlined,
+            label: 'Location',
+            value: report.location?.displayLabel ?? 'Not recorded',
+          ),
+
+          // The next three have no column behind them yet. They keep their
+          // place so the card does not silently lose rows when Phase 4 fills
+          // them in, and they show [kNoValue] rather than a plausible-looking
+          // sample — "Medium" and "Pending assignment" were indistinguishable
+          // from real data on screen.
+          const _InfoRow(
+            icon: Icons.flag_outlined,
+            label: 'Priority',
+            value: kNoValue,
+          ),
+          const _InfoRow(
+            icon: Icons.account_balance_outlined,
+            label: 'Assigned agency',
+            value: kNoValue,
+          ),
+          const _InfoRow(
+            icon: Icons.person_pin_outlined,
+            label: 'Citizen reference',
+            value: kNoValue,
+          ),
         ],
       ),
     );
@@ -165,7 +242,14 @@ class _InfoRow extends StatelessWidget {
           Expanded(child: Text(label, style: AppTextStyles.bodySmall)),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),
@@ -173,20 +257,81 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _Timeline extends StatelessWidget {
-  const _Timeline({required this.report});
+// ---------------------------------------------------------------------------
+// Timeline
+// ---------------------------------------------------------------------------
 
-  final ReportCardData report;
+class _Timeline extends StatelessWidget {
+  const _Timeline({required this.status});
+
+  final ReportStatus status;
+
+  static const List<String> _steps = ['Submitted', 'In Progress', 'Resolved'];
 
   @override
   Widget build(BuildContext context) {
-    final steps = <String>['Submitted', 'In Review', 'Assigned', 'Resolved'];
-    final current = switch (report.status) {
+    // A rejected report will never reach Resolved, so drawing it as a stalled
+    // journey towards one would be a lie. It gets its own terminal step.
+    if (status == ReportStatus.rejected) {
+      return const _TimelineSteps(
+        steps: ['Submitted', 'Rejected'],
+        current: 1,
+        isTerminalFailure: true,
+      );
+    }
+
+    // `unknown` means this build does not recognise the server's status. The
+    // report has certainly been submitted; where it goes after that is not
+    // something the app can claim, so the timeline stops at Submitted.
+    final current = switch (status) {
       ReportStatus.pending => 0,
-      ReportStatus.inReview => 1,
-      ReportStatus.assigned => 2,
-      ReportStatus.resolved => 3,
+      ReportStatus.inProgress => 1,
+      ReportStatus.resolved => 2,
+      ReportStatus.rejected => 1, // unreachable — handled above
+      ReportStatus.unknown => 0,
     };
+
+    return _TimelineSteps(steps: _steps, current: current);
+  }
+}
+
+class _TimelineSteps extends StatelessWidget {
+  const _TimelineSteps({
+    required this.steps,
+    required this.current,
+    this.isTerminalFailure = false,
+  });
+
+  final List<String> steps;
+  final int current;
+
+  /// True when the step at [current] is a failure rather than progress.
+  final bool isTerminalFailure;
+
+  bool _isFailureStep(int index) => isTerminalFailure && index == current;
+
+  Color _iconColor(int index) {
+    if (_isFailureStep(index)) return AppColors.error;
+    return index <= current ? AppColors.primary : AppColors.inputBorder;
+  }
+
+  IconData _icon(int index) {
+    if (_isFailureStep(index)) return Icons.cancel;
+    return index <= current ? Icons.check_circle : Icons.radio_button_unchecked;
+  }
+
+  Color _connectorColor(int index) {
+    if (isTerminalFailure && index == current - 1) return AppColors.error;
+    return index < current ? AppColors.primary : AppColors.inputBorder;
+  }
+
+  Color _labelColor(int index) {
+    if (_isFailureStep(index)) return AppColors.error;
+    return index <= current ? AppColors.textPrimary : AppColors.textSecondary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         for (var i = 0; i < steps.length; i++)
@@ -195,33 +340,26 @@ class _Timeline extends StatelessWidget {
             children: [
               Column(
                 children: [
-                  Icon(i <= current ? Icons.check_circle : Icons.radio_button_unchecked, size: 22, color: i <= current ? AppColors.primary : AppColors.inputBorder),
-                  if (i < steps.length - 1) Container(width: 2, height: 30, color: i < current ? AppColors.primary : AppColors.inputBorder),
+                  Icon(_icon(i), size: 22, color: _iconColor(i)),
+                  if (i < steps.length - 1)
+                    Container(width: 2, height: 30, color: _connectorColor(i)),
                 ],
               ),
               const SizedBox(width: 12),
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text(steps[i], style: TextStyle(fontWeight: i == current ? FontWeight.w700 : FontWeight.w500, color: i <= current ? AppColors.textPrimary : AppColors.textSecondary)),
+                child: Text(
+                  steps[i],
+                  style: TextStyle(
+                    fontWeight:
+                        i == current ? FontWeight.w700 : FontWeight.w500,
+                    color: _labelColor(i),
+                  ),
+                ),
               ),
             ],
           ),
       ],
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-
-  final ReportStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: status.bgColor, borderRadius: BorderRadius.circular(AppConstants.radiusButton)),
-      child: Text(status.label, style: TextStyle(color: status.textColor, fontSize: 12, fontWeight: FontWeight.w700)),
     );
   }
 }

@@ -28,6 +28,21 @@ class ReportHistoryProvider extends ChangeNotifier {
   /// failed and the list happens to be empty.
   bool get isEmpty => _hasLoaded && _errorMessage == null && _reports.isEmpty;
 
+  /// The report carrying this citizen-facing id, or null if it is not held.
+  ///
+  /// Reads the loaded list rather than calling `GET /api/reports/:id`, which
+  /// does not exist yet. That is sufficient for the way the app reaches a
+  /// detail screen — always by tapping a row that came from this list — but it
+  /// does mean a deep link to a report this citizen has not loaded shows
+  /// "Report not found" until the list arrives. Called after the list is in
+  /// hand, which the route builder guarantees.
+  SubmittedReport? byPublicId(String id) {
+    for (final report in _reports) {
+      if (report.publicId == id) return report;
+    }
+    return null;
+  }
+
   /// Loads the first page, replacing whatever is held.
   ///
   /// [showSpinner] is false for pull-to-refresh, which has its own indicator —

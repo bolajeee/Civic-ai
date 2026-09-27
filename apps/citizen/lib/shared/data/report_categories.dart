@@ -3,8 +3,8 @@ import '../../core/constants/app_colors.dart';
 
 /// Visual identity for a civic-issue category.
 ///
-/// Used by the Report screen (selectable tiles) and by report cards
-/// (icon fallback + sample thumbnail).
+/// Used by the Report screen (selectable tiles) and by report cards (the icon
+/// box that stands in when a report has no photo).
 class ReportCategoryVisual {
   const ReportCategoryVisual({
     required this.id,
@@ -12,79 +12,84 @@ class ReportCategoryVisual {
     required this.icon,
     required this.accent,
     required this.accentLight,
-    required this.sampleImageUrl,
   });
 
+  /// The **database slug**, not a display name — `POTHOLE`, not `pothole`.
+  ///
+  /// It is matched against `ReportCategory.slug`, which comes straight from the
+  /// `report_categories` table. These were previously camelCase (`waterLeak`),
+  /// which meant `reportCategoryById` never matched a single real category and
+  /// every report in the app rendered as "Other" — silently, because the
+  /// fallback is a perfectly valid-looking category.
   final String id;
+
   final String title;
   final IconData icon;
   final Color accent;
   final Color accentLight;
-
-  /// Placeholder evidence photo that matches this category.
-  final String sampleImageUrl;
 }
 
+/// Mirrors the rows seeded by
+/// `supabase/migrations/20260927120001_create_report_categories.sql`.
 const List<ReportCategoryVisual> kReportCategories = [
   ReportCategoryVisual(
-    id: 'pothole',
+    id: 'POTHOLE',
     title: 'Pothole',
     icon: Icons.image_outlined,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1515165562839-978bbcf18277?w=224&h=224&fit=crop',
   ),
   ReportCategoryVisual(
-    id: 'flooding',
+    id: 'FLOODING',
     title: 'Flooding',
     icon: Icons.umbrella_outlined,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=224&h=224&fit=crop',
   ),
   ReportCategoryVisual(
-    id: 'streetlight',
+    id: 'STREETLIGHT',
     title: 'Streetlight',
     icon: Icons.wb_sunny_outlined,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=224&h=224&fit=crop',
   ),
   ReportCategoryVisual(
-    id: 'waste',
+    id: 'WASTE',
     title: 'Waste',
     icon: Icons.delete_outline_rounded,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=224&h=224&fit=crop',
   ),
   ReportCategoryVisual(
-    id: 'waterLeak',
+    id: 'WATER_LEAK',
     title: 'Water Leak',
     icon: Icons.water_drop_outlined,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=224&h=224&fit=crop',
   ),
   ReportCategoryVisual(
-    id: 'other',
+    id: 'OTHER',
     title: 'Other',
     icon: Icons.error_outline_rounded,
     accent: AppColors.primary,
     accentLight: AppColors.primaryLight,
-    sampleImageUrl:
-        'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=224&h=224&fit=crop',
   ),
 ];
 
-ReportCategoryVisual reportCategoryById(String id) {
-  return kReportCategories.firstWhere(
-    (c) => c.id == id,
-    orElse: () => kReportCategories.last,
-  );
+/// The slug a category falls back to when this build does not recognise it.
+const String kOtherCategorySlug = 'OTHER';
+
+/// Resolves a database slug to its visuals, falling back to "Other".
+///
+/// The match is case-insensitive so a future migration that switches the column
+/// to lowercase does not quietly reintroduce the every-category-is-Other bug
+/// this function's callers used to have.
+ReportCategoryVisual reportCategoryById(String? slug) {
+  final wanted = slug?.toUpperCase();
+
+  for (final category in kReportCategories) {
+    if (category.id == wanted) return category;
+  }
+
+  return kReportCategories.firstWhere((c) => c.id == kOtherCategorySlug);
 }

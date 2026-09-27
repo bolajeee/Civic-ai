@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
@@ -7,10 +8,10 @@ import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/report/providers/report_history_provider.dart';
 import '../../features/report/screens/history_screen.dart';
 import '../../features/report/screens/report_screen.dart';
 import '../../features/report/screens/report_details_screen.dart';
-import '../../shared/data/mock_reports.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/';
@@ -34,8 +35,9 @@ abstract final class AppRoutes {
 /// Rules:
 ///   initializing     → splash is the only valid destination
 ///   unauthenticated  → login/register only; everything else → /login
-///   authenticated    → onboarding routes are escorted to /permissions or
-///                      /home; every real app route passes through
+///   authenticated    → the onboarding routes are escorted to /permissions or
+///                      /home, and /permissions escorts itself to /home once
+///                      its flag is set; every real app route passes through
 ///
 /// Splash (`/`) is deliberately NOT grouped with login/register as an "auth
 /// route". It is the router's `initialLocation`, so treating it as a valid
@@ -60,7 +62,18 @@ String? resolveRedirect({
         : AppRoutes.login;
   }
 
-  // 3. Logged in — escort the onboarding routes to their destination.
+  // 3. Logged in — the onboarding screens hand off once their job is done.
+  //
+  // /permissions is tested separately, before the generic onboarding check,
+  // because it is the one screen that has to move itself: the citizen taps
+  // "Grant" or "Skip" while already standing on it. A rule that merely allowed
+  // it through — which is what both this function and the inline copy it
+  // replaced used to do — declared their current location fine and left them
+  // stranded there, which is the hang.
+  if (location == AppRoutes.permissions) {
+    return permissionsGranted ? AppRoutes.home : null;
+  }
+
   final isOnboardingRoute = location == AppRoutes.splash ||
       location == AppRoutes.login ||
       location == AppRoutes.register;
@@ -69,7 +82,7 @@ String? resolveRedirect({
     return permissionsGranted ? AppRoutes.home : AppRoutes.permissions;
   }
 
-  // Any real app route (home, permissions, report, …) is allowed through.
+  // Any real app route (home, report, history, …) is allowed through.
   return null;
 }
 
@@ -126,11 +139,18 @@ GoRouter buildRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: AppRoutes.reportDetails,
-        builder: (_, state) {
+        builder: (context, state) {
+          // Read from the history provider rather than `GET /api/reports/:id`,
+          // which the API does not serve. Every route into this screen is a tap
+          // on a row that came from that list, so the report is already held.
+          // The providers sit above MaterialApp.router in main.dart, which is
+          // what makes them reachable from here.
           final id = state.pathParameters['id'];
-          final report = kMockReports.where((item) => item.id == id).firstOrNull;
+          final report =
+              id == null ? null : context.read<ReportHistoryProvider>().byPublicId(id);
+
           return report == null
-              ? const Scaffold(body: Center(child: Text('Report not found')))
+              ? const _ReportNotFoundScreen()
               : ReportDetailsScreen(report: report);
         },
       ),
@@ -140,4 +160,50 @@ GoRouter buildRouter(AuthProvider authProvider) {
       ),
     ],
   );
+}
+
+/// Shown when a report id does not resolve.
+///
+/// The realistic way to land here is a stale or shared link: the id is
+/// well-formed but the report is not in the page this device has loaded —
+/// `fetchHistory` returns the newest twenty, so an older report is simply not
+/// held. It offers a way onward rather than the dead end this used to be.
+///
+/// Deliberately plain, and deliberately the only widget in this file: the
+/// router is not where presentation lives.
+class _ReportNotFoundScreen extends StatelessWidget {
+  const _ReportNotFoundScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Report Details')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.search_off_rounded, size: 40),
+              const SizedBox(height: 16),
+              const Text(
+                'Report not found',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'It may not be in the reports loaded on this device.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.history),
+                child: const Text('Back to my reports'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
