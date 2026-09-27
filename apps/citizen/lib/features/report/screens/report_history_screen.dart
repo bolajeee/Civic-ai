@@ -303,23 +303,23 @@ class StatusBadge extends StatelessWidget {
     final (background, foreground) = switch (status) {
       ReportStatus.pending => (
           AppColors.statusPendingBg,
-          AppColors.statusPendingFg,
+          AppColors.statusPendingText,
         ),
       ReportStatus.inProgress => (
           AppColors.statusInProgressBg,
-          AppColors.statusInProgressFg,
+          AppColors.statusInProgressText,
         ),
       ReportStatus.resolved => (
           AppColors.statusResolvedBg,
-          AppColors.statusResolvedFg,
+          AppColors.statusResolvedText,
         ),
       ReportStatus.rejected => (
           AppColors.statusRejectedBg,
-          AppColors.statusRejectedFg,
+          AppColors.statusRejectedText,
         ),
       ReportStatus.unknown => (
           AppColors.statusUnknownBg,
-          AppColors.statusUnknownFg,
+          AppColors.statusUnknownText,
         ),
     };
 

@@ -24,6 +24,8 @@ class AppTextField extends StatelessWidget {
     this.autofillHints,
     this.maxLength,
     this.enabled = true,
+    this.readOnly = false,
+    this.onTap,
   });
 
   final TextEditingController controller;
@@ -42,6 +44,8 @@ class AppTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final int? maxLength;
   final bool enabled;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +69,8 @@ class AppTextField extends StatelessWidget {
           autofillHints: autofillHints,
           maxLength: maxLength,
           enabled: enabled,
+          readOnly: readOnly,
+          onTap: onTap,
           style: const TextStyle(
             fontSize: 14,
             color: AppColors.textPrimary,

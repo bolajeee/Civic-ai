@@ -28,7 +28,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
-        AppRoutes.reports,
+        AppRoutes.history,
       ]) {
         expect(
           resolveRedirect(
@@ -74,7 +74,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
-        AppRoutes.reports,
+        AppRoutes.history,
       ]) {
         expect(
           resolveRedirect(
@@ -130,7 +130,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
-        AppRoutes.reports,
+        AppRoutes.history,
       ]) {
         expect(
           resolveRedirect(

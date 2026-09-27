@@ -6,8 +6,11 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
-import '../../features/report/screens/report_history_screen.dart';
-import '../../features/report/screens/report_issue_screen.dart';
+import '../../features/profile/screens/profile_screen.dart';
+import '../../features/report/screens/history_screen.dart';
+import '../../features/report/screens/report_screen.dart';
+import '../../features/report/screens/report_details_screen.dart';
+import '../../shared/data/mock_reports.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/';
@@ -16,7 +19,9 @@ abstract final class AppRoutes {
   static const String permissions = '/permissions';
   static const String home = '/home';
   static const String report = '/report';
-  static const String reports = '/reports';
+  static const String history = '/history';
+  static const String profile = '/profile';
+  static const String reportDetails = '/report-details/:id';
 }
 
 /// Decides where a navigation to [location] should actually land.
@@ -78,6 +83,10 @@ GoRouter buildRouter(AuthProvider authProvider) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: authProvider,
+    // Deliberately thin. The rules live in [resolveRedirect] so there is one
+    // copy of them, unit-testable without a widget tree. An earlier version
+    // inlined a second, `async` copy here that re-read SharedPreferences on
+    // every navigation — and the two had already drifted apart.
     redirect: (BuildContext context, GoRouterState state) => resolveRedirect(
       status: authProvider.status,
       location: state.matchedLocation,
@@ -106,11 +115,28 @@ GoRouter buildRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: AppRoutes.report,
-        builder: (_, __) => const ReportIssueScreen(),
+        builder: (_, __) => const ReportScreen(),
       ),
       GoRoute(
-        path: AppRoutes.reports,
-        builder: (_, __) => const ReportHistoryScreen(),
+        path: AppRoutes.history,
+        builder: (_, state) => HistoryScreen(
+          initialFilter: state.uri.queryParameters['filter'],
+          highlightId: state.uri.queryParameters['id'],
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.reportDetails,
+        builder: (_, state) {
+          final id = state.pathParameters['id'];
+          final report = kMockReports.where((item) => item.id == id).firstOrNull;
+          return report == null
+              ? const Scaffold(body: Center(child: Text('Report not found')))
+              : ReportDetailsScreen(report: report);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (_, __) => const ProfileScreen(),
       ),
     ],
   );
