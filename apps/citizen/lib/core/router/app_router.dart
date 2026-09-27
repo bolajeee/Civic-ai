@@ -6,6 +6,7 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
+import '../../features/report/screens/report_history_screen.dart';
 import '../../features/report/screens/report_issue_screen.dart';
 
 abstract final class AppRoutes {
@@ -15,6 +16,7 @@ abstract final class AppRoutes {
   static const String permissions = '/permissions';
   static const String home = '/home';
   static const String report = '/report';
+  static const String reports = '/reports';
 }
 
 /// Decides where a navigation to [location] should actually land.
@@ -105,6 +107,10 @@ GoRouter buildRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.report,
         builder: (_, __) => const ReportIssueScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        builder: (_, __) => const ReportHistoryScreen(),
       ),
     ],
   );

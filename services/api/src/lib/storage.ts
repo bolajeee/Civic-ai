@@ -46,3 +46,50 @@ export async function getImageUrl(filename: string, expiresIn: number = 60 * 60 
   }
   return data.signedUrl;
 }
+
+/**
+ * Retrieves signed URLs for many images in one round trip.
+ *
+ * The report history list needs a thumbnail per row; signing them one at a time
+ * would mean N calls to storage for a single screen.
+ *
+ * Returns a map of storage key → signed URL. Keys that could not be signed are
+ * simply absent, so a single bad reference cannot fail the whole listing.
+ */
+export async function getImageUrls(
+  filenames: string[],
+  expiresIn: number = 60 * 60 * 24,
+): Promise<Record<string, string>> {
+  if (filenames.length === 0) return {};
+
+  const { data, error } = await supabase.storage
+    .from('reports')
+    .createSignedUrls(filenames, expiresIn);
+
+  if (error) {
+    throw error;
+  }
+
+  return Object.fromEntries(
+    (data ?? [])
+      .filter((entry) => entry.signedUrl)
+      .map((entry) => [entry.path, entry.signedUrl]),
+  );
+}
+
+/**
+ * Removes images from the 'reports' bucket.
+ *
+ * Used to clean up after a failed report submission: images are uploaded before
+ * the database rows are written, so a rollback would otherwise leave the bucket
+ * holding files nothing references.
+ */
+export async function deleteImages(filenames: string[]) {
+  if (filenames.length === 0) return;
+
+  const { error } = await supabase.storage.from('reports').remove(filenames);
+
+  if (error) {
+    throw error;
+  }
+}

@@ -25,7 +25,12 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] `/logout-all` for full session revocation
 
 ### Phase 2: Citizen Reporting (In Progress)
-- [ ] Create report API endpoint
+- [x] Create report API endpoint
+  - [x] Migrations: `report_categories` (6 seeded), `reports`, `locations` (+ PostGIS `geom`), `report_media`, `report_status` enum, `CR-` public-id sequence
+  - [x] `POST /api/reports` — multipart, 1–5 photos, category + description + optional location; images uploaded first, then rows committed in one transaction so a failed insert leaves no orphan images
+  - [x] `GET /api/reports/categories` — the selectable list, so the client sends real category ids
+  - [x] `GET /api/reports` — the caller's own reports, newest first, with signed thumbnail URLs
+  - [x] `full_name` added to `users` and threaded through register / login / `/me` — it was being silently stripped by Zod and had no column
 - [x] Flutter citizen app scaffolded (`apps/citizen`)
   - [x] Splash screen (animated, dark green, shield icon)
   - [x] Login screen (email + password, validation, social login stubs)
@@ -45,10 +50,22 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] Camera permission pre-check via `permission_handler` — denial surfaces an error + Open Settings instead of failing silently
   - [x] Multi-photo: up to 5 per report, appended, individually removable, with a live counter
   - [x] `ReportDraftProvider` (ChangeNotifier) — draft is dropped when the form is abandoned
-  - [x] Report Issue screen shell per Figma (`/report`) — category, location, description and submit are laid out but inert pending their own items below
-- [ ] GPS capture
-- [ ] Description submission
-- [ ] Report history retrieval
+  - [x] Report Issue screen (`/report`) per Figma — category, location, photo and description all live
+- [x] GPS capture
+  - [x] `geolocator` + `geocoding`; a fix is taken on entry to the form, with a 20s ceiling and a last-known-position fallback
+  - [x] Service-disabled, denied, permanently-denied and no-fix are distinct `LocationFailure` values with their own remedies — "Open Settings" appears only when Settings is actually the fix
+  - [x] Location is **optional** at submit: a citizen indoors can still file a report, and the API stores `location_id` as null
+  - [x] Accuracy preserved alongside the coordinates (`locations.accuracy`, `locations.geom` as `geometry(Point,4326)`)
+  - [x] Reverse geocoding is best-effort — a failure shows coordinates rather than blocking the field
+- [x] Description submission
+  - [x] `TextField` on the draft (1000 chars, matching the column) with a live counter
+  - [x] Carried as a multipart field on `POST /api/reports` and stored on `reports.description`
+- [x] Report history retrieval
+  - [x] `ReportHistoryProvider` — loading / error / empty states, pull-to-refresh, stale list kept on a failed refresh
+  - [x] `/reports` — newest-first list with thumbnail, category, `CR-` number, location and relative date
+  - [x] Status badges (Pending / In Progress / Resolved / Rejected) coloured from `AppColors`
+  - [x] List only — detail screen, filters and paging deferred
+  - [x] Submit now clears the draft and returns Home with the new report number
 
 ### Phase 3: AI (Pending)
 - [ ] Image classification service

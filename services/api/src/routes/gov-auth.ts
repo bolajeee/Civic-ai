@@ -89,7 +89,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
       return reply.status(201).send({ accessToken, refreshToken, user });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -141,7 +141,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         },
       });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -182,7 +182,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({ accessToken, refreshToken: newRefreshToken });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       if (err.message === 'Invalid or expired refresh token') {
         return reply.status(401).send({ error: err.message });
       }
@@ -206,7 +206,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         await revokeRefreshToken(rawToken);
         return reply.status(200).send({ message: 'Logged out successfully' });
       } catch (err: any) {
-        if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+        if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }

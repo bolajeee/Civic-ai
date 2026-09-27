@@ -6,6 +6,7 @@ import fastifyMultipart from '@fastify/multipart';
 import authenticatePlugin from './plugins/authenticate';
 import authRoutes from './routes/auth';
 import govAuthRoutes from './routes/gov-auth';
+import reportRoutes from './routes/reports';
 import { uploadImage, getImageUrl } from './lib/storage';
 
 const fastify = Fastify({ logger: true });
@@ -35,6 +36,7 @@ fastify.register(authenticatePlugin);
 
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
+fastify.register(reportRoutes, { prefix: '/api/reports' });
 
 // Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));

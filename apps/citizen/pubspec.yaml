@@ -31,6 +31,13 @@ dependencies:
   # Camera + gallery photo capture for citizen reports
   image_picker: ^1.1.2
 
+  # GPS fix for a report's location
+  geolocator: ^13.0.1
+
+  # Reverse geocoding — coordinates to a street address, via the platform
+  # geocoder. No API key, no per-request cost.
+  geocoding: ^3.0.0
+
   # URL launcher (Terms & Privacy links)
   url_launcher: ^6.3.0
 

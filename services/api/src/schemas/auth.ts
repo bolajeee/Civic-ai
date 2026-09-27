@@ -4,6 +4,7 @@ import { z } from 'zod';
 const ninSchema = z.string().regex(/^\d{11}$/, 'NIN must be exactly 11 digits');
 
 export const registerSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name is required'),
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   phone: z.string().optional(),

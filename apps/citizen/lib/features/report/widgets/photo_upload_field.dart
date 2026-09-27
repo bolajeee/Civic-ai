@@ -71,9 +71,9 @@ class PhotoUploadField extends StatelessWidget {
             ),
           ),
 
-        if (draft.errorMessage != null) ...[
+        if (draft.photoErrorMessage != null) ...[
           const SizedBox(height: AppConstants.spacingSm),
-          ErrorBanner(message: draft.errorMessage!),
+          ErrorBanner(message: draft.photoErrorMessage!),
           if (draft.permissionDenied)
             Align(
               alignment: Alignment.centerLeft,

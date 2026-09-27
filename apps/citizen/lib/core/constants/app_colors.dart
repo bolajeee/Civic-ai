@@ -31,6 +31,20 @@ abstract final class AppColors {
   static const Color error = Color(0xFFDC2626);
   static const Color success = Color(0xFF16A34A);
 
+  // Report status badges — one pair per state in the Figma.
+  // A tinted background with a matching darker foreground reads as a badge at
+  // a glance without shouting, which matters in a list of many reports.
+  static const Color statusPendingBg = Color(0xFFFEF3C7);   // amber 100
+  static const Color statusPendingFg = Color(0xFFB45309);   // amber 700
+  static const Color statusInProgressBg = Color(0xFFDBEAFE); // blue 100
+  static const Color statusInProgressFg = Color(0xFF1D4ED8); // blue 700
+  static const Color statusResolvedBg = Color(0xFFDCFCE7);  // green 100
+  static const Color statusResolvedFg = Color(0xFF15803D);  // green 700
+  static const Color statusRejectedBg = Color(0xFFFEE2E2);  // red 100
+  static const Color statusRejectedFg = Color(0xFFB91C1C);  // red 700
+  static const Color statusUnknownBg = Color(0xFFE5E7EB);   // grey 200
+  static const Color statusUnknownFg = Color(0xFF4B5563);   // grey 600
+
   // Checkbox accent
   static const Color checkboxActive = Color(0xFF1A7A3C);
 }

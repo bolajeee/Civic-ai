@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -48,17 +49,37 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   Future<void> _requestAll() async {
     setState(() => _isRequesting = true);
 
-    final results = await [
-      Permission.camera,
-      Permission.locationWhenInUse,
-      Permission.notification,
-    ].request();
+    // Derived from the list the screen renders, rather than repeated here: the
+    // two had already drifted, with this hardcoded copy still naming
+    // `locationWhenInUse` on web. One source means a permission can never be
+    // requested without a card explaining it, or shown without being asked for.
+    final Map<Permission, PermissionStatus> results;
+    try {
+      results = await _permItems
+          .map((item) => item.permission)
+          .toList(growable: false)
+          .request();
+    } catch (_) {
+      // A platform that cannot answer for one of these throws instead of
+      // reporting a status — the web delegate does exactly that for anything
+      // outside its switch. Nothing was learned, so this is treated the same as
+      // "Skip for now": the feature asks again at the point of use. Without it
+      // the button spins forever behind an unhandled error.
+      if (!mounted) return;
+      setState(() => _isRequesting = false);
+      await _proceed();
+      return;
+    }
 
     if (!mounted) return;
 
     setState(() {
       _statuses = {
-        for (final item in _permItems) item: results[item.permission]!,
+        for (final item in _permItems)
+          // `?? denied` rather than `!`: a permission missing from the result
+          // map is one the platform declined to answer for, and an exception
+          // thrown from inside setState would blank the screen.
+          item: results[item.permission] ?? PermissionStatus.denied,
       };
       _isRequesting = false;
     });
@@ -200,8 +221,19 @@ class _PermItem {
   final String description;
 }
 
-const List<_PermItem> _permItems = [
-  _PermItem(
+/// Which location permission this platform can actually be asked for.
+///
+/// `permission_handler_html` implements `Permission.location` but not
+/// `Permission.locationWhenInUse` — the latter falls through its switch and
+/// throws, which is what crashed this screen on web. Mobile is the other way
+/// round: `locationWhenInUse` is the right granularity there, because plain
+/// `Permission.location` asks for background ("always") access, which iOS
+/// refuses unless the app declares the background location capability.
+Permission get _locationPermission =>
+    kIsWeb ? Permission.location : Permission.locationWhenInUse;
+
+final List<_PermItem> _permItems = [
+  const _PermItem(
     permission: Permission.camera,
     icon: Icons.camera_alt_outlined,
     title: 'Camera',
@@ -209,13 +241,13 @@ const List<_PermItem> _permItems = [
         'Take photos of infrastructure issues when submitting a report.',
   ),
   _PermItem(
-    permission: Permission.locationWhenInUse,
+    permission: _locationPermission,
     icon: Icons.location_on_outlined,
     title: 'Location',
     description:
         'Attach your precise GPS coordinates so officers can find the issue.',
   ),
-  _PermItem(
+  const _PermItem(
     permission: Permission.notification,
     icon: Icons.notifications_outlined,
     title: 'Notifications',

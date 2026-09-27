@@ -37,6 +37,14 @@ abstract final class AppConstants {
   static const double reportPhotoMaxDimension = 1920.0;
   static const int reportPhotoQuality = 85;
 
+  // Location capture
+  //
+  // A hard ceiling on the wait for a fix. `LocationAccuracy.high` is requested,
+  // but a citizen standing over a pothole should not be made to wait for a
+  // perfect one — whatever the device has when this elapses is what gets
+  // attached, falling back to the last known position.
+  static const Duration reportLocationTimeout = Duration(seconds: 20);
+
   // Spacing
   static const double spacingXs = 4.0;
   static const double spacingSm = 8.0;

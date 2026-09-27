@@ -16,7 +16,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { email, password, phone, nin } = registerSchema.parse(request.body);
+      const { fullName, email, password, phone, nin } = registerSchema.parse(request.body);
 
       const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
       if (existing.rows.length > 0) {
@@ -32,10 +32,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const publicId = crypto.randomUUID();
 
       const result = await query(
-        `INSERT INTO users (public_id, email, phone, password_hash, nin, role)
-         VALUES ($1, $2, $3, $4, $5, 'CITIZEN')
-         RETURNING id, public_id, email, role`,
-        [publicId, email, phone ?? null, passwordHash, nin],
+        `INSERT INTO users (public_id, full_name, email, phone, password_hash, nin, role)
+         VALUES ($1, $2, $3, $4, $5, $6, 'CITIZEN')
+         RETURNING id, public_id, full_name, email, role`,
+        [publicId, fullName, email, phone ?? null, passwordHash, nin],
       );
 
       const user = result.rows[0];
@@ -48,7 +48,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
       return reply.status(201).send({ accessToken, refreshToken, user });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -89,12 +89,13 @@ export default async function authRoutes(fastify: FastifyInstance) {
         user: {
           id: user.id,
           public_id: user.public_id,
+          full_name: user.full_name,
           email: user.email,
           role: user.role,
         },
       });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -135,7 +136,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({ accessToken, refreshToken: newRefreshToken });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       if (err.message === 'Invalid or expired refresh token') {
         return reply.status(401).send({ error: err.message });
       }
@@ -160,7 +161,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         await revokeRefreshToken(rawToken);
         return reply.status(200).send({ message: 'Logged out successfully' });
       } catch (err: any) {
-        if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+        if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }
@@ -179,7 +180,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         const payload = request.user as { id: string };
 
         const result = await query(
-          `SELECT id, public_id, email, phone, nin, role, status, created_at
+          `SELECT id, public_id, full_name, email, phone, nin, role, status, created_at
            FROM users
            WHERE id = $1`,
           [payload.id],

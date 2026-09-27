@@ -28,6 +28,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
+        AppRoutes.reports,
       ]) {
         expect(
           resolveRedirect(
@@ -64,7 +65,7 @@ void main() {
           ),
           isNull,
           reason: '$location must be reachable while signed out',
-          );
+        );
       }
     });
 
@@ -73,6 +74,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
+        AppRoutes.reports,
       ]) {
         expect(
           resolveRedirect(
@@ -128,6 +130,7 @@ void main() {
         AppRoutes.home,
         AppRoutes.permissions,
         AppRoutes.report,
+        AppRoutes.reports,
       ]) {
         expect(
           resolveRedirect(

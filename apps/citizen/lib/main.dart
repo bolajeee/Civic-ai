@@ -5,6 +5,7 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/report/providers/report_draft_provider.dart';
+import 'features/report/providers/report_history_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,12 @@ class CivicReportApp extends StatelessWidget {
         // entry, so leaving the form discards the staged photos.
         ChangeNotifierProvider<ReportDraftProvider>(
           create: (_) => ReportDraftProvider(),
+        ),
+        // Owns the report history. Registered here rather than on the history
+        // screen so the list survives navigation and is already loaded when the
+        // citizen returns to it after submitting.
+        ChangeNotifierProvider<ReportHistoryProvider>(
+          create: (_) => ReportHistoryProvider(),
         ),
       ],
       child: _AppView(authProvider: authProvider),

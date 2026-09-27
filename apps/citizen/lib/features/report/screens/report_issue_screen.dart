@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/report_draft_provider.dart';
+import '../widgets/category_grid.dart';
+import '../widgets/description_field.dart';
+import '../widgets/location_field.dart';
 import '../widgets/photo_upload_field.dart';
 
 /// "Report an Issue" — the citizen's report form.
 ///
-/// Only the photo step is wired up. Category, Location, Description and Submit
-/// are laid out to match the reference design but have no behaviour yet; they
-/// are the remaining Phase 2 items (GPS capture, description submission,
-/// report-creation API) and will be filled in against this same
-/// [ReportDraftProvider].
+/// A view over [ReportDraftProvider]: every field writes to the draft and reads
+/// back from it, so the report exists in one place and the screen can be
+/// rebuilt or left without losing anything.
 class ReportIssueScreen extends StatefulWidget {
   const ReportIssueScreen({super.key});
 
@@ -27,26 +30,75 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   void initState() {
     super.initState();
 
-    // Start from a clean draft. Resetting on entry rather than on exit means
-    // abandoning the form drops the staged photos without firing
-    // notifyListeners() while the previous screen is being torn down.
-    context.read<ReportDraftProvider>().clear();
+    final draft = context.read<ReportDraftProvider>();
+
+    // All three of these notify their listeners the moment they run, and doing
+    // that from initState would mark an already-built widget dirty mid-build.
+    // That is not hypothetical: "Report Issue" pushes without a debounce, so a
+    // double tap stacks a second report screen on top of the first, and the
+    // `clear()` below would then notify the *first* screen's fields while the
+    // second is still being built — a "markNeedsBuild called during build"
+    // crash. Deferring costs one frame of the previous draft on re-entry, which
+    // is the price of the reset being safe however the screen was reached.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      // Start from a clean draft, so a report abandoned mid-way does not
+      // reappear under a new one.
+      draft.clear();
+
+      draft.loadCategories();
+
+      // Asked for on entry rather than behind a tap: the permission prompt is
+      // better met while the citizen is filling the form than at submit time,
+      // and a refusal is not fatal — the field explains and the report goes
+      // through without a location.
+      draft.captureLocation();
+    });
   }
 
-  void _onSubmit() {
-    // The reports API does not exist yet — be explicit rather than leaving a
-    // button that silently does nothing.
+  Future<void> _onSubmit() async {
+    final draft = context.read<ReportDraftProvider>();
+
+    final report = await draft.submit();
+
+    // The citizen may have left while the upload was in flight.
+    if (!mounted) return;
+
+    if (report == null) {
+      // The draft is untouched, so the error banner sits above a form that
+      // still holds everything they entered.
+      return;
+    }
+
+    // Cleared before navigating so returning to this screen does not show the
+    // report that was just filed.
+    draft.clear();
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Submitting reports arrives with the reports API.'),
+      SnackBar(
+        content: Text('Report ${report.publicId} submitted.'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
+
+    // Back to where the citizen came from — Home. The history screen is
+    // reachable from there and will show this report at the top.
+    context.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasPhotos = context.select<ReportDraftProvider, bool>(
-      (d) => d.photos.isNotEmpty,
+    final canSubmit = context.select<ReportDraftProvider, bool>(
+      (d) => d.canSubmit,
+    );
+    final isSubmitting = context.select<ReportDraftProvider, bool>(
+      (d) => d.isSubmitting,
+    );
+    final error = context.select<ReportDraftProvider, String?>(
+      (d) => d.errorMessage,
     );
 
     return Scaffold(
@@ -66,31 +118,43 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
           children: [
             const _SectionLabel('Select Category'),
             const SizedBox(height: AppConstants.spacingSm),
-            const _CategoryGrid(),
+            const CategoryGrid(),
 
             const SizedBox(height: AppConstants.spacingLg),
 
             const _SectionLabel('Location'),
             const SizedBox(height: AppConstants.spacingSm),
-            const _LocationPlaceholder(),
+            const LocationField(),
 
             const SizedBox(height: AppConstants.spacingLg),
 
-            // The working part of the form.
             const PhotoUploadField(),
 
             const SizedBox(height: AppConstants.spacingLg),
 
             const _SectionLabel('Description'),
             const SizedBox(height: AppConstants.spacingSm),
-            const _DescriptionPlaceholder(),
+            const DescriptionField(),
+
+            if (error != null) ...[
+              const SizedBox(height: AppConstants.spacingMd),
+              ErrorBanner(message: error),
+            ],
 
             const SizedBox(height: AppConstants.spacingXl),
 
             PrimaryButton(
               label: 'Submit Report',
-              onPressed: hasPhotos ? _onSubmit : null,
+              isLoading: isSubmitting,
+              onPressed: canSubmit ? _onSubmit : null,
             ),
+
+            // Says why the button is inert, rather than leaving the citizen to
+            // work it out from a greyed-out control.
+            if (!canSubmit && !isSubmitting) ...[
+              const SizedBox(height: AppConstants.spacingSm),
+              const _SubmitHint(),
+            ],
           ],
         ),
       ),
@@ -113,123 +177,27 @@ class _SectionLabel extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Category grid — laid out only, not yet selectable
+// Submit hint
 // ---------------------------------------------------------------------------
 
-const List<({IconData icon, String label})> _categories = [
-  (icon: Icons.add_road_outlined, label: 'Pothole'),
-  (icon: Icons.water_drop_outlined, label: 'Flooding'),
-  (icon: Icons.lightbulb_outline, label: 'Streetlight'),
-  (icon: Icons.delete_outline, label: 'Waste'),
-  (icon: Icons.water_damage_outlined, label: 'Water Leak'),
-  (icon: Icons.more_horiz_rounded, label: 'Other'),
-];
-
-class _CategoryGrid extends StatelessWidget {
-  const _CategoryGrid();
+class _SubmitHint extends StatelessWidget {
+  const _SubmitHint();
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: AppConstants.spacingSm,
-      crossAxisSpacing: AppConstants.spacingSm,
-      childAspectRatio: 1.25,
-      children: [
-        for (final category in _categories)
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-              border: Border.all(color: AppColors.inputBorder),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  category.icon,
-                  size: 22,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(height: AppConstants.spacingXs),
-                Text(
-                  category.label,
-                  style: AppTextStyles.bodySmall,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
+    final draft = context.watch<ReportDraftProvider>();
 
-// ---------------------------------------------------------------------------
-// Location placeholder
-// ---------------------------------------------------------------------------
+    final missing = <String>[
+      if (draft.category == null) 'a category',
+      if (draft.photos.isEmpty) 'at least one photo',
+    ];
 
-class _LocationPlaceholder extends StatelessWidget {
-  const _LocationPlaceholder();
+    if (missing.isEmpty) return const SizedBox.shrink();
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.spacingMd,
-        vertical: 14,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.inputFill,
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(color: AppColors.inputBorder),
-      ),
-      child: const Row(
-        children: [
-          Icon(
-            Icons.location_on_outlined,
-            size: 18,
-            color: AppColors.inputIcon,
-          ),
-          SizedBox(width: AppConstants.spacingSm),
-          Expanded(
-            // Deliberately not a fake address — GPS capture is the next step.
-            child: Text(
-              'Your GPS location will be attached to this report',
-              style: AppTextStyles.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Description placeholder
-// ---------------------------------------------------------------------------
-
-class _DescriptionPlaceholder extends StatelessWidget {
-  const _DescriptionPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 96,
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      decoration: BoxDecoration(
-        color: AppColors.inputFill,
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(color: AppColors.inputBorder),
-      ),
-      child: const Text(
-        'Provide more details about the issue '
-        '(e.g. depth, impact on traffic)…',
-        style: AppTextStyles.bodyMedium,
-      ),
+    return Text(
+      'Add ${missing.join(' and ')} to submit.',
+      style: AppTextStyles.bodySmall,
+      textAlign: TextAlign.center,
     );
   }
 }

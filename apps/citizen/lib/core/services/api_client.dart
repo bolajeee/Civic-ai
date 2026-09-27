@@ -34,7 +34,11 @@ class ApiClient {
         baseUrl: AppConstants.baseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 20),
-        headers: {'Content-Type': 'application/json'},
+        // No default Content-Type on purpose. A global 'application/json'
+        // would also be applied to multipart bodies, and Dio only generates
+        // the multipart boundary — the part the server parses on — when it
+        // sets that header itself. Dio already sends 'application/json' for
+        // Map bodies, so JSON requests are unaffected.
       ),
     );
 
