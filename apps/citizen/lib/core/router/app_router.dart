@@ -7,6 +7,11 @@ import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
+import '../../features/profile/screens/profile_screen.dart';
+import '../../features/report/screens/history_screen.dart';
+import '../../features/report/screens/report_screen.dart';
+import '../../features/report/screens/report_details_screen.dart';
+import '../../shared/data/mock_reports.dart';
 import '../constants/app_constants.dart';
 
 abstract final class AppRoutes {
@@ -15,6 +20,10 @@ abstract final class AppRoutes {
   static const String register = '/register';
   static const String permissions = '/permissions';
   static const String home = '/home';
+  static const String report = '/report';
+  static const String history = '/history';
+  static const String profile = '/profile';
+  static const String reportDetails = '/report-details/:id';
 }
 
 /// Builds the [GoRouter] instance.
@@ -66,6 +75,12 @@ GoRouter buildRouter(AuthProvider authProvider) {
       // Already on home — allow it
       if (location == AppRoutes.home) return null;
 
+      // Already on protected app screens — allow them
+      if (location == AppRoutes.report) return null;
+      if (location == AppRoutes.history) return null;
+      if (location == AppRoutes.profile) return null;
+      if (location.startsWith('/report-details/')) return null;
+
       // Coming from an auth route or splash after login → go to permissions
       // first if they haven't been asked yet, otherwise straight to home.
       if (isAuthRoute) {
@@ -95,6 +110,31 @@ GoRouter buildRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.home,
         builder: (_, __) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.report,
+        builder: (_, __) => const ReportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.history,
+        builder: (_, state) => HistoryScreen(
+          initialFilter: state.uri.queryParameters['filter'],
+          highlightId: state.uri.queryParameters['id'],
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.reportDetails,
+        builder: (_, state) {
+          final id = state.pathParameters['id'];
+          final report = kMockReports.where((item) => item.id == id).firstOrNull;
+          return report == null
+              ? const Scaffold(body: Center(child: Text('Report not found')))
+              : ReportDetailsScreen(report: report);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (_, __) => const ProfileScreen(),
       ),
     ],
   );

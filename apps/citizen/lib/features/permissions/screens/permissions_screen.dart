@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -47,6 +48,30 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _requestAll() async {
+    // -------------------------------------------------------------------------
+    // Flutter Web testing bypass
+    //
+    // permission_handler's .request() does not reliably resolve on Flutter Web:
+    // the browser requires a separate direct user-gesture for each permission
+    // and does not support batched requests the way Android/iOS do. This causes
+    // the Future to hang indefinitely after the user accepts the first (camera)
+    // prompt, leaving the screen permanently stuck in the loading state.
+    //
+    // On web we skip the OS-level request and proceed immediately. This is safe
+    // because:
+    //   • The citizen app is intended to ship as a mobile app; web is dev/test only.
+    //   • No feature currently reads these permission statuses after this screen.
+    //   • When camera, location, and notification features are implemented they
+    //     will trigger the browser's native permission prompt at the point of use
+    //     (the correct web pattern), not here.
+    //
+    // Android/iOS: the full permission flow below is unchanged.
+    // -------------------------------------------------------------------------
+    if (kIsWeb) {
+      _proceed();
+      return;
+    }
+
     setState(() => _isRequesting = true);
 
     final results = await [
