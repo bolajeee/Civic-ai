@@ -20,7 +20,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - JWT `authenticate` preHandler decorator for protected routes
 - [x] Object Storage integration
 - [x] Government Authentication
-  - Invite-code gated registration (`gov_invite_codes` table)
+  - Invite-code gated registration (`gov_invite_codes` table) // intentionally skipped for
   - Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
   - `/logout-all` for full session revocation
 
