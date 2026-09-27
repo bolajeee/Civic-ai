@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../shared/widgets/primary_button.dart';
 
-/// Placeholder home screen — will be replaced in Phase 2 (Citizen Reporting).
+/// Placeholder home screen — the dashboard proper arrives in Phase 4.
+/// For now it exists to host the entry point into the report flow.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -26,7 +31,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(AppConstants.spacingXl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -43,17 +48,23 @@ class HomeScreen extends StatelessWidget {
                   color: AppColors.primary,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppConstants.spacingLg),
               Text(
                 'Welcome${user != null ? ', ${user.email}' : ''}!',
                 style: AppTextStyles.heading2,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppConstants.spacingSm),
               const Text(
-                'Dashboard coming in Phase 2.',
+                'Spotted a problem on your street? Photograph it and let the '
+                'right people know.',
                 style: AppTextStyles.bodyMedium,
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spacingXl),
+              PrimaryButton(
+                label: 'Report Issue',
+                onPressed: () => context.push(AppRoutes.report),
               ),
             ],
           ),

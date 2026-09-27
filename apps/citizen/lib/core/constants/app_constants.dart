@@ -29,6 +29,14 @@ abstract final class AppConstants {
   // Prefs keys
   static const String keyPermissionsGranted = 'permissions_granted';
 
+  // Citizen reports
+  //
+  // Photos are downsampled on pick so a modern phone's capture doesn't stage a
+  // multi-megabyte file per image — upload time matters on mobile data.
+  static const int maxReportPhotos = 5;
+  static const double reportPhotoMaxDimension = 1920.0;
+  static const int reportPhotoQuality = 85;
+
   // Spacing
   static const double spacingXs = 4.0;
   static const double spacingSm = 8.0;

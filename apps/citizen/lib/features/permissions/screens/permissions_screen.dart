@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/primary_button.dart';
 
 /// Shown once after a successful login/register, before navigating to Home.
@@ -65,22 +64,21 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     });
 
     // Any permanently denied permission → guide to Settings
-    final permanentlyDenied = results.values
-        .any((s) => s == PermissionStatus.permanentlyDenied);
+    final permanentlyDenied =
+        results.values.any((s) => s == PermissionStatus.permanentlyDenied);
 
     if (permanentlyDenied && mounted) {
       _showSettingsDialog();
       return;
     }
 
-    _proceed();
+    await _proceed();
   }
 
-  void _proceed() async {
-    // Mark permissions flow as complete so it's skipped on future launches
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(AppConstants.keyPermissionsGranted, true);
-    if (mounted) context.go(AppRoutes.home);
+  Future<void> _proceed() async {
+    // markPermissionsGranted() writes to SharedPreferences AND calls
+    // notifyListeners() — the router redirect fires and navigates to /home.
+    await context.read<AuthProvider>().markPermissionsGranted();
   }
 
   void _showSettingsDialog() {
@@ -167,7 +165,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               // Skip — some permissions can be granted later
               Center(
                 child: TextButton(
-                  onPressed: _isRequesting ? null : _proceed,
+                  onPressed: _isRequesting ? null : () => _proceed(),
                   child: const Text(
                     'Skip for now',
                     style: AppTextStyles.bodyMedium,
@@ -221,8 +219,7 @@ const List<_PermItem> _permItems = [
     permission: Permission.notification,
     icon: Icons.notifications_outlined,
     title: 'Notifications',
-    description:
-        'Get updates when your report is reviewed or resolved.',
+    description: 'Get updates when your report is reviewed or resolved.',
   ),
 ];
 
@@ -353,8 +350,8 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (status == null) return const SizedBox.shrink();
 
-    final isGranted =
-        status == PermissionStatus.granted || status == PermissionStatus.limited;
+    final isGranted = status == PermissionStatus.granted ||
+        status == PermissionStatus.limited;
     final isDenied = status == PermissionStatus.permanentlyDenied;
 
     if (isGranted) {

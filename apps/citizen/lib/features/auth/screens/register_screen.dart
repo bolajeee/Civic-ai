@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -71,7 +72,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final auth = context.read<AuthProvider>();
-    final success = await auth.register(
+    // Router redirect fires automatically once register() calls notifyListeners().
+    await auth.register(
       fullName: _fullNameController.text.trim(),
       nin: _ninController.text.trim(),
       email: _emailController.text.trim(),
@@ -80,10 +82,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ? null
           : _phoneController.text.trim(),
     );
-
-    if (success && mounted) {
-      context.go(AppRoutes.permissions);
-    }
   }
 
   @override
@@ -378,11 +376,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
 // Terms & Conditions checkbox row
 // ---------------------------------------------------------------------------
 
-class _TermsCheckbox extends StatelessWidget {
+// Placeholder URLs — swap for real hosted documents before release
+const _kTermsUrl = 'https://civicreport.ng/terms';
+const _kPrivacyUrl = 'https://civicreport.ng/privacy';
+
+Future<void> _launchUrl(String url) async {
+  final uri = Uri.parse(url);
+  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    // Silently ignore — user can decline the in-app browser prompt
+  }
+}
+
+class _TermsCheckbox extends StatefulWidget {
   const _TermsCheckbox({required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool?> onChanged;
+
+  @override
+  State<_TermsCheckbox> createState() => _TermsCheckboxState();
+}
+
+class _TermsCheckboxState extends State<_TermsCheckbox> {
+  // GestureRecognizers must be disposed to avoid memory leaks
+  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
+    ..onTap = () => _launchUrl(_kTermsUrl);
+  late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()
+    ..onTap = () => _launchUrl(_kPrivacyUrl);
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -393,24 +420,32 @@ class _TermsCheckbox extends StatelessWidget {
           width: 24,
           height: 24,
           child: Checkbox(
-            value: value,
-            onChanged: onChanged,
+            value: widget.value,
+            onChanged: widget.onChanged,
             visualDensity: VisualDensity.compact,
           ),
         ),
         const SizedBox(width: AppConstants.spacingSm),
         Expanded(
           child: GestureDetector(
-            onTap: () => onChanged(!value),
+            // Tapping the text body (not the links) toggles the checkbox
+            onTap: () => widget.onChanged(!widget.value),
             child: RichText(
-              text: const TextSpan(
+              text: TextSpan(
                 style: AppTextStyles.bodySmall,
                 children: [
-                  TextSpan(text: 'I agree to the '),
+                  const TextSpan(text: 'I agree to the '),
                   TextSpan(
-                      text: 'Terms & Conditions', style: AppTextStyles.link),
-                  TextSpan(text: ' and '),
-                  TextSpan(text: 'Privacy Policy', style: AppTextStyles.link),
+                    text: 'Terms & Conditions',
+                    style: AppTextStyles.link,
+                    recognizer: _termsTap,
+                  ),
+                  const TextSpan(text: ' and '),
+                  TextSpan(
+                    text: 'Privacy Policy',
+                    style: AppTextStyles.link,
+                    recognizer: _privacyTap,
+                  ),
                 ],
               ),
             ),

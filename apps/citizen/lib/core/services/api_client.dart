@@ -17,6 +17,16 @@ class ApiClient {
 
   Dio get dio => _dio;
 
+  /// Invoked when the session can no longer be recovered — the refresh token is
+  /// missing, or the silent refresh call itself failed. [AuthProvider] registers
+  /// here so an expired session actually reaches the router and redirects to
+  /// `/login`, instead of leaving the app parked on a screen it can no longer
+  /// load data for.
+  ///
+  /// A plain callback rather than an `AuthProvider` reference keeps this file
+  /// free of a `core → features` dependency.
+  void Function()? onSessionExpired;
+
   Dio _buildDio() {
     final dio = Dio(
       BaseOptions(
@@ -28,7 +38,10 @@ class ApiClient {
       ),
     );
 
-    dio.interceptors.add(_AuthInterceptor(dio));
+    // Looked up lazily so AuthProvider can register after the client is built.
+    dio.interceptors.add(
+      _AuthInterceptor(dio, () => onSessionExpired?.call()),
+    );
 
     return dio;
   }
@@ -39,9 +52,10 @@ class ApiClient {
 // ---------------------------------------------------------------------------
 
 class _AuthInterceptor extends Interceptor {
-  _AuthInterceptor(this._dio);
+  _AuthInterceptor(this._dio, this._onSessionExpired);
 
   final Dio _dio;
+  final void Function() _onSessionExpired;
   bool _isRefreshing = false;
 
   final _storage = TokenStorageService.instance;
@@ -65,9 +79,13 @@ class _AuthInterceptor extends Interceptor {
   ) async {
     final path = err.requestOptions.path;
     final is401 = err.response?.statusCode == 401;
+    // `/logout` is in the list so a sign-out whose 401 is merely a stale token
+    // never kicks off a refresh attempt — which, if it then failed, would raise
+    // a "session expired" message on a logout the user asked for.
     final isAuthEndpoint = path.contains('/auth/login') ||
         path.contains('/auth/register') ||
-        path.contains('/auth/refresh');
+        path.contains('/auth/refresh') ||
+        path.contains('/auth/logout');
 
     if (!is401 || isAuthEndpoint || _isRefreshing) {
       handler.next(err);
@@ -81,7 +99,7 @@ class _AuthInterceptor extends Interceptor {
       final userId = await _storage.getUserId();
 
       if (refreshToken == null || userId == null) {
-        await _storage.clearAll();
+        await _expireSession();
         handler.next(err);
         return;
       }
@@ -106,10 +124,18 @@ class _AuthInterceptor extends Interceptor {
       final retryResponse = await _dio.fetch(retryOptions);
       handler.resolve(retryResponse);
     } catch (_) {
-      await _storage.clearAll();
+      await _expireSession();
       handler.next(err);
     } finally {
       _isRefreshing = false;
     }
+  }
+
+  /// Wipes stored credentials and reports the dead session upward, so the app
+  /// routes to `/login` instead of retrying forever against a session that is
+  /// already gone.
+  Future<void> _expireSession() async {
+    await _storage.clearAll();
+    _onSessionExpired();
   }
 }

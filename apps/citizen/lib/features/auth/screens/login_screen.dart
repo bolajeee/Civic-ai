@@ -37,14 +37,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
-    final success = await auth.login(
+    // Router redirect fires automatically once login() calls notifyListeners().
+    await auth.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
-
-    if (success && mounted) {
-      context.go(AppRoutes.permissions);
-    }
   }
 
   @override
@@ -96,8 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Error banner
                 Consumer<AuthProvider>(
                   builder: (_, auth, __) {
-                    if (auth.errorMessage == null){
-                      return const SizedBox.shrink();}
+                    if (auth.errorMessage == null) {
+                      return const SizedBox.shrink();
+                    }
                     return Padding(
                       padding:
                           const EdgeInsets.only(bottom: AppConstants.spacingMd),

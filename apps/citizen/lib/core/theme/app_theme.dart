@@ -15,7 +15,6 @@ abstract final class AppTheme {
         error: AppColors.error,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Inter',
 
       // AppBar
       appBarTheme: const AppBarTheme(
@@ -95,7 +94,9 @@ abstract final class AppTheme {
       // Checkbox
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.checkboxActive;
+          if (states.contains(WidgetState.selected)) {
+            return AppColors.checkboxActive;
+          }
           return Colors.transparent;
         }),
         checkColor: WidgetStateProperty.all(AppColors.surface),

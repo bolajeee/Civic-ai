@@ -4,50 +4,46 @@ import 'package:provider/provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/report/providers/report_draft_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait orientation
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(const CivicReportApp());
+  // Create the provider BEFORE runApp so the instance is ready.
+  // initialize() is called AFTER runApp — by that point GoRouter has mounted
+  // and subscribed to the ChangeNotifier via refreshListenable, so the
+  // notifyListeners() inside initialize() reliably triggers the redirect.
+  final authProvider = AuthProvider();
+
+  runApp(CivicReportApp(authProvider: authProvider));
+
+  // Kick off session restore now that the widget tree is listening.
+  authProvider.initialize();
 }
 
-class CivicReportApp extends StatefulWidget {
-  const CivicReportApp({super.key});
+class CivicReportApp extends StatelessWidget {
+  const CivicReportApp({super.key, required this.authProvider});
 
-  @override
-  State<CivicReportApp> createState() => _CivicReportAppState();
-}
-
-class _CivicReportAppState extends State<CivicReportApp> {
-  // AuthProvider is created here so the router can hold a stable reference
-  // to the same instance across rebuilds.
-  late final AuthProvider _authProvider;
-
-  @override
-  void initState() {
-    super.initState();
-    _authProvider = AuthProvider();
-  }
-
-  @override
-  void dispose() {
-    _authProvider.dispose();
-    super.dispose();
-  }
+  final AuthProvider authProvider;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<AuthProvider>.value(value: _authProvider),
+        ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+        // Owns the in-progress report. Registered app-wide so a draft survives
+        // navigation within the report flow; ReportIssueScreen resets it on
+        // entry, so leaving the form discards the staged photos.
+        ChangeNotifierProvider<ReportDraftProvider>(
+          create: (_) => ReportDraftProvider(),
+        ),
       ],
-      child: _AppView(authProvider: _authProvider),
+      child: _AppView(authProvider: authProvider),
     );
   }
 }
@@ -61,7 +57,7 @@ class _AppView extends StatefulWidget {
 }
 
 class _AppViewState extends State<_AppView> {
-  // Router is built once and held here — not recreated on rebuild.
+  // Router is built once — not recreated on rebuild.
   late final router = buildRouter(widget.authProvider);
 
   @override

@@ -11,32 +11,41 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 
 ## Phases
 
-### Phase 1: Foundation (In Progress)
+### Phase 1: Foundation (Complete)
 - [x] Repository Architecture
 - [x] Database (PostgreSQL setup, Users table)
 - [x] Authentication (API setup)
-  - Citizen: `/api/auth/register`, `/login`, `/refresh`, `/logout`, `/me`
-  - Refresh token rotation strategy (SHA-256 hashed, 30-day TTL, per-device revocation)
-  - JWT `authenticate` preHandler decorator for protected routes
+  - [x] Citizen: `/api/auth/register`, `/login`, `/refresh`, `/logout`, `/me`
+  - [x] Refresh token rotation strategy (SHA-256 hashed, 30-day TTL, per-device revocation)
+  - [x] JWT `authenticate` preHandler decorator for protected routes
 - [x] Object Storage integration
 - [x] Government Authentication
-  - Invite-code gated registration (`gov_invite_codes` table) // intentionally skipped for
-  - Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
-  - `/logout-all` for full session revocation
+  - [x] Invite-code gated registration (`gov_invite_codes` table) // intentionally skipped for now
+  - [x] Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
+  - [x] `/logout-all` for full session revocation
 
 ### Phase 2: Citizen Reporting (In Progress)
 - [ ] Create report API endpoint
 - [x] Flutter citizen app scaffolded (`apps/citizen`)
-  - Splash screen (animated, dark green, shield icon)
-  - Login screen (email + password, validation, social login stubs)
-  - Sign-up screen (Full Name, NIN, Email, Phone, Password, T&C checkbox)
-  - `AuthProvider` (ChangeNotifier) — session restore, login, register, logout
-  - `ApiClient` (Dio) — Bearer token injection + silent refresh interceptor
-  - `TokenStorageService` — flutter_secure_storage (keychain/keystore)
-  - `GoRouter` — redirect-based auth guard, refreshListenable wired to provider
-  - Shared widgets: `PrimaryButton`, `AppTextField`, `ErrorBanner`
-  - Placeholder `HomeScreen` (to be replaced in Phase 2)
-- [ ] Camera/Gallery integration (Flutter)
+  - [x] Splash screen (animated, dark green, shield icon)
+  - [x] Login screen (email + password, validation, social login stubs)
+  - [x] Sign-up screen (Full Name, NIN, Email, Phone, Password, T&C checkbox)
+  - [x] `AuthProvider` (ChangeNotifier) — session restore, login, register, logout
+  - [x] `ApiClient` (Dio) — Bearer token injection + silent refresh interceptor
+  - [x] `TokenStorageService` — flutter_secure_storage (keychain/keystore)
+  - [x] `GoRouter` — redirect-based auth guard, refreshListenable wired to provider
+  - [x] Shared widgets: `PrimaryButton`, `AppTextField`, `ErrorBanner`
+  - [x] Permissions screen (camera, location, notifications — shown once post-login)
+  - [x] Android & iOS platform folders generated with full manifest entries
+  - [x] All auth gaps resolved: fullName in register body, double-navigation removed, Terms/Privacy links wired via `url_launcher`, `await _proceed()` fixed
+  - [x] Splash-screen hang fixed — `unauthenticated` + `/` returned `null` because splash was grouped with the auth routes, so a fresh install never left splash. Redirect rules extracted into a pure `resolveRedirect()` with regression tests (`test/core/router/`)
+  - [x] `flutter analyze` — zero issues
+- [x] Camera/Gallery integration (Flutter)
+  - [x] `image_picker` (native camera + system gallery), downsampled to 1920px @ 85 quality on pick
+  - [x] Camera permission pre-check via `permission_handler` — denial surfaces an error + Open Settings instead of failing silently
+  - [x] Multi-photo: up to 5 per report, appended, individually removable, with a live counter
+  - [x] `ReportDraftProvider` (ChangeNotifier) — draft is dropped when the form is abandoned
+  - [x] Report Issue screen shell per Figma (`/report`) — category, location, description and submit are laid out but inert pending their own items below
 - [ ] GPS capture
 - [ ] Description submission
 - [ ] Report history retrieval

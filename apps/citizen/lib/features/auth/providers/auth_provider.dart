@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/api_exception.dart';
+import '../../../core/services/api_client.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 
@@ -17,14 +20,20 @@ enum AuthStatus {
 
 /// Holds all auth state and exposes actions consumed by screens.
 ///
-/// Lifecycle:
-///   1. App starts → [initialize] checks secure storage for existing tokens.
-///   2. User logs in/registers → [login] / [register] → status becomes [authenticated].
-///   3. Any 401 the API interceptor can't recover from → [_clearSession] →
-///      status becomes [unauthenticated] → router redirects to login.
+/// Owns [permissionsGranted] so the GoRouter redirect stays fully synchronous
+/// (no async SharedPreferences read inside the redirect callback).
 class AuthProvider extends ChangeNotifier {
   AuthProvider() {
-    initialize();
+    ApiClient.instance.onSessionExpired = _handleSessionExpired;
+    // initialize() is NOT called here — it is called explicitly from main()
+    // after runApp so the GoRouter refreshListenable is guaranteed to be
+    // subscribed before the first notifyListeners() fires.
+  }
+
+  @override
+  void dispose() {
+    ApiClient.instance.onSessionExpired = null;
+    super.dispose();
   }
 
   final _service = AuthService.instance;
@@ -38,30 +47,47 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _isLoading = false;
 
+  /// Loaded once during [initialize] from SharedPreferences.
+  /// Updated to true when the user completes the permissions screen.
+  bool _permissionsGranted = false;
+
   AuthStatus get status => _status;
   UserModel? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+  bool get permissionsGranted => _permissionsGranted;
 
   // ---------------------------------------------------------------------------
-  // Initialise (session restore on app launch)
+  // Initialise
   // ---------------------------------------------------------------------------
 
   Future<void> initialize() async {
+    // The whole body is guarded so this future can never reject and can never
+    // leave [_status] as `initializing`. main() fires this without awaiting it,
+    // so an uncaught throw here would be silent — and the router would park on
+    // the splash screen forever with no error to explain why.
     try {
+      // Read the permissions flag once here — keeps the router redirect sync.
+      final prefs = await SharedPreferences.getInstance();
+      _permissionsGranted =
+          prefs.getBool(AppConstants.keyPermissionsGranted) ?? false;
+
       final hasSession = await _service.hasSession();
       if (hasSession) {
-        // Try fetching the user profile to validate the stored token
         _user = await _service.getMe();
         _status = AuthStatus.authenticated;
       } else {
         _status = AuthStatus.unauthenticated;
       }
     } catch (_) {
-      // Token may be expired and refresh failed — treat as unauthenticated
+      // Any failure (storage, network, malformed response) means we cannot
+      // prove there is a session — fall back to signed-out.
+      _permissionsGranted = false;
+      _user = null;
       _status = AuthStatus.unauthenticated;
     }
+
     notifyListeners();
   }
 
@@ -94,7 +120,7 @@ class AuthProvider extends ChangeNotifier {
     } on DioException catch (e) {
       _setError(ApiException.fromDio(e).message);
       return false;
-    } catch (e) {
+    } catch (_) {
       _setError('An unexpected error occurred. Please try again.');
       return false;
     } finally {
@@ -122,7 +148,7 @@ class AuthProvider extends ChangeNotifier {
     } on DioException catch (e) {
       _setError(ApiException.fromDio(e).message);
       return false;
-    } catch (e) {
+    } catch (_) {
       _setError('An unexpected error occurred. Please try again.');
       return false;
     } finally {
@@ -142,12 +168,33 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Permissions
+  // ---------------------------------------------------------------------------
+
+  /// Called by [PermissionsScreen] after the user grants or skips permissions.
+  /// Updates the in-memory flag so the router redirect reacts immediately
+  /// without needing another SharedPreferences read.
+  Future<void> markPermissionsGranted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.keyPermissionsGranted, true);
+    _permissionsGranted = true;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
   void clearError() => _clearError();
 
+  void _handleSessionExpired() {
+    if (_status == AuthStatus.unauthenticated) return;
+    _errorMessage = 'Your session expired. Please sign in again.';
+    _clearSession();
+  }
+
   void _clearSession() {
+    if (_status == AuthStatus.unauthenticated && _user == null) return;
     _user = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
