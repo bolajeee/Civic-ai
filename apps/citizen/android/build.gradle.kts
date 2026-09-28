@@ -15,6 +15,16 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+// Flutter plugins can set their own compileSdk during project evaluation.
+// Override it after their scripts finish, before evaluation of :app triggers
+// dependent projects and Gradle starts reading Android variant configuration.
+subprojects {
+    afterEvaluate {
+        extensions.findByType<com.android.build.api.dsl.LibraryExtension>()
+            ?.let { androidLibrary -> androidLibrary.compileSdk = 36 }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
