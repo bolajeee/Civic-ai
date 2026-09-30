@@ -1,3 +1,4 @@
+import 'ai_classification.dart';
 import 'report_category.dart';
 import 'report_location.dart';
 
@@ -43,6 +44,7 @@ class SubmittedReport {
     this.submittedAt,
     this.location,
     this.thumbnailUrl,
+    this.aiClassification,
   });
 
   final String id;
@@ -61,8 +63,12 @@ class SubmittedReport {
   /// no media or the signature could not be created.
   final String? thumbnailUrl;
 
+  /// The AI's photo check, or null when the server has AI switched off.
+  final AiClassification? aiClassification;
+
   factory SubmittedReport.fromJson(Map<String, dynamic> json) {
     final location = json['location'];
+    final ai = json['aiClassification'];
 
     return SubmittedReport(
       id: json['id'] as String,
@@ -80,6 +86,9 @@ class SubmittedReport {
           ? ReportLocation.fromJson(location)
           : null,
       thumbnailUrl: json['thumbnailUrl'] as String?,
+      aiClassification: ai is Map<String, dynamic>
+          ? AiClassification.fromJson(ai)
+          : null,
     );
   }
 }

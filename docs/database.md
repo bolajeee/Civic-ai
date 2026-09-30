@@ -37,6 +37,7 @@
 - Every AI processing operation creates an audit record.
 - The MVP stores image classification work and results in report_ai_analyses, which is also the durable PostgreSQL-backed job queue.
 - `id`, `report_id`, `model_name`, `model_version`, `analysis_type`, `prediction`, `confidence`, `metadata`
+- Embeddings live in `report_embeddings` (pgvector `vector(1536)`, HNSW cosine index), which is likewise its own durable queue. It keeps `input_text`, model and version for auditability.
 
 ### 8. Audit Logs
 - Immutable audit records for important government actions.

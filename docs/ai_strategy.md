@@ -43,3 +43,17 @@ Do not train five sophisticated models from scratch for the MVP. Start with pret
 - A result below AI_CLASSIFICATION_MIN_CONFIDENCE keeps its score and evidence but has no predicted category id.
 - Confidence is a model-reported score, not a calibrated probability; use it for triage and review, not as ground truth.
 - Severity, embeddings, duplicate matching, and clustering remain separate later steps.
+
+## Phase 3 Second Slice: Embeddings
+
+- One SEMANTIC_TEXT embedding per report (text-embedding-3-small, 1536 dimensions, configurable model), stored in report_embeddings with its input text, model and version.
+- The text is category label, description, address and the visual evidence sentence from image classification. The job waits for classification to settle (pending/processing) so evidence is included, but a skipped, failed or absent classification does not block it.
+- Same durable PostgreSQL queue pattern and retry policy as classification. Disabled unless both AI_EMBEDDINGS_ENABLED=true and OPENAI_API_KEY are set.
+- Image-vector embeddings are not built: OpenAI has no image embedding endpoint, so this needs a separate model (e.g. CLIP) as a new embedding_type.
+
+## Operating the AI queues
+
+- **Backfill:** at startup, each enabled flag queues a job for every report that has none (`src/ai/backfill.ts`). Enabling a flag is therefore the consent to bill for the whole back catalogue; it is idempotent and safe across restarts.
+- **Crash cap:** a job left PROCESSING for over 10 minutes is re-claimed only while it has attempts left; otherwise it is marked FAILED with `WORKER_CRASHED`.
+- **Citizen app:** the report detail screen shows the AI's suggestion as a second opinion, or a "reviewing" note while pending. Failed and skipped checks are hidden.
+

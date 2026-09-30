@@ -31,6 +31,10 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   'image/gif',
 ]);
 
+export function supportedClassificationImageTypes(): string[] {
+  return [...SUPPORTED_IMAGE_TYPES];
+}
+
 export function isSupportedClassificationImageType(mimeType: string): boolean {
   return SUPPORTED_IMAGE_TYPES.has(mimeType);
 }

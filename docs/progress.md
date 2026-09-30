@@ -91,7 +91,7 @@ intentionally redirects it to Home; the test and router were not changed here.
 
 ### Phase 3: AI (In Progress)
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending)
-- [ ] Embeddings generation
+- [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
 - [ ] Duplicate candidates detection
 - [ ] Issue clustering logic
 - [ ] Severity estimation

@@ -10,12 +10,17 @@ import reportRoutes from './routes/reports';
 import { uploadImage, getImageUrl } from './lib/storage';
 import { startClassificationWorker } from './ai/classification_worker';
 import { isClassificationEnabled } from './ai/classification';
+import { startEmbeddingWorker } from './ai/embedding_worker';
+import { isEmbeddingEnabled } from './ai/embedding';
+import { backfillAiJobs } from './ai/backfill';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
+let stopAIEmbeddingWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
+  stopAIEmbeddingWorker();
 });
 
 // ---------------------------------------------------------------------------
@@ -89,10 +94,16 @@ const start = async () => {
   try {
     const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
     await fastify.listen({ port, host: '0.0.0.0' });
+    await backfillAiJobs(fastify.log);
     stopAIClassificationWorker = startClassificationWorker(fastify.log);
     fastify.log.info(
       { enabled: isClassificationEnabled() },
       'AI image classification worker configuration',
+    );
+    stopAIEmbeddingWorker = startEmbeddingWorker(fastify.log);
+    fastify.log.info(
+      { enabled: isEmbeddingEnabled() },
+      'AI embedding worker configuration',
     );
     console.log(`Server listening at http://localhost:${port}`);
   } catch (err) {

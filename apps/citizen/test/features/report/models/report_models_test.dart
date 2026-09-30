@@ -1,3 +1,4 @@
+import 'package:civic_report/features/report/models/ai_classification.dart';
 import 'package:civic_report/features/report/models/report_category.dart';
 import 'package:civic_report/features/report/models/report_location.dart';
 import 'package:civic_report/features/report/models/submitted_report.dart';
@@ -167,6 +168,64 @@ void main() {
       });
 
       expect(report.submittedAt, isNull);
+    });
+  });
+
+  group('AiClassification', () {
+    test('parses a completed check with a suggestion', () {
+      final ai = AiClassification.fromJson({
+        'status': 'completed',
+        'category': {'id': 'c1', 'slug': 'POTHOLE', 'label': 'Pothole'},
+        'confidence': 0.824,
+        'evidence': 'A hole in the tarmac.',
+      });
+
+      expect(ai.status, AiClassificationStatus.completed);
+      expect(ai.category?.slug, 'POTHOLE');
+      expect(ai.confidenceLabel, '82%');
+      expect(ai.isVisible, isTrue);
+    });
+
+    test('an unsure result keeps its score but has no category', () {
+      final ai = AiClassification.fromJson({
+        'status': 'completed',
+        'category': null,
+        'confidence': 0.3,
+        'evidence': 'Unclear.',
+      });
+
+      expect(ai.category, isNull);
+      expect(ai.confidenceLabel, '30%');
+      expect(ai.isVisible, isTrue);
+    });
+
+    test('in-progress checks are visible, failed and skipped are not', () {
+      AiClassification of(String status) =>
+          AiClassification.fromJson({'status': status});
+
+      expect(of('pending').isVisible, isTrue);
+      expect(of('processing').isInProgress, isTrue);
+      expect(of('failed').isVisible, isFalse);
+      expect(of('skipped').isVisible, isFalse);
+      expect(of('disabled').isVisible, isFalse);
+    });
+
+    test('SubmittedReport parses it, and tolerates its absence', () {
+      final base = <String, dynamic>{
+        'id': 'r1',
+        'publicId': 'CR-1',
+        'status': 'PENDING',
+        'category': {'id': 'c1', 'slug': 'POTHOLE', 'label': 'Pothole'},
+      };
+
+      expect(SubmittedReport.fromJson(base).aiClassification, isNull);
+      expect(
+        SubmittedReport.fromJson({
+          ...base,
+          'aiClassification': {'status': 'pending'},
+        }).aiClassification?.isInProgress,
+        isTrue,
+      );
     });
   });
 

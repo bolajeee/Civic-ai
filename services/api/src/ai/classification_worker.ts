@@ -55,6 +55,20 @@ async function claimJob(): Promise<ClassificationJob | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // A job whose worker died on its final attempt would otherwise be
+    // re-claimed forever, because only handled errors reach the retry cap.
+    await client.query(
+      `UPDATE report_ai_analyses
+       SET status = 'FAILED',
+           error_code = 'WORKER_CRASHED',
+           completed_at = NOW(),
+           updated_at = NOW()
+       WHERE analysis_type = 'IMAGE_CLASSIFICATION'
+         AND status = 'PROCESSING'
+         AND updated_at < NOW() - INTERVAL '10 minutes'
+         AND attempt_count >= $1`,
+      [MAX_ATTEMPTS],
+    );
     const candidate = await client.query<ClassificationJob>(
       `SELECT a.id, a.media_id, m.storage_key, m.media_type,
               a.attempt_count, a.model_name
@@ -68,9 +82,11 @@ async function claimJob(): Promise<ClassificationJob | null> {
              AND a.updated_at < NOW() - INTERVAL '10 minutes'
            )
          )
+         AND a.attempt_count < $1
        ORDER BY a.created_at
        LIMIT 1
        FOR UPDATE OF a SKIP LOCKED`,
+      [MAX_ATTEMPTS],
     );
 
     if (candidate.rows.length === 0) {

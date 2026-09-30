@@ -7,7 +7,9 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/data/report_categories.dart';
 import '../../../shared/widgets/report_card.dart';
+import '../models/ai_classification.dart';
 import '../models/relative_time.dart';
+import '../models/report_category.dart';
 import '../models/submitted_report.dart';
 
 /// One report, in full.
@@ -84,6 +86,13 @@ class ReportDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppConstants.spacingLg),
                   _DetailsCard(report: report),
+                  if (report.aiClassification?.isVisible ?? false) ...[
+                    const SizedBox(height: AppConstants.spacingMd),
+                    _AiCheckCard(
+                      classification: report.aiClassification!,
+                      reportedCategory: report.category,
+                    ),
+                  ],
                   const SizedBox(height: AppConstants.spacingLg),
                   Text(
                     'Progress timeline',
@@ -216,6 +225,81 @@ class _DetailsCard extends StatelessWidget {
             icon: Icons.person_pin_outlined,
             label: 'Citizen reference',
             value: kNoValue,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the AI made of the photo. Worded as a second opinion: the category the
+/// citizen chose is the one on record, whatever the model thinks.
+class _AiCheckCard extends StatelessWidget {
+  const _AiCheckCard({
+    required this.classification,
+    required this.reportedCategory,
+  });
+
+  final AiClassification classification;
+  final ReportCategory reportedCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    final suggested = classification.category;
+    final confidence = classification.confidenceLabel;
+    final confidenceSuffix = confidence == null ? '' : ' ($confidence confident)';
+    final evidence = classification.evidence?.trim() ?? '';
+
+    final String headline;
+    if (classification.isInProgress) {
+      headline = 'AI is reviewing your photo…';
+    } else if (suggested == null) {
+      headline = 'AI could not confidently identify the issue';
+    } else if (suggested.id == reportedCategory.id) {
+      headline = 'AI agrees this is ${suggested.label}$confidenceSuffix';
+    } else {
+      headline = 'AI suggests ${suggested.label}$confidenceSuffix';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.spacingMd),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.auto_awesome_outlined,
+            size: 18,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  headline,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (!classification.isInProgress && evidence.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(evidence, style: AppTextStyles.bodySmall),
+                ],
+                const SizedBox(height: 4),
+                const Text(
+                  'Automated check — your selected category stays on record.',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
       ),

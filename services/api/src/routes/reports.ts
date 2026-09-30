@@ -8,6 +8,7 @@ import {
   isSupportedClassificationImageType,
   isClassificationEnabled,
 } from '../ai/classification';
+import { embeddingModel, isEmbeddingEnabled } from '../ai/embedding';
 
 /** Matches the client-side cap in the Flutter app. */
 const MAX_PHOTOS = 5;
@@ -331,6 +332,15 @@ export default async function reportRoutes(fastify: FastifyInstance) {
                   ? 'UNSUPPORTED_IMAGE_TYPE'
                   : null,
               ],
+            );
+          }
+
+          if (isEmbeddingEnabled()) {
+            await client.query(
+              `INSERT INTO report_embeddings
+                 (report_id, embedding_type, status, model_name)
+               VALUES ($1, 'SEMANTIC_TEXT', 'PENDING', $2)`,
+              [reportId, embeddingModel()],
             );
           }
 
