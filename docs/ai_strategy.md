@@ -3,7 +3,7 @@
 ## Core Principles
 
 - **Independent Capabilities**: Do not make one giant AI function. Use independent services (ClassificationService, SeverityService, EmbeddingService, etc.) to ensure replaceability (e.g., swapping YOLO v1 for v2 without rewriting the reporting platform).
-- **Asynchronous Processing**: AI processing must not block the report API. Use a background job queue (e.g., Redis + BullMQ) so reports are stored immediately and AI processes them asynchronously.
+- **Asynchronous Processing**: AI processing must not block the report API. The MVP uses a PostgreSQL-backed queue so the report and its analysis job can be committed together without adding Redis. Move to a dedicated queue when throughput requires it.
 - **Auditability**: Every AI prediction must retain the model, version, input reference, prediction, and confidence to answer questions like "Why did CivicAI classify this as flooding?".
 - **Data Preservation**: AI is an enhancement, not the foundation of data integrity. If AI fails, the citizen's report must still exist. AI uncertainty should never destroy citizen data.
 
@@ -31,3 +31,15 @@ When a citizen submits a report:
 
 ## Model Strategy (MVP)
 Do not train five sophisticated models from scratch for the MVP. Start with pretrained vision models tailored with Nigerian civic datasets and standard embedding models for similarity.
+
+## Phase 3 First Slice: Image Classification
+
+- Classify the first supported uploaded photo into the category table's current slugs, or UNSURE.
+- Store the citizen-selected category unchanged. The AI result is a separate suggestion with a confidence score and short visual evidence.
+- Do not block report submission on image download, OpenAI latency, or model failure.
+- Use the durable report_ai_analyses queue and retry transient failures up to three times.
+- Configure the OpenAI key on the API server only. Classification stays disabled unless both AI_CLASSIFICATION_ENABLED=true and OPENAI_API_KEY are set.
+- Default to gpt-6-luna for image input and structured output; keep the model configurable. OpenAI API inference is usage-billed, so there is no automatic call without explicit server configuration.
+- A result below AI_CLASSIFICATION_MIN_CONFIDENCE keeps its score and evidence but has no predicted category id.
+- Confidence is a model-reported score, not a calibrated probability; use it for triage and review, not as ground truth.
+- Severity, embeddings, duplicate matching, and clustering remain separate later steps.

@@ -10,4 +10,5 @@ const connectionString =
 
 export const pool = new Pool({ connectionString });
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
+export const query = <Row = any>(text: string, params?: any[]) =>
+  pool.query<Row>(text, params);

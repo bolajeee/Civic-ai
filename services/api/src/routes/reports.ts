@@ -3,6 +3,11 @@ import crypto from 'crypto';
 import { pool, query } from '../db';
 import { uploadImage, getImageUrls, deleteImages } from '../lib/storage';
 import { createReportSchema, listReportsSchema } from '../schemas/report';
+import {
+  classificationModel,
+  isSupportedClassificationImageType,
+  isClassificationEnabled,
+} from '../ai/classification';
 
 /** Matches the client-side cap in the Flutter app. */
 const MAX_PHOTOS = 5;
@@ -54,6 +59,14 @@ interface ReportRow {
   address: string | null;
   photo_count: string;
   thumbnail_key: string | null;
+  ai_analysis_status: string | null;
+  ai_model_name: string | null;
+  ai_model_version: string | null;
+  ai_predicted_category_id: string | null;
+  ai_predicted_category_slug: string | null;
+  ai_predicted_category_label: string | null;
+  ai_confidence: string | null;
+  ai_prediction: { evidence?: string } | null;
 }
 
 export default async function reportRoutes(fastify: FastifyInstance) {
@@ -230,17 +243,53 @@ export default async function reportRoutes(fastify: FastifyInstance) {
             ],
           );
 
+          let classificationMediaId: string | null = null;
+          let firstMediaId: string | null = null;
           for (const [index, file] of files.entries()) {
-            await client.query(
+            const media = await client.query(
               `INSERT INTO report_media
                  (report_id, storage_key, media_type, file_size, display_order)
-               VALUES ($1, $2, $3, $4, $5)`,
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING id`,
               [
                 reportId,
                 uploadedKeys[index],
                 file.mimetype,
                 file.buffer.length,
                 index,
+              ],
+            );
+            const mediaId = media.rows[0]?.id ?? null;
+            if (index === 0) firstMediaId = mediaId;
+            if (
+              classificationMediaId === null &&
+              isSupportedClassificationImageType(file.mimetype)
+            ) {
+              classificationMediaId = mediaId;
+            }
+          }
+
+          const classificationEnabled = isClassificationEnabled();
+          const hasSupportedImage = classificationMediaId !== null;
+          const analysisMediaId = classificationMediaId ?? firstMediaId;
+          const classificationStatus = !classificationEnabled
+            ? 'DISABLED'
+            : hasSupportedImage
+              ? 'PENDING'
+              : 'SKIPPED';
+          if (classificationEnabled && analysisMediaId) {
+            await client.query(
+              `INSERT INTO report_ai_analyses
+                 (report_id, media_id, analysis_type, status, model_name, error_code)
+               VALUES ($1, $2, 'IMAGE_CLASSIFICATION', $3, $4, $5)`,
+              [
+                reportId,
+                analysisMediaId,
+                classificationStatus,
+                classificationModel(),
+                classificationStatus === 'SKIPPED'
+                  ? 'UNSUPPORTED_IMAGE_TYPE'
+                  : null,
               ],
             );
           }
@@ -255,6 +304,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
               publicId: report.rows[0].public_id,
               status: report.rows[0].status,
               submittedAt: report.rows[0].submitted_at,
+              aiClassificationStatus: classificationStatus.toLowerCase(),
             },
           });
         } catch (err) {
@@ -293,6 +343,31 @@ export default async function reportRoutes(fastify: FastifyInstance) {
       try {
         const { limit, offset } = listReportsSchema.parse(request.query);
         const citizenId = (request.user as { id: string }).id;
+        const aiEnabled = isClassificationEnabled();
+        const aiColumns = aiEnabled
+          ? `ai.status AS ai_analysis_status,
+             ai.model_name AS ai_model_name,
+             ai.model_version AS ai_model_version,
+             ai.predicted_category_id AS ai_predicted_category_id,
+             ai_category.slug AS ai_predicted_category_slug,
+             ai_category.label AS ai_predicted_category_label,
+             ai.confidence AS ai_confidence,
+             ai.prediction AS ai_prediction`
+          : `NULL::text AS ai_analysis_status,
+             NULL::text AS ai_model_name,
+             NULL::text AS ai_model_version,
+             NULL::uuid AS ai_predicted_category_id,
+             NULL::text AS ai_predicted_category_slug,
+             NULL::text AS ai_predicted_category_label,
+             NULL::numeric AS ai_confidence,
+             NULL::jsonb AS ai_prediction`;
+        const aiJoins = aiEnabled
+          ? `LEFT JOIN report_ai_analyses ai
+               ON ai.report_id = r.id
+              AND ai.analysis_type = 'IMAGE_CLASSIFICATION'
+             LEFT JOIN report_categories ai_category
+               ON ai_category.id = ai.predicted_category_id`
+          : '';
 
         // Scoped by citizen_id: a citizen sees only their own reports, per the
         // data isolation rule in docs/architecture.md.
@@ -315,10 +390,12 @@ export default async function reportRoutes(fastify: FastifyInstance) {
              (SELECT m.storage_key FROM report_media m
                WHERE m.report_id = r.id
                ORDER BY m.display_order
-               LIMIT 1) AS thumbnail_key
+               LIMIT 1) AS thumbnail_key,
+             ${aiColumns}
            FROM reports r
            JOIN report_categories c ON c.id = r.category_id
            LEFT JOIN locations l ON l.id = r.location_id
+           ${aiJoins}
            WHERE r.citizen_id = $1
            ORDER BY r.submitted_at DESC
            LIMIT $2 OFFSET $3`,
@@ -358,6 +435,26 @@ export default async function reportRoutes(fastify: FastifyInstance) {
             photoCount: Number(row.photo_count),
             thumbnailUrl: row.thumbnail_key
               ? (thumbnailUrls[row.thumbnail_key] ?? null)
+              : null,
+            aiClassification: row.ai_analysis_status
+              ? {
+                  status: row.ai_analysis_status.toLowerCase(),
+                  model: row.ai_model_name,
+                  modelVersion: row.ai_model_version,
+                  category:
+                    row.ai_predicted_category_id !== null
+                      ? {
+                          id: row.ai_predicted_category_id,
+                          slug: row.ai_predicted_category_slug,
+                          label: row.ai_predicted_category_label,
+                        }
+                      : null,
+                  confidence:
+                    row.ai_confidence === null
+                      ? null
+                      : Number(row.ai_confidence),
+                  evidence: row.ai_prediction?.evidence ?? null,
+                }
               : null,
           })),
         });

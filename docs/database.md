@@ -35,6 +35,7 @@
 
 ### 7. AI Analysis
 - Every AI processing operation creates an audit record.
+- The MVP stores image classification work and results in report_ai_analyses, which is also the durable PostgreSQL-backed job queue.
 - `id`, `report_id`, `model_name`, `model_version`, `analysis_type`, `prediction`, `confidence`, `metadata`
 
 ### 8. Audit Logs

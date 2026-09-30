@@ -47,6 +47,16 @@ export async function getImageUrl(filename: string, expiresIn: number = 60 * 60 
   return data.signedUrl;
 }
 
+/** Downloads a private report image for server-side AI processing. */
+export async function downloadImage(filename: string): Promise<Buffer> {
+  const { data, error } = await supabase.storage
+    .from('reports')
+    .download(filename);
+
+  if (error) throw error;
+  return Buffer.from(await data.arrayBuffer());
+}
+
 /**
  * Retrieves signed URLs for many images in one round trip.
  *

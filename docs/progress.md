@@ -67,9 +67,8 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] List only — detail screen, filters and paging deferred
   - [x] Submit now clears the draft and returns Home with the new report number
 
-### Phase 3: AI (Pending)
-- [ ] Image classification service
-- [ ] Confidence scoring
+### Phase 3: AI (In Progress)
+- [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending)
 - [ ] Embeddings generation
 - [ ] Duplicate candidates detection
 - [ ] Issue clustering logic
