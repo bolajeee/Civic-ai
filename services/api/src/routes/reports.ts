@@ -70,6 +70,46 @@ interface ReportRow {
 }
 
 export default async function reportRoutes(fastify: FastifyInstance) {
+  // Counts cover all of the caller's reports, independently of history pagination.
+  fastify.get(
+    '/summary',
+    { preHandler: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const citizenId = (request.user as { id: string }).id;
+        const result = await query<{
+          total: string;
+          pending: string;
+          in_progress: string;
+          resolved: string;
+          rejected: string;
+        }>(
+          `SELECT COUNT(*) AS total,
+                  COUNT(*) FILTER (WHERE status = 'PENDING') AS pending,
+                  COUNT(*) FILTER (WHERE status = 'IN_PROGRESS') AS in_progress,
+                  COUNT(*) FILTER (WHERE status = 'RESOLVED') AS resolved,
+                  COUNT(*) FILTER (WHERE status = 'REJECTED') AS rejected
+           FROM reports
+           WHERE citizen_id = $1`,
+          [citizenId],
+        );
+        const counts = result.rows[0];
+
+        // PostgreSQL COUNT returns bigint strings; the API exposes JSON numbers.
+        return reply.status(200).send({
+          total: Number(counts.total),
+          pending: Number(counts.pending),
+          inProgress: Number(counts.in_progress),
+          resolved: Number(counts.resolved),
+          rejected: Number(counts.rejected),
+        });
+      } catch (err) {
+        fastify.log.error(err);
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    },
+  );
+
   // ---------------------------------------------------------------------------
   // GET /api/reports/categories
   //

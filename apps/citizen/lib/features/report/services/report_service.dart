@@ -4,6 +4,7 @@ import '../../../core/services/api_client.dart';
 import '../models/report_category.dart';
 import '../models/report_location.dart';
 import '../models/report_photo.dart';
+import '../models/report_summary.dart';
 import '../models/submitted_report.dart';
 
 /// Thrown when the API rejects a submission for a reason the citizen can act
@@ -28,6 +29,16 @@ class ReportService {
   static final ReportService instance = ReportService._();
 
   final Dio _dio = ApiClient.instance.dio;
+
+  Future<ReportSummary> fetchSummary() async {
+    try {
+      final response =
+          await _dio.get<Map<String, dynamic>>('/api/reports/summary');
+      return ReportSummary.fromJson(response.data ?? {});
+    } on DioException catch (err) {
+      throw ReportSubmissionException(_messageFor(err));
+    }
+  }
 
   /// The six seeded categories, in display order.
   ///

@@ -11,6 +11,7 @@ import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/report_card.dart';
 import '../models/submitted_report.dart';
 import '../providers/report_history_provider.dart';
+import '../providers/report_summary_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Filtering
@@ -129,9 +130,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _FilterChipRow(active: _activeFilter, onSelected: _setFilter),
-
           const Divider(height: 1),
-
           Expanded(child: _body(history)),
         ],
       ),
@@ -169,7 +168,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return RefreshIndicator(
       color: AppColors.primary,
-      onRefresh: () => context.read<ReportHistoryProvider>().refresh(),
+      onRefresh: () async {
+        await Future.wait([
+          context.read<ReportHistoryProvider>().refresh(),
+          context.read<ReportSummaryProvider>().refresh(),
+        ]);
+      },
       child: reports.isEmpty
           ? _EmptyState(
               filter: _activeFilter,
@@ -180,7 +184,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               // One extra leading row when a refresh failed, so the error sits
               // above the reports rather than replacing them.
-              itemCount: reports.length + (history.errorMessage != null ? 1 : 0),
+              itemCount:
+                  reports.length + (history.errorMessage != null ? 1 : 0),
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (_, index) {
                 if (history.errorMessage != null) {

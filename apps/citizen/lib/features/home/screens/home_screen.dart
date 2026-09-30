@@ -8,6 +8,9 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../report/models/submitted_report.dart';
 import '../../report/providers/report_history_provider.dart';
+import '../../report/providers/report_summary_provider.dart';
+import '../../report/widgets/report_summary_status.dart';
+import '../../report/models/relative_time.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/report_card.dart';
 
@@ -40,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // citizen has opened History yet. Skipped when it is already in hand —
       // returning from the Report tab must not re-fetch what we just refreshed.
       if (!history.hasLoaded) history.load();
+      context.read<ReportSummaryProvider>().refresh();
     });
   }
 
@@ -53,30 +57,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final history = context.watch<ReportHistoryProvider>();
+    final summary = context.watch<ReportSummaryProvider>().summary;
     final String initials = _initials(user?.email ?? '');
     final String firstName = _firstName(user?.email ?? '');
 
     // Mapped through the same adapter History and Details use, so a report
     // cannot read one way here and another way there.
-    final allReports = history.reports
-        .map(ReportCardData.fromSubmittedReport)
-        .toList();
+    final allReports =
+        history.reports.map(ReportCardData.fromSubmittedReport).toList();
 
     final query = _query.trim().toLowerCase();
-    final reports = allReports.where((report) {
-      return query.isEmpty ||
-          report.title.toLowerCase().contains(query) ||
-          report.category.toLowerCase().contains(query) ||
-          report.location.toLowerCase().contains(query);
-    }).take(3).toList();
-
-    // Counted from the loaded page, which `fetchHistory` caps at twenty. These
-    // become server-side aggregates the day the history pages; until then,
-    // counting what the app actually holds beats showing invented numbers.
-    final resolved =
-        allReports.where((r) => r.status == ReportStatus.resolved).length;
-    final pending =
-        allReports.where((r) => r.status == ReportStatus.pending).length;
+    final reports = allReports
+        .where((report) {
+          return query.isEmpty ||
+              report.title.toLowerCase().contains(query) ||
+              report.category.toLowerCase().contains(query) ||
+              report.location.toLowerCase().contains(query);
+        })
+        .take(3)
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -86,79 +85,88 @@ class _HomeScreenState extends State<HomeScreen> {
             // ----------------------------------------------------------------
             // Scrollable content
             // ----------------------------------------------------------------
-            CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: 100, // clears FAB + bottom nav
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _Header(initials: initials, firstName: firstName),
-                      const SizedBox(height: 20),
-                      _SearchBar(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _query = value),
-                      ),
-                      const SizedBox(height: 20),
-                      _StatsRow(
-                        total: allReports.length,
-                        resolved: resolved,
-                        pending: pending,
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionHeader(
-                        title: 'Recent Reports',
-                        actionLabel: 'View All',
-                        onAction: () => context.go(AppRoutes.history),
-                      ),
-                      const SizedBox(height: 12),
-                      // The three most recent, narrowed by the search box.
-                      if (!history.hasLoaded)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: AppColors.primary,
+            RefreshIndicator(
+              onRefresh: () async {
+                await Future.wait([
+                  context.read<ReportHistoryProvider>().refresh(),
+                  context.read<ReportSummaryProvider>().refresh(),
+                ]);
+              },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                      bottom: 100, // clears FAB + bottom nav
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _Header(initials: initials, firstName: firstName),
+                        const SizedBox(height: 20),
+                        _SearchBar(
+                          controller: _searchController,
+                          onChanged: (value) => setState(() => _query = value),
+                        ),
+                        const SizedBox(height: 20),
+                        _StatsRow(
+                          total: summary?.total,
+                          resolved: summary?.resolved,
+                          pending: summary?.pending,
+                        ),
+                        const ReportSummaryStatus(),
+                        const SizedBox(height: 24),
+                        _SectionHeader(
+                          title: 'Recent Reports',
+                          actionLabel: 'View All',
+                          onAction: () => context.go(AppRoutes.history),
+                        ),
+                        const SizedBox(height: 12),
+                        // The three most recent, narrowed by the search box.
+                        if (!history.hasLoaded)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                        )
-                      else if (reports.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: Text(
-                              _query.isEmpty
-                                  ? 'No reports yet. Tap “Report Issue” to '
-                                      'file your first one.'
-                                  : 'No reports match your search.',
+                          )
+                        else if (reports.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Text(
+                                _query.isEmpty
+                                    ? 'No reports yet. Tap “Report Issue” to '
+                                        'file your first one.'
+                                    : 'No reports match your search.',
+                              ),
                             ),
-                          ),
-                        )
-                      else
-                        ...reports.map(
-                          (report) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: ReportCard(
-                              data: report,
-                              onTap: () => context.push(
-                                AppRoutes.reportDetails.replaceFirst(
-                                  ':id',
-                                  report.id,
+                          )
+                        else
+                          ...reports.map(
+                            (report) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: ReportCard(
+                                data: report,
+                                onTap: () => context.push(
+                                  AppRoutes.reportDetails.replaceFirst(
+                                    ':id',
+                                    report.id,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ]),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-
             // ----------------------------------------------------------------
             // Floating "+ Report Issue" pill button — bottom-right
             // ----------------------------------------------------------------
@@ -318,7 +326,8 @@ class _SearchBar extends StatelessWidget {
         style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
         decoration: const InputDecoration(
           hintText: 'Search reports by title, category or location...',
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textSecondary),
+          prefixIcon:
+              Icon(Icons.search_rounded, color: AppColors.textSecondary),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(vertical: 14),
         ),
@@ -338,9 +347,9 @@ class _StatsRow extends StatelessWidget {
     required this.pending,
   });
 
-  final int total;
-  final int resolved;
-  final int pending;
+  final int? total;
+  final int? resolved;
+  final int? pending;
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +360,7 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.description_outlined,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '$total',
+            value: total?.toString() ?? kNoValue,
             label: 'Submitted',
             // All reports
             onTap: () => context.go(AppRoutes.history),
@@ -363,7 +372,7 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.check_circle_outline_rounded,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '$resolved',
+            value: resolved?.toString() ?? kNoValue,
             label: 'Resolved',
             // Pre-filtered to Resolved
             onTap: () => context.go(
@@ -377,7 +386,7 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.access_time_rounded,
             iconColor: AppColors.statusPendingIcon,
             iconBgColor: AppColors.statusPendingBg,
-            value: '$pending',
+            value: pending?.toString() ?? kNoValue,
             label: 'Pending',
             // Pre-filtered to Pending
             onTap: () => context.go(

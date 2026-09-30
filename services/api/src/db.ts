@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type QueryResultRow } from 'pg';
 import dotenv from 'dotenv';
 
 // Load .env before the Pool is constructed — this file is imported
@@ -10,5 +10,5 @@ const connectionString =
 
 export const pool = new Pool({ connectionString });
 
-export const query = <Row = any>(text: string, params?: any[]) =>
+export const query = <Row extends QueryResultRow = any>(text: string, params?: any[]) =>
   pool.query<Row>(text, params);

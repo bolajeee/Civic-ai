@@ -29,6 +29,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] Migrations: `report_categories` (6 seeded), `reports`, `locations` (+ PostGIS `geom`), `report_media`, `report_status` enum, `CR-` public-id sequence
   - [x] `POST /api/reports` — multipart, 1–5 photos, category + description + optional location; images uploaded first, then rows committed in one transaction so a failed insert leaves no orphan images
   - [x] `GET /api/reports/categories` — the selectable list, so the client sends real category ids
+  - [x] `GET /api/reports/summary` — all-report counts scoped to the caller, independent of pagination; [response contract](reports-api.md)
   - [x] `GET /api/reports` — the caller's own reports, newest first, with signed thumbnail URLs
   - [x] `full_name` added to `users` and threaded through register / login / `/me` — it was being silently stripped by Zod and had no column
 - [x] Flutter citizen app scaffolded (`apps/citizen`)
@@ -64,8 +65,29 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] `ReportHistoryProvider` — loading / error / empty states, pull-to-refresh, stale list kept on a failed refresh
   - [x] `/reports` — newest-first list with thumbnail, category, `CR-` number, location and relative date
   - [x] Status badges (Pending / In Progress / Resolved / Rejected) coloured from `AppColors`
-  - [x] List only — detail screen, filters and paging deferred
+  - [x] Detail screen and status filters use loaded report data
+  - [ ] Load additional history pages and filter/search the full history — currently only the first 20 reports are loaded; Home search and History filters operate on that page
+  - [x] Home/Profile counts use `GET /api/reports/summary` through a shared model/service/provider, independently of history; loading, retry, pull-to-refresh, refresh after submission, and account-change clearing included
   - [x] Submit now clears the draft and returns Home with the new report number
+
+### Citizen UI functionality gaps (reviewed 2026-09-30)
+
+- [ ] Login: Forgot Password, Google sign-in, and Apple sign-in only show "coming soon" messages; no reset or social authentication flow
+- [ ] Home: notification bell is decorative; no notification inbox or tap action
+- [ ] Profile: Edit Profile, Notifications, Language, Help & Support, and About rows have no tap handlers/screens
+- [ ] Profile: Dark Mode only toggles local switch state; it does not change the app theme or persist the preference
+- [ ] Profile: Impact Score has no scoring model/API and displays a dash
+- [ ] Home/Profile: location labels are hardcoded (Ikeja/Lagos); displayed names are derived from email rather than the stored full name; Profile version is hardcoded
+- [ ] Report Details: both Share receipt actions only show a snackbar; no receipt generation or system share sheet
+- [ ] Report Details: Priority, Assigned agency, and Citizen reference are unavailable placeholders; timeline is inferred from current status, with no event history/timestamps
+- [ ] Report Details: only the thumbnail is displayed, with no full photo gallery; direct links require the report to exist in loaded history (no report-detail fetch endpoint)
+- [ ] Notifications: permission request exists, but delivery, device-token registration, and notification preferences are not implemented
+
+Summary integration validation: `flutter analyze` passes; all four new summary
+model/provider tests pass. Full Flutter suite: 30 passed, one existing router-test
+failure (`authenticated real app routes pass through untouched`). That test expects
+`/permissions` to remain open with permissions granted, while the current router
+intentionally redirects it to Home; the test and router were not changed here.
 
 ### Phase 3: AI (In Progress)
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending)

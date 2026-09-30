@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/report/providers/report_draft_provider.dart';
 import 'features/report/providers/report_history_provider.dart';
+import 'features/report/providers/report_summary_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,11 @@ class CivicReportApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+        ChangeNotifierProxyProvider<AuthProvider, ReportSummaryProvider>(
+          create: (_) => ReportSummaryProvider(),
+          update: (_, auth, summary) =>
+              summary!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
+        ),
         // Owns the in-progress report. Registered app-wide so the form and its
         // fields share one draft; ReportScreen resets it on entry, so leaving
         // the form discards the staged photos.

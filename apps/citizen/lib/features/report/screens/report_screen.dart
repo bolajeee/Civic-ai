@@ -13,6 +13,7 @@ import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../providers/report_draft_provider.dart';
 import '../providers/report_history_provider.dart';
+import '../providers/report_summary_provider.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/description_field.dart';
 import '../widgets/location_field.dart';
@@ -78,6 +79,7 @@ class _ReportScreenState extends State<ReportScreen> {
     // The new report should be on Home and in History the moment the citizen
     // gets there, rather than only after a pull-to-refresh.
     unawaited(history.refresh());
+    unawaited(context.read<ReportSummaryProvider>().refresh(force: true));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
