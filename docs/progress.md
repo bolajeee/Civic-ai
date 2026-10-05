@@ -94,7 +94,7 @@ intentionally redirects it to Home; the test and router were not changed here.
 - [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
 - [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
 - [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, database validation pending)
-- [ ] Severity estimation
+- [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, OpenAI key configuration and database validation pending)
 - [ ] Priority calculation engine
 
 ### Phase 4: Government Dashboard (Pending)
