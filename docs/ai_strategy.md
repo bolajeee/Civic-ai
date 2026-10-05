@@ -57,3 +57,11 @@ Do not train five sophisticated models from scratch for the MVP. Start with pret
 - **Crash cap:** a job left PROCESSING for over 10 minutes is re-claimed only while it has attempts left; otherwise it is marked FAILED with `WORKER_CRASHED`.
 - **Citizen app:** the report detail screen shows the AI's suggestion as a second opinion, or a "reviewing" note while pending. Failed and skipped checks are hidden.
 
+## Phase 3 Third Slice: Duplicate Candidates
+
+- When a report's embedding is COMPLETED, a worker finds earlier open (PENDING / IN_PROGRESS) reports within `AI_DUPLICATE_RADIUS_METERS` (default 200 m, PostGIS `ST_DistanceSphere`) whose embeddings are also complete, and keeps the best five scoring at least `AI_DUPLICATE_MIN_SCORE` (default 0.6).
+- Score = 0.4 x geographic closeness (linear to 0 at the radius) + 0.4 x semantic cosine similarity + 0.2 x same citizen-selected category. Visual similarity is absent until image embeddings exist. The formula is versioned (`geo-semantic-category-v1`) and each candidate stores its distance, similarity and category match.
+- Results go to `report_duplicate_candidates`; `report_duplicate_searches` marks each report as searched (COMPLETED, NO_LOCATION or FAILED). There is no API cost, so it has its own flag, `AI_DUPLICATE_DETECTION_ENABLED`, and needs embeddings enabled.
+- Candidates are suggestions only. Nothing is merged or hidden; clustering and review come next.
+- Known limits: only earlier reports are searched, so an older report whose embedding finished later is missed; resolved/rejected reports are excluded on purpose; reports without a location are marked NO_LOCATION.
+

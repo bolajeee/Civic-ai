@@ -13,14 +13,18 @@ import { isClassificationEnabled } from './ai/classification';
 import { startEmbeddingWorker } from './ai/embedding_worker';
 import { isEmbeddingEnabled } from './ai/embedding';
 import { backfillAiJobs } from './ai/backfill';
+import { startDuplicateWorker } from './ai/duplicate_worker';
+import { isDuplicateDetectionEnabled } from './ai/duplicates';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
+let stopDuplicateWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
   stopAIEmbeddingWorker();
+  stopDuplicateWorker();
 });
 
 // ---------------------------------------------------------------------------
@@ -104,6 +108,11 @@ const start = async () => {
     fastify.log.info(
       { enabled: isEmbeddingEnabled() },
       'AI embedding worker configuration',
+    );
+    stopDuplicateWorker = startDuplicateWorker(fastify.log);
+    fastify.log.info(
+      { enabled: isDuplicateDetectionEnabled() },
+      'Duplicate detection worker configuration',
     );
     console.log(`Server listening at http://localhost:${port}`);
   } catch (err) {
