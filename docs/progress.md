@@ -20,7 +20,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] JWT `authenticate` preHandler decorator for protected routes
 - [x] Object Storage integration
 - [x] Government Authentication
-  - [x] Invite-code gated registration (`gov_invite_codes` table) // intentionally skipped for now
+  - [x] Invite-code gated registration (`gov_invite_codes` table); API enforces invites, manual provisioning via [government account setup](government-accounts.md)
   - [x] Role guard on `/api/gov/auth/*` — CITIZEN accounts blocked
   - [x] `/logout-all` for full session revocation
 
@@ -97,14 +97,29 @@ intentionally redirects it to Home; the test and router were not changed here.
 - [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, OpenAI key configuration and database validation pending)
 - [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, database validation pending; scores stay INCOMPLETE until sourced context is entered)
 
-### Phase 4: Government Dashboard (Pending)
+### Phase 4: Government Dashboard (In Progress)
+
+The government application is primarily web-based. The current client uses
+React + TypeScript + Vite in `apps/government`; Flutter is reserved for later
+mobile delivery and code reuse where applicable.
 
 **Admin transparency requirement:** A cluster report must combine the supporting
 observations into a reviewable account of the issue. Administrators must be able
 to trace summaries and grouping decisions back to the original reports, inspect
 uncertainty, and record corrections. See [cluster report review requirements](ai_strategy.md#admin-transparency-and-cluster-report-review).
 
-- [ ] Overview Dashboard
+- [x] Overview Dashboard (first slice implemented; live database validation pending)
+  - [x] Government web scaffold, operator/admin sign-in, in-memory sessions, silent refresh rotation, and sign-out
+  - [x] Protected `GET /api/gov/dashboard/overview`: global counts, lifecycle/category breakdown, grouping backlog, unassigned reports, missing GPS, and priority readiness
+  - [x] Latest eight observations, WAT timestamps, manual refresh, loading/empty/error states, retained snapshot after refresh failure, and responsive web layout
+  - [x] Current database role/status checks; stale/failed/disabled priority remains distinguishable; no citizen identity details in overview
+  - [ ] Validate against migrated PostgreSQL/PostGIS and a provisioned government account
+  - Setup and scope: [government web README](../apps/government/README.md); [overview API contract](government-dashboard-api.md)
+
+  Validation: API build and all 92 API tests pass; government production build
+  and all 6 web session tests pass. Chrome interaction checks with test API
+  responses pass for sign-in, overview, refresh errors, empty/disabled states,
+  responsive overflow, and sign-out. Live database validation remains pending.
 - [ ] Map interface (PostGIS layers)
 - [ ] Reports view
 - [ ] Issue clusters view
