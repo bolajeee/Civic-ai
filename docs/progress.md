@@ -95,7 +95,7 @@ intentionally redirects it to Home; the test and router were not changed here.
 - [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
 - [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, database validation pending)
 - [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, OpenAI key configuration and database validation pending)
-- [ ] Priority calculation engine
+- [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, database validation pending; scores stay INCOMPLETE until sourced context is entered)
 
 ### Phase 4: Government Dashboard (Pending)
 

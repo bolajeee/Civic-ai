@@ -19,6 +19,9 @@ import { startClusteringWorker } from './ai/clustering_worker';
 import { isClusteringEnabled } from './ai/clustering';
 import { startSeverityWorker } from './ai/severity_worker';
 import { isSeverityEnabled } from './ai/severity';
+import { startPriorityWorker } from './ai/priority_worker';
+import { isPriorityEnabled } from './ai/priority';
+import govPriorityRoutes from './routes/gov-priority';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
@@ -26,6 +29,7 @@ let stopAIEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
 let stopClusteringWorker = () => {};
 let stopSeverityWorker = () => {};
+let stopPriorityWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
@@ -33,6 +37,7 @@ fastify.addHook('onClose', async () => {
   stopDuplicateWorker();
   stopClusteringWorker();
   stopSeverityWorker();
+  stopPriorityWorker();
 });
 
 // ---------------------------------------------------------------------------
@@ -61,6 +66,7 @@ fastify.register(authenticatePlugin);
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 fastify.register(reportRoutes, { prefix: '/api/reports' });
+fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 
 // Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));
@@ -109,6 +115,8 @@ const start = async () => {
     await backfillAiJobs(fastify.log);
     stopAIClassificationWorker = startClassificationWorker(fastify.log);
     stopSeverityWorker = startSeverityWorker(fastify.log);
+    stopPriorityWorker = startPriorityWorker(fastify.log);
+    fastify.log.info({ enabled: isPriorityEnabled() }, 'Cluster priority worker configuration');
     fastify.log.info({ enabled: isSeverityEnabled() }, 'AI severity worker configuration');
     fastify.log.info(
       { enabled: isClassificationEnabled() },

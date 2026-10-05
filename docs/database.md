@@ -30,7 +30,7 @@
 - Represents the underlying civic problem.
 - Implemented in `20261005120000_create_issue_clusters.sql`: `id`, `public_id` (`IC-1000`), `category_id`, `status`, `anchor_location_id`, `report_count`, `centroid`, timestamps.
 - The fixed anchor bounds automatic assignments; centroid is the mean of located member reports. A membership trigger refreshes count and centroid on insert, move, and deletion. Reports without coordinates still count.
-- Severity and priority scores belong to the next Phase 3 slices.
+- Priority is stored separately from the cluster row (see `issue_cluster_priority_*` below); the cluster row holds no score.
 
 ### 6. Cluster Membership (`issue_cluster_reports`)
 - `issue_cluster_id`, `report_id`, `confidence`, `assignment_method` (AI, HUMAN, SYSTEM)
@@ -41,7 +41,13 @@
 - Every AI processing operation creates an audit record.
 - The MVP stores image classification work and results in report_ai_analyses, which is also the durable PostgreSQL-backed job queue.
 - `id`, `report_id`, `model_name`, `model_version`, `analysis_type`, `prediction`, `confidence`, `metadata`
+- Severity (`SEVERITY_ESTIMATION`, migration `20261005130000`) shares the table and queue; its `input_snapshot` JSONB preserves the exact inputs, threshold and rubric version.
 - Embeddings live in `report_embeddings` (pgvector `vector(1536)`, HNSW cosine index), which is likewise its own durable queue. It keeps `input_text`, model and version for auditability.
+
+### 7a. Cluster Priority (`20261005140000_create_cluster_priorities.sql`)
+- `issue_cluster_priority_context`: operator-sourced population / location-importance scores (0-1) with mandatory source, updater and reason; every write is copied to `issue_cluster_priority_context_history`.
+- `issue_cluster_priority_calculations`: immutable `input_snapshot` and `result` per calculation, with `scoring_version`.
+- `issue_cluster_priority_jobs`: durable queue (`revision`, `evaluated_revision`, `next_run_at`, `error_code`). Triggers on clusters, memberships, reports, severity analyses, review candidates and context bump the revision. Existing clusters are queued by the migration.
 
 ### 8. Audit Logs
 - Immutable audit records for important government actions.
