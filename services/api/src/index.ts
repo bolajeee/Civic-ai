@@ -17,18 +17,22 @@ import { startDuplicateWorker } from './ai/duplicate_worker';
 import { isDuplicateDetectionEnabled } from './ai/duplicates';
 import { startClusteringWorker } from './ai/clustering_worker';
 import { isClusteringEnabled } from './ai/clustering';
+import { startSeverityWorker } from './ai/severity_worker';
+import { isSeverityEnabled } from './ai/severity';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
 let stopClusteringWorker = () => {};
+let stopSeverityWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
   stopAIEmbeddingWorker();
   stopDuplicateWorker();
   stopClusteringWorker();
+  stopSeverityWorker();
 });
 
 // ---------------------------------------------------------------------------
@@ -104,6 +108,8 @@ const start = async () => {
     await fastify.listen({ port, host: '0.0.0.0' });
     await backfillAiJobs(fastify.log);
     stopAIClassificationWorker = startClassificationWorker(fastify.log);
+    stopSeverityWorker = startSeverityWorker(fastify.log);
+    fastify.log.info({ enabled: isSeverityEnabled() }, 'AI severity worker configuration');
     fastify.log.info(
       { enabled: isClassificationEnabled() },
       'AI image classification worker configuration',

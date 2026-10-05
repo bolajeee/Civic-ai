@@ -9,6 +9,7 @@ import {
   isClassificationEnabled,
 } from '../ai/classification';
 import { embeddingModel, isEmbeddingEnabled } from '../ai/embedding';
+import { severityModel, isSeverityEnabled } from '../ai/severity';
 
 /** Matches the client-side cap in the Flutter app. */
 const MAX_PHOTOS = 5;
@@ -68,6 +69,10 @@ interface ReportRow {
   ai_predicted_category_label: string | null;
   ai_confidence: string | null;
   ai_prediction: { evidence?: string } | null;
+  severity_status: string | null;
+  severity_model: string | null;
+  severity_model_version: string | null;
+  severity_prediction: Record<string, unknown> | null;
 }
 
 export default async function reportRoutes(fastify: FastifyInstance) {
@@ -344,6 +349,17 @@ export default async function reportRoutes(fastify: FastifyInstance) {
             );
           }
 
+          const severityStatus = !isSeverityEnabled() ? 'DISABLED' : hasSupportedImage ? 'PENDING' : 'SKIPPED';
+          if (isSeverityEnabled() && analysisMediaId) {
+            await client.query(
+              `INSERT INTO report_ai_analyses
+                 (report_id, media_id, analysis_type, status, model_name, error_code)
+               VALUES ($1, $2, 'SEVERITY_ESTIMATION', $3, $4, $5)`,
+              [reportId, analysisMediaId, severityStatus, severityModel(),
+                severityStatus === 'SKIPPED' ? 'UNSUPPORTED_IMAGE_TYPE' : null],
+            );
+          }
+
           await client.query('COMMIT');
 
           // camelCase to match the list endpoint, so the client parses both
@@ -355,6 +371,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
               status: report.rows[0].status,
               submittedAt: report.rows[0].submitted_at,
               aiClassificationStatus: classificationStatus.toLowerCase(),
+              aiSeverityStatus: severityStatus.toLowerCase(),
             },
           });
         } catch (err) {
@@ -394,6 +411,15 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         const { limit, offset } = listReportsSchema.parse(request.query);
         const citizenId = (request.user as { id: string }).id;
         const aiEnabled = isClassificationEnabled();
+        const severityEnabled = isSeverityEnabled();
+        const severityColumns = severityEnabled
+          ? `severity.status AS severity_status, severity.model_name AS severity_model,
+             severity.model_version AS severity_model_version, severity.prediction AS severity_prediction`
+          : `NULL::text AS severity_status, NULL::text AS severity_model,
+             NULL::text AS severity_model_version, NULL::jsonb AS severity_prediction`;
+        const severityJoin = severityEnabled
+          ? `LEFT JOIN report_ai_analyses severity ON severity.report_id = r.id
+             AND severity.analysis_type = 'SEVERITY_ESTIMATION'` : '';
         const aiColumns = aiEnabled
           ? `ai.status AS ai_analysis_status,
              ai.model_name AS ai_model_name,
@@ -441,11 +467,12 @@ export default async function reportRoutes(fastify: FastifyInstance) {
                WHERE m.report_id = r.id
                ORDER BY m.display_order
                LIMIT 1) AS thumbnail_key,
-             ${aiColumns}
+             ${aiColumns}, ${severityColumns}
            FROM reports r
            JOIN report_categories c ON c.id = r.category_id
            LEFT JOIN locations l ON l.id = r.location_id
            ${aiJoins}
+           ${severityJoin}
            WHERE r.citizen_id = $1
            ORDER BY r.submitted_at DESC
            LIMIT $2 OFFSET $3`,
@@ -505,6 +532,11 @@ export default async function reportRoutes(fastify: FastifyInstance) {
                       : Number(row.ai_confidence),
                   evidence: row.ai_prediction?.evidence ?? null,
                 }
+              : null,
+            aiSeverity: row.severity_status
+              ? { status: row.severity_status.toLowerCase(), model: row.severity_model,
+                  modelVersion: row.severity_model_version,
+                  estimate: row.severity_status === 'COMPLETED' ? row.severity_prediction : null }
               : null,
           })),
         });

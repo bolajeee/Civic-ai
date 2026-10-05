@@ -6,6 +6,7 @@ import {
   supportedClassificationImageTypes,
 } from './classification';
 import { embeddingModel, isEmbeddingEnabled } from './embedding';
+import { severityModel, isSeverityEnabled } from './severity';
 
 /**
  * Queues AI work for reports that predate the feature flags.
@@ -26,10 +27,33 @@ export async function backfillAiJobs(logger: FastifyBaseLogger): Promise<void> {
       const queued = await enqueueMissingEmbeddings();
       if (queued > 0) logger.info({ queued }, 'Backfilled embedding jobs');
     }
+    if (isSeverityEnabled()) {
+      const queued = await enqueueMissingSeverities();
+      if (queued > 0) logger.info({ queued }, 'Backfilled severity jobs');
+    }
   } catch (error) {
     // The server must still start; the next boot retries the backfill.
     logger.error({ err: error }, 'AI job backfill failed');
   }
+}
+
+export async function enqueueMissingSeverities(): Promise<number> {
+  const result = await query(
+    `INSERT INTO report_ai_analyses
+       (report_id, media_id, analysis_type, status, model_name, error_code)
+     SELECT r.id, m.id, 'SEVERITY_ESTIMATION',
+       CASE WHEN m.media_type = ANY($2::text[]) THEN 'PENDING' ELSE 'SKIPPED' END,
+       $1, CASE WHEN m.media_type = ANY($2::text[]) THEN NULL ELSE 'UNSUPPORTED_IMAGE_TYPE' END
+     FROM reports r JOIN LATERAL (
+       SELECT id, media_type FROM report_media WHERE report_id = r.id
+       ORDER BY (media_type = ANY($2::text[])) DESC, display_order, id LIMIT 1
+     ) m ON TRUE
+     WHERE NOT EXISTS (SELECT 1 FROM report_ai_analyses a
+       WHERE a.report_id = r.id AND a.analysis_type = 'SEVERITY_ESTIMATION')
+     ON CONFLICT (report_id, analysis_type) DO NOTHING`,
+    [severityModel(), supportedClassificationImageTypes()],
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function enqueueMissingClassifications(): Promise<number> {
