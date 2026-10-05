@@ -29,6 +29,22 @@ When a citizen submits a report:
 - **Clustering**: Similarity Score = geographic similarity + visual similarity + semantic similarity + category similarity.
 - **Priority**: Priority should not simply equal severity. Initial MVP uses a transparent weighted formula: Severity (40%), Report Volume (20%), Persistence (15%), Population context (15%), Location importance (10%).
 
+## Admin Transparency and Cluster Report Review
+
+Transparency is a core requirement of the government/admin experience. A cluster
+report combines citizen observations into a reviewable account of an issue;
+administrators must be able to inspect the data and reasoning behind that account.
+The following are requirements for the dashboard and reporting phases, not
+features already delivered by the clustering worker.
+
+- **Combined evidence:** Present the cluster reference, category, status, report count, geographic spread, observation dates, and a combined findings summary. Each factual summary claim must reference the supporting report IDs. Preserve differing observations instead of smoothing them into a single asserted fact.
+- **Source inspection:** Let the reviewer open every supporting report's original description, photos, submitted location, GPS accuracy, submission date, and status. Distinguish the original citizen observation, AI suggestions, and administrator conclusions.
+- **Grouping explanation:** Show why a report joined the cluster: matched report, geographic distance, semantic similarity, category match, combined score, threshold, assignment method, and scoring/clustering versions. Explain the score in plain language and show competing candidates when relevant. A singleton created for review must be distinguishable from an approved grouping.
+- **Visible uncertainty:** Show missing coordinates/media, incomplete or failed processing, conflicting categories, low scores, pending review, and absent model capabilities. Display unavailable severity/priority as unavailable; when implemented, expose their contributing inputs and weights. Scores must not be presented as verified facts or calibrated probabilities.
+- **Human review:** Administrators must be able to approve or dismiss proposed matches, remove or move a report, and merge or split clusters. Record the reviewer, timestamp, reason, and before/after membership for each change. Automatic grouping and administrative approval are separate states; retain the original automated decision alongside later review actions.
+- **Report traceability:** The compiled cluster report and exported PDF must include the combined findings, source report references, evidence appendix, outstanding uncertainty, review status, and approval details where present. Each version preserves the evidence and membership snapshot reviewed at that time, so later changes do not rewrite an earlier approved report.
+
+
 ## Model Strategy (MVP)
 Do not train five sophisticated models from scratch for the MVP. Start with pretrained vision models tailored with Nigerian civic datasets and standard embedding models for similarity.
 
@@ -62,6 +78,18 @@ Do not train five sophisticated models from scratch for the MVP. Start with pret
 - When a report's embedding is COMPLETED, a worker finds earlier open (PENDING / IN_PROGRESS) reports within `AI_DUPLICATE_RADIUS_METERS` (default 200 m, PostGIS `ST_DistanceSphere`) whose embeddings are also complete, and keeps the best five scoring at least `AI_DUPLICATE_MIN_SCORE` (default 0.6).
 - Score = 0.4 x geographic closeness (linear to 0 at the radius) + 0.4 x semantic cosine similarity + 0.2 x same citizen-selected category. Visual similarity is absent until image embeddings exist. The formula is versioned (`geo-semantic-category-v1`) and each candidate stores its distance, similarity and category match.
 - Results go to `report_duplicate_candidates`; `report_duplicate_searches` marks each report as searched (COMPLETED, NO_LOCATION or FAILED). There is no API cost, so it has its own flag, `AI_DUPLICATE_DETECTION_ENABLED`, and needs embeddings enabled.
-- Candidates are suggestions only. Nothing is merged or hidden; clustering and review come next.
+- The duplicate worker only writes suggestions. The separate clustering worker below consumes them without deleting or hiding reports.
 - Known limits: only earlier reports are searched, so an older report whose embedding finished later is missed; resolved/rejected reports are excluded on purpose; reports without a location are marked NO_LOCATION.
+
+## Phase 3 Fourth Slice: Issue Clustering
+
+- Apply `supabase/migrations/20261005120000_create_issue_clusters.sql`, then set `AI_CLUSTERING_ENABLED=true` on the API server. This database-only worker consumes the existing backlog of COMPLETED / NO_LOCATION duplicate searches. New searches require embeddings and duplicate detection enabled. There is no additional model call.
+- Only open reports can join open clusters with the same citizen-selected category. Both the candidate report and cluster must still be open at assignment time. The source must be within `AI_DUPLICATE_RADIUS_METERS` of the cluster's fixed seed location; this prevents transitive chains from spreading beyond that radius.
+- The strongest match per distinct cluster competes for assignment. A score at least `AI_CLUSTER_AUTO_MIN_SCORE` (default 0.85) assigns automatically, unless the runner-up cluster is within `AI_CLUSTER_AMBIGUITY_MARGIN` (default 0.05). These weighted scores are not calibrated probabilities.
+- Weaker or ambiguous eligible matches create a separate singleton plus PENDING review candidates. A report with no eligible match, including one without GPS, gets a singleton. Every report retains its original content and citizen status; cluster status is separate.
+- Durable `report_cluster_decisions` stores configuration, version (`anchor-category-v1`) and outcome. Membership is unique per report. A transaction-level advisory lock serializes workers; membership, cluster, review rows and decision commit together. The worker preserves existing memberships, including human assignments, and skips closed reports.
+- A failed report transaction rolls back to a savepoint and records FAILED / CLUSTERING_FAILED so it cannot block later reports. After correcting the cause, delete only that FAILED decision to retry. Searches marked FAILED are not consumed; repair/retry duplicate detection first. Completed decisions are not automatically recomputed when thresholds change.
+- Counts and centroids update through a membership trigger, including membership moves and report deletion. Empty clusters remain available for audit. A singleton's confidence is null; AI-assigned membership retains its winning score.
+- Limits: only candidates already assigned to clusters can be used. The worker processes available searches oldest first, but late predecessor searches can still cause separate singletons. Existing clusters are never automatically merged. Operator review actions, merge/split APIs, review UI, severity and priority calculation remain later work.
+- Validation: TypeScript build and API tests cover decision thresholds, ambiguity, distinct-cluster ranking, transactional writes, worker contention, preserving existing assignments, and failure markers. The migration still needs integration validation against PostgreSQL/PostGIS.
 

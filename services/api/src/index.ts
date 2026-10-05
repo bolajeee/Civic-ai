@@ -15,16 +15,20 @@ import { isEmbeddingEnabled } from './ai/embedding';
 import { backfillAiJobs } from './ai/backfill';
 import { startDuplicateWorker } from './ai/duplicate_worker';
 import { isDuplicateDetectionEnabled } from './ai/duplicates';
+import { startClusteringWorker } from './ai/clustering_worker';
+import { isClusteringEnabled } from './ai/clustering';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
+let stopClusteringWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
   stopAIEmbeddingWorker();
   stopDuplicateWorker();
+  stopClusteringWorker();
 });
 
 // ---------------------------------------------------------------------------
@@ -110,6 +114,11 @@ const start = async () => {
       'AI embedding worker configuration',
     );
     stopDuplicateWorker = startDuplicateWorker(fastify.log);
+    stopClusteringWorker = startClusteringWorker(fastify.log);
+    fastify.log.info(
+      { enabled: isClusteringEnabled() },
+      'Issue clustering worker configuration',
+    );
     fastify.log.info(
       { enabled: isDuplicateDetectionEnabled() },
       'Duplicate detection worker configuration',

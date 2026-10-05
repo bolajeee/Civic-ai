@@ -93,23 +93,34 @@ intentionally redirects it to Home; the test and router were not changed here.
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending)
 - [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
 - [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
-- [ ] Issue clustering logic
+- [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, database validation pending)
 - [ ] Severity estimation
 - [ ] Priority calculation engine
 
 ### Phase 4: Government Dashboard (Pending)
+
+**Admin transparency requirement:** A cluster report must combine the supporting
+observations into a reviewable account of the issue. Administrators must be able
+to trace summaries and grouping decisions back to the original reports, inspect
+uncertainty, and record corrections. See [cluster report review requirements](ai_strategy.md#admin-transparency-and-cluster-report-review).
+
 - [ ] Overview Dashboard
 - [ ] Map interface (PostGIS layers)
 - [ ] Reports view
 - [ ] Issue clusters view
+- [ ] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
+- [ ] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
 - [ ] Filters & Search
 - [ ] Review queue
+- [ ] Administrator review actions: approve/dismiss candidates, remove/move reports, merge/split clusters, and record reviewer, timestamp, and reason
 
 ### Phase 5: Government Reporting (Pending)
 - [ ] Issue report compilation
+- [ ] Reviewable cluster report: combined findings linked to source reports, evidence appendix, unresolved disagreements, and review status
 - [ ] PDF generation
 - [ ] Print optimizations
 - [ ] Report versioning
+- [ ] Preserve the reviewed evidence snapshot and approval details for each generated report version
 - [ ] Audit trail
 
 ### Phase 6: Hardening (Pending)

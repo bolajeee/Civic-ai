@@ -5,7 +5,7 @@
 ## Migration Strategy
 
 - Never manually alter production tables.
-- Use sequential migrations stored in `infrastructure/database/` (e.g., `001_extensions`, `002_users`, etc.).
+- Use sequential migrations stored in `supabase/migrations/`.
 - Every schema change gets a migration.
 
 ## Core Domains & Entities
@@ -28,10 +28,14 @@
 
 ### 5. Issue Clusters
 - Represents the underlying civic problem.
-- `id`, `public_id`, `category`, `status`, `severity`, `priority_score`, `report_count`, `centroid` (approx. geographic center)
+- Implemented in `20261005120000_create_issue_clusters.sql`: `id`, `public_id` (`IC-1000`), `category_id`, `status`, `anchor_location_id`, `report_count`, `centroid`, timestamps.
+- The fixed anchor bounds automatic assignments; centroid is the mean of located member reports. A membership trigger refreshes count and centroid on insert, move, and deletion. Reports without coordinates still count.
+- Severity and priority scores belong to the next Phase 3 slices.
 
 ### 6. Cluster Membership (`issue_cluster_reports`)
 - `issue_cluster_id`, `report_id`, `confidence`, `assignment_method` (AI, HUMAN, SYSTEM)
+- `report_id` is the primary key: one report belongs to at most one cluster. Automatic assignment stores the duplicate score as confidence; singleton SYSTEM assignments have null confidence.
+- `report_cluster_decisions` records the outcome, configuration, clustering version and matched report/scoring version. `issue_cluster_review_candidates` retains ambiguous or lower-score target clusters for later operator review.
 
 ### 7. AI Analysis
 - Every AI processing operation creates an audit record.
