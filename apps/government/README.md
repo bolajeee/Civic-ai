@@ -38,7 +38,7 @@ development proxy does not apply to production or `npm run preview`. Serve
 Vite setup and proxy behavior follow the [official guide](https://vite.dev/guide/)
 and [server options](https://vite.dev/config/server-options.html#server-proxy).
 
-## First Phase 4 slice
+## Implemented Phase 4 slices
 
 - Government sign-in, in-memory access/refresh tokens, silent token rotation,
   single shared refresh for concurrent expired requests, and sign-out.
@@ -48,10 +48,24 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
   backlog, unassigned reports, missing GPS and priority readiness.
 - Latest eight citizen observations with cluster references and WAT timestamps.
 - Manual refresh, loading, empty, error, and retained snapshot on refresh failure.
+- Issue map with separate report GPS and issue-cluster centroid layers, viewport
+  loading, exact category/status filters, manual refresh, and a Nigeria reset view.
+- Select markers or accessible result-list buttons to inspect references, status,
+  GPS accuracy, cluster assignment and supporting-report counts.
+- Explicit per-layer caps, missing-coordinate counts, empty states, safe retained
+  snapshots after failed refresh, and street-map loading failure notices.
 
-Map layers, full report/cluster lists, evidence inspection, filtering, review
+Full report/cluster lists, evidence inspection, broader search, review
 actions, and exported government reports remain subsequent slices. The recent
 observations table is an overview, not a complete searchable reports view.
+
+The map uses [Leaflet 1.9.4](https://leafletjs.com/reference-1.9.4.html) and
+OpenStreetMap street tiles, with visible contributor attribution. Tile requests
+go to the public tile service; authenticated report data stays on the CivicAI API.
+Follow the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
+when deploying; select an appropriate provider before expanding production usage.
+See the [map API contract](../../docs/government-map-api.md) for bounds, filters,
+caps and point semantics. Clusters without coordinates are counted, not mapped.
 
 The API uses one statement for a consistent snapshot and checks role/status in
 the database on every request. Counts are independent of the eight-row activity
@@ -61,8 +75,15 @@ as pending, failed jobs as failed, and disabled priority exposes no cached score
 Empty clusters retained for audit are excluded from overview cluster counts.
 
 Validation: API and web builds, mocked API access/contract tests and web session
-tests. Chrome interaction checks with intercepted test API responses also covered
+tests. Chrome overview interaction checks with intercepted test API responses covered
 sign-in errors, eight activity rows, retained data after a failed refresh,
 empty/disabled states, desktop/mobile overflow and sign-out, with no runtime
-errors. Live PostgreSQL/PostGIS validation and end-to-end sign-in with a provisioned
-government account are still required before deployment.
+errors. Live PostgreSQL/PostGIS overview and map queries, priority enabled/disabled
+modes, and authorization against an existing active government account pass via
+`npm run validate:government` in `services/api`. Session-local spatial fixtures
+also pass and are rolled back. End-to-end password sign-in with a provisioned
+government account remains pending; the live script uses an isolated test JWT.
+Chrome map checks with intercepted API responses pass for marker/list selection,
+escaped address text, category/layer changes, viewport reload, retained refresh
+errors, empty/capped states, tile failure fallback, desktop/mobile overflow and
+sign-out, with no runtime errors.

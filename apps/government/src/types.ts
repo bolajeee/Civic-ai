@@ -1,5 +1,19 @@
 export interface GovernmentUser { id: string; email: string; role: 'ADMIN' | 'OPERATOR' }
 export interface Session { accessToken: string; refreshToken: string; user: GovernmentUser }
+export type MapLayer = 'reports' | 'clusters' | 'all';
+export interface MapFilters { bbox: [number, number, number, number]; layer: MapLayer; status?: string; category?: string; limit?: number }
+export interface MapFeature {
+  type: 'Feature'; id: string;
+  geometry: { type: 'Point'; coordinates: [number, number] };
+  properties: { kind: 'report' | 'cluster'; publicId: string; status: string; category: string; categorySlug: string;
+    submittedAt?: string; createdAt?: string; address?: string | null; accuracy?: number | null;
+    clusterPublicId?: string | null; reportCount?: number };
+}
+export interface MapCollection { type: 'FeatureCollection'; total: number; withoutGeometry: number; features: MapFeature[] }
+export interface MapSnapshot {
+  generatedAt: string; bbox: [number, number, number, number]; limit: number;
+  categories: Array<{ slug: string; label: string }>; reports: MapCollection; clusters: MapCollection;
+}
 export interface Overview {
   generatedAt: string;
   reports: { total: number; pending: number; inProgress: number; resolved: number; rejected: number; withoutLocation: number };

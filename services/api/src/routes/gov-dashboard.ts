@@ -1,22 +1,11 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { query } from '../db';
 import { isPriorityEnabled } from '../ai/priority';
+import { governmentAccess } from './gov-access';
 
 /** Overview only: counts cover the full dataset; activity lists are bounded. */
 export default async function govDashboardRoutes(app: FastifyInstance) {
-  async function requireGovernment(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const result = await query<{ role: string; status: string }>(
-        'SELECT role, status FROM users WHERE id = $1', [(request.user as { id: string }).id]);
-      const user = result.rows[0];
-      if (!user || !['ADMIN', 'OPERATOR'].includes(user.role) || user.status !== 'ACTIVE') {
-        return reply.status(403).send({ error: 'Access denied' });
-      }
-    } catch (error) {
-      app.log.error(error);
-      return reply.status(500).send({ error: 'Internal Server Error' });
-    }
-  }
+  const requireGovernment = governmentAccess(app);
 
   app.get('/overview', { preHandler: [app.authenticate, requireGovernment] }, async (_request, reply) => {
     const priorityEnabled = isPriorityEnabled();

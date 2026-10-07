@@ -1,4 +1,4 @@
-import type { Overview, Session } from './types';
+import type { MapFilters, MapSnapshot, Overview, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -74,6 +74,13 @@ export class GovernmentApi {
   }
 
   overview() { return this.authorized<Overview>('/dashboard/overview'); }
+  map(filters: MapFilters) {
+    const params = new URLSearchParams({ bbox: filters.bbox.join(','), layer: filters.layer });
+    if (filters.status) params.set('status', filters.status);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+    return this.authorized<MapSnapshot>(`/dashboard/map?${params}`);
+  }
 
   async logout() {
     const previous = this.session;

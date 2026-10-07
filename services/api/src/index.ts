@@ -23,6 +23,7 @@ import { startPriorityWorker } from './ai/priority_worker';
 import { isPriorityEnabled } from './ai/priority';
 import govPriorityRoutes from './routes/gov-priority';
 import govDashboardRoutes from './routes/gov-dashboard';
+import govMapRoutes from './routes/gov-map';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
@@ -69,6 +70,7 @@ fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 fastify.register(reportRoutes, { prefix: '/api/reports' });
 fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
+fastify.register(govMapRoutes, { prefix: '/api/gov/dashboard' });
 
 // Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));

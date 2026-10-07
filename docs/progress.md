@@ -108,19 +108,26 @@ observations into a reviewable account of the issue. Administrators must be able
 to trace summaries and grouping decisions back to the original reports, inspect
 uncertainty, and record corrections. See [cluster report review requirements](ai_strategy.md#admin-transparency-and-cluster-report-review).
 
-- [x] Overview Dashboard (first slice implemented; live database validation pending)
+- [x] Overview Dashboard (first slice implemented; live database queries validated)
   - [x] Government web scaffold, operator/admin sign-in, in-memory sessions, silent refresh rotation, and sign-out
   - [x] Protected `GET /api/gov/dashboard/overview`: global counts, lifecycle/category breakdown, grouping backlog, unassigned reports, missing GPS, and priority readiness
   - [x] Latest eight observations, WAT timestamps, manual refresh, loading/empty/error states, retained snapshot after refresh failure, and responsive web layout
   - [x] Current database role/status checks; stale/failed/disabled priority remains distinguishable; no citizen identity details in overview
-  - [ ] Validate against migrated PostgreSQL/PostGIS and a provisioned government account
+  - [x] Validate overview queries against migrated PostgreSQL/PostGIS and database authorization for an existing active government account
+  - [ ] Validate end-to-end browser password sign-in with a provisioned government account (live database checks use an isolated test JWT)
   - Setup and scope: [government web README](../apps/government/README.md); [overview API contract](government-dashboard-api.md)
 
-  Validation: API build and all 92 API tests pass; government production build
-  and all 6 web session tests pass. Chrome interaction checks with test API
+  Validation: API build and all 97 API tests pass; government production build
+  and all 8 web tests pass. Chrome overview interaction checks with test API
   responses pass for sign-in, overview, refresh errors, empty/disabled states,
-  responsive overflow, and sign-out. Live database validation remains pending.
-- [ ] Map interface (PostGIS layers)
+  responsive overflow, and sign-out. Live overview/map queries and account
+  authorization pass; password-based browser sign-in remains pending.
+- [x] Map interface (PostGIS layers)
+  - [x] Protected viewport GeoJSON API, report GPS and non-empty cluster centroids, exact category/status filters, per-layer caps and missing-coordinate counts
+  - [x] Leaflet street map, layer controls, pan/zoom loading, selectable markers and accessible results, GPS accuracy and centroid uncertainty
+  - [x] Live PostgreSQL/PostGIS queries and rolled-back spatial fixtures validate boundaries, ordering, limits, missing GPS, empty clusters, memberships and empty areas
+  - [x] Chrome checks with test API responses: marker/list selection, category and layer changes, viewport reload, retained refresh errors, empty/capped states, tile failure fallback, desktop/mobile overflow and sign-out
+  - API contract and repeatable live check: [government map API](government-map-api.md)
 - [ ] Reports view
 - [ ] Issue clusters view
 - [ ] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
