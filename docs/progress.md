@@ -84,18 +84,26 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 - [ ] Notifications: permission request exists, but delivery, device-token registration, and notification preferences are not implemented
 
 Summary integration validation: `flutter analyze` passes; all four new summary
-model/provider tests pass. Full Flutter suite: 30 passed, one existing router-test
-failure (`authenticated real app routes pass through untouched`). That test expects
-`/permissions` to remain open with permissions granted, while the current router
-intentionally redirects it to Home; the test and router were not changed here.
+model/provider tests pass. Full Flutter suite (re-run 2026-10-07): 33 passed, one
+failure (`authenticated real app routes pass through untouched`). That test is stale:
+it expects `/permissions` to remain open with permissions granted, while the router
+intentionally redirects it to Home. The test needs updating to match the router.
+- [ ] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)
-- [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending)
+**Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Reviewed 2026-10-07: the dev database has only 11 migrations recorded. The cluster tables exist (applied by hand, not recorded), but the severity migration (`input_snapshot`, widened analysis-type constraint) and all `issue_cluster_priority_*` tables are missing. No AI flag is enabled and no OpenAI key is set, so none of the items below has run against a database or a model.
+
+- [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending; default model name `gpt-6-luna` unverified)
 - [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
 - [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
-- [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, database validation pending)
-- [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, OpenAI key configuration and database validation pending)
-- [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, database validation pending; scores stay INCOMPLETE until sourced context is entered)
+- [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code ready, migration applied by hand but not recorded, no clustering run yet)
+- [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, migration not applied to the dev database, OpenAI key configuration and database validation pending; default model name `gpt-6-luna` unverified)
+- [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, migration not applied to the dev database; scores stay INCOMPLETE until sourced context is entered)
+- [ ] Validate Phase 3 end to end: apply the severity and priority migrations, enable the flags with a key, and confirm a submitted report flows through classification, embedding, duplicate search, clustering, severity and priority
+- [ ] Pipeline gaps found in review:
+  - A report whose embedding ends `FAILED` is never duplicate-searched, so it is never clustered and stays "unclustered" with no retry or singleton fallback
+  - Duplicate search only considers earlier reports that are already clustered; if a later report's embedding finishes first, the pair is never matched and they form separate clusters
+  - `GET /api/gov/issue-clusters/:id/priority` returns an input snapshot containing each member report's `citizenId`; `requireGovernment` in `gov-priority.ts` has no error handling
 
 ### Phase 4: Government Dashboard (In Progress)
 
@@ -118,10 +126,12 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - Setup and scope: [government web README](../apps/government/README.md); [overview API contract](government-dashboard-api.md)
 
   Validation: API build and all 97 API tests pass; government production build
-  and all 8 web tests pass. Chrome overview interaction checks with test API
-  responses pass for sign-in, overview, refresh errors, empty/disabled states,
-  responsive overflow, and sign-out. Live overview/map queries and account
-  authorization pass; password-based browser sign-in remains pending.
+  and all 8 web tests pass (re-run 2026-10-07). Chrome overview interaction checks
+  with test API responses pass for sign-in, overview, refresh errors, empty/disabled
+  states, responsive overflow, and sign-out. Live overview/map queries and account
+  authorization pass with `AI_PRIORITY_ENABLED=false`; password-based browser
+  sign-in remains pending.
+  - [ ] Live-validate the overview's priority branch (`priority_state` CTE). The live script forces priority off and the dev database lacks the priority tables, so that SQL has only been exercised through mocked tests.
 - [x] Map interface (PostGIS layers)
   - [x] Protected viewport GeoJSON API, report GPS and non-empty cluster centroids, exact category/status filters, per-layer caps and missing-coordinate counts
   - [x] Leaflet street map, layer controls, pan/zoom loading, selectable markers and accessible results, GPS accuracy and centroid uncertainty
@@ -153,7 +163,7 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [ ] Audit trail
 
 ### Phase 6: Hardening (Pending)
-- [ ] Security audits & least privilege
+- [ ] Security audits & least privilege (known now: `JWT_SECRET` falls back to a hardcoded default, CORS is `*`, `/api/test-upload` is still registered)
 - [ ] Rate limiting
 - [ ] Error handling
 - [ ] Offline handling (Flutter sync queue)
