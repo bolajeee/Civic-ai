@@ -128,11 +128,18 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Live PostgreSQL/PostGIS queries and rolled-back spatial fixtures validate boundaries, ordering, limits, missing GPS, empty clusters, memberships and empty areas
   - [x] Chrome checks with test API responses: marker/list selection, category and layer changes, viewport reload, retained refresh errors, empty/capped states, tile failure fallback, desktop/mobile overflow and sign-out
   - API contract and repeatable live check: [government map API](government-map-api.md)
-- [ ] Reports view
+- [x] Reports view
+  - [x] Protected full-dataset report list with server-side search, status/category, WAT dates, GPS and cluster-assignment filters; bounded pagination and deterministic newest-first ordering
+  - [x] Individual report details with original description, saved GPS/accuracy, separate report/cluster statuses, ordered photos and renewable 15-minute signed links
+  - [x] Loading/empty/error states, retained snapshots after failed refresh, stale-response protection, accessible detail focus and responsive layout
+  - [x] Live database queries and rolled-back fixtures validate pagination beyond 20, literal search, WAT boundaries, filters, details and photo metadata; existing stored-photo signing and retrieval pass
+  - [x] API/government builds, all 106 API tests and 10 web tests pass; Chrome checks with test responses cover browsing, filters, detail/photo failures, refresh errors, stale responses, mobile overflow and sign-out
+  - Contract and validation commands: [government reports API](government-reports-api.md)
 - [ ] Issue clusters view
 - [ ] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
 - [ ] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
 - [ ] Filters & Search
+  - Report search/filters and map category/status filters are implemented; cross-cluster and review-queue search remain pending.
 - [ ] Review queue
 - [ ] Administrator review actions: approve/dismiss candidates, remove/move reports, merge/split clusters, and record reviewer, timestamp, and reason
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { GovernmentApi } from './api';
 import type { Overview, Session } from './types';
 import { MapView } from './MapView';
+import { ReportsView } from './ReportsView';
 
 const number = (value: number) => value.toLocaleString('en-NG');
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -13,7 +14,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [notice, setNotice] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const [page, setPage] = useState<'overview' | 'map'>('overview');
+  const [page, setPage] = useState<'overview' | 'map' | 'reports'>('overview');
   const api = useMemo(() => new GovernmentApi(setSession), []);
   async function logout() {
     setSigningOut(true);
@@ -26,13 +27,13 @@ export function App() {
     <aside className="sidebar">
       <a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI<span className="brand-dot">●</span></a>
       <p className="workspace-label">GOVERNMENT WORKSPACE</p>
-      <nav aria-label="Workspace">{(['overview', 'map'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span>{item === 'overview' ? '▦' : '◎'}</span>{item === 'overview' ? 'Overview' : 'Issue map'}</a>)}</nav>
+      <nav aria-label="Workspace">{(['overview', 'map', 'reports'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span aria-hidden="true">{item === 'overview' ? '▦' : item === 'map' ? '◎' : '▤'}</span>{item === 'overview' ? 'Overview' : item === 'map' ? 'Issue map' : 'Reports'}</a>)}</nav>
       <div className="sidebar-note"><span className="live-dot" />Citizen observations.<br />Better public decisions.</div>
       <div className="account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><div><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></div></div>
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
     </aside>
-    <main id={page}><header className="topbar"><span>Operations / <strong>{page === 'overview' ? 'Overview' : 'Issue map'}</strong></span><span className="workspace-tag">Government portal</span></header>
-      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : <MapView key={session.user.id} api={api} />}
+    <main id={page}><header className="topbar"><span>Operations / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : 'Reports'}</strong></span><span className="workspace-tag">Government portal</span></header>
+      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : <ReportsView key={session.user.id} api={api} />}
     </main>
   </div>;
 }

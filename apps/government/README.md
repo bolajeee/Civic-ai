@@ -54,8 +54,13 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
   GPS accuracy, cluster assignment and supporting-report counts.
 - Explicit per-layer caps, missing-coordinate counts, empty states, safe retained
   snapshots after failed refresh, and street-map loading failure notices.
+- Reports view with full-dataset server search, status/category, inclusive WAT date,
+  GPS and cluster-assignment filters, and 20/50/100-row pagination.
+- Report details with original descriptions, saved location and GPS accuracy,
+  separate report/cluster statuses, and ordered photos with renewable 15-minute
+  signed links and unavailable-photo fallbacks.
 
-Full report/cluster lists, evidence inspection, broader search, review
+Full cluster lists, combined cluster evidence inspection, broader search, review
 actions, and exported government reports remain subsequent slices. The recent
 observations table is an overview, not a complete searchable reports view.
 
@@ -66,6 +71,9 @@ Follow the [tile usage policy](https://operations.osmfoundation.org/policies/til
 when deploying; select an appropriate provider before expanding production usage.
 See the [map API contract](../../docs/government-map-api.md) for bounds, filters,
 caps and point semantics. Clusters without coordinates are counted, not mapped.
+See the [reports API contract](../../docs/government-reports-api.md) for list
+pagination, full-dataset filters, details and photo expiry. Report descriptions
+remain original observations; there are no report mutation actions in this view.
 
 The API uses one statement for a consistent snapshot and checks role/status in
 the database on every request. Counts are independent of the eight-row activity
@@ -87,3 +95,11 @@ Chrome map checks with intercepted API responses pass for marker/list selection,
 escaped address text, category/layer changes, viewport reload, retained refresh
 errors, empty/capped states, tile failure fallback, desktop/mobile overflow and
 sign-out, with no runtime errors.
+Reports validation: both builds, 106 API tests and 10 web tests pass. Live report
+queries and rolled-back fixtures cover pagination beyond 20, ordering, literal
+search, WAT date boundaries, GPS/grouping/category/status filters and details.
+`npm run validate:government -- --storage` also verified signing and retrieving
+an existing stored photo. Chrome Reports checks with test API responses pass
+for pagination/filters/reset, date validation, detail focus, photo failures,
+escaped descriptions, refresh errors, late responses, empty states and mobile
+overflow, with no runtime errors.
