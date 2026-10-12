@@ -48,3 +48,4 @@ civicai/
 - [Project Progress & MVP Scope](docs/progress.md)
 - [Database Schema & Migrations](docs/database.md)
 - [AI Strategy & Pipeline](docs/ai_strategy.md)
+- [Citizen Authentication Setup](docs/citizen-auth.md)

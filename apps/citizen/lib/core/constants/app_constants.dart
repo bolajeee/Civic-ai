@@ -21,6 +21,17 @@ abstract final class AppConstants {
     return 'http://127.0.0.1:3000';
   }();
 
+  // OAuth values are public client identifiers, supplied per build flavor.
+  // The Google value must also appear in API GOOGLE_CLIENT_IDS.
+  static const String googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const String googleClientId =
+      String.fromEnvironment('GOOGLE_CLIENT_ID');
+  static const String appleServiceId =
+      String.fromEnvironment('APPLE_SERVICE_ID');
+  static const String appleRedirectUri =
+      String.fromEnvironment('APPLE_REDIRECT_URI');
+
   // Token storage keys
   static const String keyAccessToken = 'access_token';
   static const String keyRefreshToken = 'refresh_token';

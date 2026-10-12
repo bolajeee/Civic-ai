@@ -88,6 +88,9 @@ class _AuthInterceptor extends Interceptor {
     // a "session expired" message on a logout the user asked for.
     final isAuthEndpoint = path.contains('/auth/login') ||
         path.contains('/auth/register') ||
+        path.contains('/auth/social') ||
+        path.contains('/auth/forgot-password') ||
+        path.contains('/auth/reset-password') ||
         path.contains('/auth/refresh') ||
         path.contains('/auth/logout');
 

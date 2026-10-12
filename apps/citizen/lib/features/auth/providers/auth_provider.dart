@@ -6,6 +6,7 @@ import '../../../core/errors/api_exception.dart';
 import '../../../core/services/api_client.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/social_auth_service.dart';
 
 enum AuthStatus {
   /// App just launched — checking storage for an existing session
@@ -150,6 +151,38 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (_) {
       _setError('An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> socialLogin(String provider) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final credential = provider == 'google'
+          ? await SocialAuthService.instance.signInWithGoogle()
+          : await SocialAuthService.instance.signInWithApple();
+      final auth = await _service.socialLogin(
+        provider: credential.provider,
+        idToken: credential.idToken,
+        nonce: credential.nonce,
+      );
+      _user = auth.user;
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
+    } on DioException catch (e) {
+      _setError(ApiException.fromDio(e).message);
+      return false;
+    } catch (e) {
+      final message =
+          e.toString().replaceFirst(RegExp(r'^(Bad state: |Exception: )'), '');
+      if (!message.toLowerCase().contains('cancel')) {
+        _setError(message);
+      }
       return false;
     } finally {
       _setLoading(false);

@@ -72,7 +72,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 
 ### Citizen UI functionality gaps (reviewed 2026-09-30)
 
-- [ ] Login: Forgot Password, Google sign-in, and Apple sign-in only show "coming soon" messages; no reset or social authentication flow
+- [x] Login: password reset plus verified Google and Apple sign-in flows (social identities link to an existing NIN-backed citizen account)
 - [ ] Home: notification bell is decorative; no notification inbox or tap action
 - [ ] Profile: Edit Profile, Notifications, Language, Help & Support, and About rows have no tap handlers/screens
 - [ ] Profile: Dark Mode only toggles local switch state; it does not change the app theme or persist the preference

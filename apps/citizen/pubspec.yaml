@@ -41,6 +41,12 @@ dependencies:
   # URL launcher (Terms & Privacy links)
   url_launcher: ^6.3.0
 
+  # Federated identity sign-in. Provider ID tokens are always verified again by
+  # the CivicAI API before a local session is issued.
+  google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.6
+
   # Icons
   cupertino_icons: ^1.0.8
 

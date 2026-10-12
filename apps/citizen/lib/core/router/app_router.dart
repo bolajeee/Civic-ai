@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
+import '../../features/auth/screens/reset_password_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
@@ -17,6 +18,7 @@ abstract final class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String register = '/register';
+  static const String resetPassword = '/reset-password';
   static const String permissions = '/permissions';
   static const String home = '/home';
   static const String report = '/report';
@@ -57,7 +59,9 @@ String? resolveRedirect({
   // 2. Not logged in — only login/register are reachable.
   //    Splash, permissions, home, report → /login
   if (status == AuthStatus.unauthenticated) {
-    return location == AppRoutes.login || location == AppRoutes.register
+    return location == AppRoutes.login ||
+            location == AppRoutes.register ||
+            location == AppRoutes.resetPassword
         ? null
         : AppRoutes.login;
   }
@@ -76,7 +80,8 @@ String? resolveRedirect({
 
   final isOnboardingRoute = location == AppRoutes.splash ||
       location == AppRoutes.login ||
-      location == AppRoutes.register;
+      location == AppRoutes.register ||
+      location == AppRoutes.resetPassword;
 
   if (isOnboardingRoute) {
     return permissionsGranted ? AppRoutes.home : AppRoutes.permissions;
@@ -119,6 +124,12 @@ GoRouter buildRouter(AuthProvider authProvider) {
         builder: (_, __) => const RegisterScreen(),
       ),
       GoRoute(
+        path: AppRoutes.resetPassword,
+        builder: (_, state) => ResetPasswordScreen(
+          initialEmail: state.uri.queryParameters['email'],
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.permissions,
         builder: (_, __) => const PermissionsScreen(),
       ),
@@ -146,8 +157,9 @@ GoRouter buildRouter(AuthProvider authProvider) {
           // The providers sit above MaterialApp.router in main.dart, which is
           // what makes them reachable from here.
           final id = state.pathParameters['id'];
-          final report =
-              id == null ? null : context.read<ReportHistoryProvider>().byPublicId(id);
+          final report = id == null
+              ? null
+              : context.read<ReportHistoryProvider>().byPublicId(id);
 
           return report == null
               ? const _ReportNotFoundScreen()

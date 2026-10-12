@@ -55,8 +55,12 @@ void main() {
       );
     });
 
-    test('login and register are reachable', () {
-      for (final location in [AppRoutes.login, AppRoutes.register]) {
+    test('login, register, and password reset are reachable', () {
+      for (final location in [
+        AppRoutes.login,
+        AppRoutes.register,
+        AppRoutes.resetPassword,
+      ]) {
         expect(
           resolveRedirect(
             status: AuthStatus.unauthenticated,
@@ -112,8 +116,12 @@ void main() {
       );
     });
 
-    test('login and register are escorted out', () {
-      for (final location in [AppRoutes.login, AppRoutes.register]) {
+    test('authentication screens are escorted out', () {
+      for (final location in [
+        AppRoutes.login,
+        AppRoutes.register,
+        AppRoutes.resetPassword,
+      ]) {
         expect(
           resolveRedirect(
             status: AuthStatus.authenticated,
@@ -125,10 +133,31 @@ void main() {
       }
     });
 
+    test('permissions routes to home after it has been granted', () {
+      expect(
+        resolveRedirect(
+          status: AuthStatus.authenticated,
+          location: AppRoutes.permissions,
+          permissionsGranted: true,
+        ),
+        AppRoutes.home,
+      );
+    });
+
+    test('permissions remains reachable until it has been handled', () {
+      expect(
+        resolveRedirect(
+          status: AuthStatus.authenticated,
+          location: AppRoutes.permissions,
+          permissionsGranted: false,
+        ),
+        isNull,
+      );
+    });
+
     test('real app routes pass through untouched', () {
       for (final location in [
         AppRoutes.home,
-        AppRoutes.permissions,
         AppRoutes.report,
         AppRoutes.history,
       ]) {

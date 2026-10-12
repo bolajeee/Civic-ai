@@ -162,11 +162,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: TextButton(
                     onPressed: () {
                       // Forgot password flow — Phase 6 (Hardening)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Password reset coming soon.'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                      context.push(
+                        Uri(
+                          path: AppRoutes.resetPassword,
+                          queryParameters: _emailController.text.trim().isEmpty
+                              ? null
+                              : {'email': _emailController.text.trim()},
+                        ).toString(),
                       );
                     },
                     style: TextButton.styleFrom(
@@ -200,34 +202,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: AppConstants.spacingLg),
 
                 // Continue with Google
-                _SocialButton(
-                  label: 'Continue with Google',
-                  icon: _GoogleIcon(),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Google sign-in coming soon.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                Consumer<AuthProvider>(
+                  builder: (_, auth, __) => _SocialButton(
+                    label: 'Continue with Google',
+                    icon: _GoogleIcon(),
+                    onPressed: auth.isLoading
+                        ? null
+                        : () => auth.socialLogin('google'),
+                  ),
                 ),
 
                 const SizedBox(height: AppConstants.spacingMd),
 
                 // Continue with Apple
-                _SocialButton(
-                  label: 'Continue with Apple',
-                  icon: const Icon(Icons.apple,
-                      size: 20, color: AppColors.textPrimary),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Apple sign-in coming soon.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                Consumer<AuthProvider>(
+                  builder: (_, auth, __) => _SocialButton(
+                    label: 'Continue with Apple',
+                    icon: const Icon(Icons.apple,
+                        size: 20, color: AppColors.textPrimary),
+                    onPressed:
+                        auth.isLoading ? null : () => auth.socialLogin('apple'),
+                  ),
                 ),
 
                 const SizedBox(height: AppConstants.spacingXxl),
@@ -299,7 +294,7 @@ class _SocialButton extends StatelessWidget {
 
   final String label;
   final Widget icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
