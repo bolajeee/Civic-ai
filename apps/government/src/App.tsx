@@ -3,6 +3,7 @@ import { GovernmentApi } from './api';
 import type { Overview, Session } from './types';
 import { MapView } from './MapView';
 import { ReportsView } from './ReportsView';
+import { ClustersView } from './ClustersView';
 import { AdminView } from './AdminView';
 
 const number = (value: number) => value.toLocaleString('en-NG');
@@ -15,7 +16,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [notice, setNotice] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const [page, setPage] = useState<'overview' | 'map' | 'reports' | 'admin'>('overview');
+  const [page, setPage] = useState<'overview' | 'map' | 'reports' | 'clusters' | 'admin'>('overview');
   const [publicRoute, setPublicRoute] = useState(window.location.hash);
   const api = useMemo(() => new GovernmentApi(value => {
     setSession(value);
@@ -47,13 +48,13 @@ export function App() {
       <a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI<span className="brand-dot">●</span></a>
       <p className="workspace-label">GOVERNMENT WORKSPACE</p>
       {session.user.role === 'ADMIN' && <nav aria-label="Administration"><a className={page === 'admin' ? 'nav-active' : ''} href="#admin" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}><span aria-hidden="true">⚙</span>Administration</a></nav>}
-      <nav aria-label="Workspace">{(['overview', 'map', 'reports'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span aria-hidden="true">{item === 'overview' ? '▦' : item === 'map' ? '◎' : '▤'}</span>{item === 'overview' ? 'Overview' : item === 'map' ? 'Issue map' : 'Reports'}</a>)}</nav>
+      <nav aria-label="Workspace">{(['overview', 'map', 'reports', 'clusters'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span aria-hidden="true">{item === 'overview' ? '▦' : item === 'map' ? '◎' : item === 'reports' ? '▤' : '◉'}</span>{item === 'overview' ? 'Overview' : item === 'map' ? 'Issue map' : item === 'reports' ? 'Reports' : 'Issue clusters'}</a>)}</nav>
       <div className="sidebar-note"><span className="live-dot" />Citizen observations.<br />Better public decisions.</div>
       <div className="account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><div><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></div></div>
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
     </aside>
-    <main id={page}><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
-      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
+    <main id={page}><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : page === 'clusters' ? 'Issue clusters' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
+      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : page === 'clusters' ? <ClustersView key={session.user.id} api={api} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
     </main>
   </div>;
 }

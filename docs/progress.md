@@ -143,7 +143,11 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Live database queries and rolled-back fixtures validate pagination beyond 20, literal search, WAT boundaries, filters, details and photo metadata; existing stored-photo signing and retrieval pass
   - [x] API/government builds, all 106 API tests and 10 web tests pass; Chrome checks with test responses cover browsing, filters, detail/photo failures, refresh errors, stale responses, mobile overflow and sign-out
   - Contract and validation commands: [government reports API](government-reports-api.md)
-- [ ] Issue clusters view
+- [x] Issue clusters view
+  - [x] Protected paginated API and dashboard list with reference/category/status search, non-empty clusters, lifecycle and review counts, centroid, and feature-aware priority state
+  - [x] Independently loadable aggregate summary with grouping method counts, confidence, fixed anchor, first/last assignment times, retained refresh errors, responsive layout, and no citizen identity/evidence leakage
+  - [x] API/government builds, all 130 API tests and 14 web tests pass; live database fixture and browser interaction validation remain pending
+  - Contract and validation commands: [government issue clusters API](government-clusters-api.md)
 - [ ] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
 - [ ] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
 - [ ] Filters & Search

@@ -32,6 +32,28 @@ export interface ReportDetailSnapshot {
   report: GovernmentReport & { photos: Array<{ id: string; mediaType: string; displayOrder: number; url: string | null }> };
   photosExpireInSeconds: number;
 }
+export interface ClusterFilters { page?: number; limit?: number; q?: string; status?: string; category?: string }
+export interface ClusterPriority { status: string; score: number | null; band: string | null }
+export interface IssueCluster {
+  id: string; publicId: string; status: string; reportCount: number; createdAt: string; updatedAt: string;
+  category: { slug: string; label: string };
+  centroid: { latitude: number; longitude: number } | null;
+  pendingReviewCount: number;
+  reportStatuses: { pending: number; inProgress: number; resolved: number; rejected: number };
+  priority: ClusterPriority;
+}
+export interface ClustersSnapshot {
+  generatedAt: string; page: number; limit: number; total: number; priorityEnabled: boolean;
+  categories: Array<{ slug: string; label: string }>; clusters: IssueCluster[];
+}
+export interface ClusterDetailSnapshot {
+  priorityEnabled: boolean;
+  cluster: IssueCluster & {
+    anchorLocation: { latitude: number; longitude: number; accuracy: number | null; address: string | null } | null;
+    grouping: { ai: number; human: number; system: number; averageConfidence: number | null;
+      firstAssignedAt: string | null; lastAssignedAt: string | null };
+  };
+}
 export type MapLayer = 'reports' | 'clusters' | 'all';
 export interface MapFilters { bbox: [number, number, number, number]; layer: MapLayer; status?: string; category?: string; limit?: number }
 export interface MapFeature {

@@ -61,9 +61,13 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
 - Report details with original descriptions, saved location and GPS accuracy,
   separate report/cluster statuses, and ordered photos with renewable 15-minute
   signed links and unavailable-photo fallbacks.
+- Issue-cluster list with reference/category/status search, pagination, report
+  lifecycle and grouping-review counts, centroid and current priority state.
+- Cluster summaries with aggregate assignment methods and confidence, fixed
+  anchor, and first/last grouping times.
 
-Full cluster lists, combined cluster evidence inspection, broader search, review
-actions, and exported government reports remain subsequent slices. The recent
+Combined cluster evidence inspection, grouping explanations, review actions,
+and exported government reports remain subsequent slices. The recent
 observations table is an overview, not a complete searchable reports view.
 
 The map uses [Leaflet 1.9.4](https://leafletjs.com/reference-1.9.4.html) and
@@ -76,6 +80,9 @@ caps and point semantics. Clusters without coordinates are counted, not mapped.
 See the [reports API contract](../../docs/government-reports-api.md) for list
 pagination, full-dataset filters, details and photo expiry. Report descriptions
 remain original observations; there are no report mutation actions in this view.
+See the [issue clusters API contract](../../docs/government-clusters-api.md) for
+cluster filters, aggregate field semantics, feature-aware priority, and the
+deliberate evidence boundary.
 
 The API uses one statement for a consistent snapshot and checks role/status in
 the database on every request. Counts are independent of the eight-row activity
@@ -105,3 +112,5 @@ an existing stored photo. Chrome Reports checks with test API responses pass
 for pagination/filters/reset, date validation, detail focus, photo failures,
 escaped descriptions, refresh errors, late responses, empty states and mobile
 overflow, with no runtime errors.
+Issue-cluster validation: both builds, 130 API tests and 14 web tests pass.
+Live database fixtures and browser interaction checks for this view remain pending.

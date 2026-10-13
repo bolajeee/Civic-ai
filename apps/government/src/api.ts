@@ -1,4 +1,4 @@
-import type { AdminSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -90,6 +90,14 @@ export class GovernmentApi {
     return this.authorized<ReportsSnapshot>(`/reports/?${params}`);
   }
   report(id: string) { return this.authorized<ReportDetailSnapshot>(`/reports/${encodeURIComponent(id)}`); }
+  clusters(filters: ClusterFilters = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    }
+    return this.authorized<ClustersSnapshot>(`/issue-clusters/?${params}`);
+  }
+  cluster(id: string) { return this.authorized<ClusterDetailSnapshot>(`/issue-clusters/${encodeURIComponent(id)}`); }
   map(filters: MapFilters) {
     const params = new URLSearchParams({ bbox: filters.bbox.join(','), layer: filters.layer });
     if (filters.status) params.set('status', filters.status);
