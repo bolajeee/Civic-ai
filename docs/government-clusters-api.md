@@ -1,6 +1,7 @@
 # Government issue clusters API
 
-`GET /api/gov/issue-clusters/` and `GET /api/gov/issue-clusters/:id` require a
+`GET /api/gov/issue-clusters/`, `GET /api/gov/issue-clusters/:id`, and
+`GET /api/gov/issue-clusters/:id/evidence` require a
 valid bearer JWT and a currently ACTIVE OPERATOR or ADMIN account, checked in
 the database on every request. Responses use `Cache-Control: no-store`.
 
@@ -21,12 +22,26 @@ priority feature is disabled, priority tables are not queried.
 
 ## Cluster summary
 
-The UUID detail route loads independently of the current page. It adds the fixed
+The UUID summary route loads independently of the current page. It adds the fixed
 grouping anchor, counts by AI/HUMAN/SYSTEM assignment method, average recorded
-assignment confidence, and first/last assignment times. It intentionally does
-not return original descriptions, media, citizen data, competing candidates,
-priority input snapshots, or mutation controls. Those belong to the separate
-evidence, grouping-explanation, and review workflows.
+assignment confidence, and first/last assignment times. It does not return
+citizen data, competing candidates, priority input snapshots, or mutation
+controls.
+
+## Original evidence
+
+The evidence route accepts strict `page` (1–1,000,000) and `limit` (1–50,
+default 20) parameters. It returns the cluster reference, matching total, newest
+reports first, and `photosExpireInSeconds: 900`. Each source report contains its
+reference, original description, category and status, submitted/updated times,
+nullable saved location with GPS accuracy, and ordered photos. It loads directly
+from cluster membership, independently of the currently loaded cluster page.
+
+Photo URLs are signed in one batch and expire after 15 minutes. A signing or
+individual object failure leaves the report available with a null URL. Internal
+storage keys are removed. Reloading the evidence page renews its links. The route
+does not return citizen identifiers, contact details, AI classifications or
+severity, grouping scores/thresholds, competing candidates, or inferred events.
 
 Cluster status and supporting-report statuses are separate. Centroids summarize
 available member GPS points and are not asserted as an exact incident location.
@@ -58,6 +73,7 @@ npm run build
 
 Automated tests cover authentication and current database authorization,
 strict filters, literal search and pagination bindings, disabled/enabled
-priority SQL, identity/evidence exclusions, missing clusters, sanitized errors,
+priority SQL, identity exclusions, bounded evidence pagination, photo ordering,
+batch signing and safe signing failures, missing clusters, sanitized errors,
 and authenticated client URL construction. Live database fixture and browser
 interaction validation remain to be completed.

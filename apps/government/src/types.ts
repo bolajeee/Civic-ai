@@ -54,6 +54,17 @@ export interface ClusterDetailSnapshot {
       firstAssignedAt: string | null; lastAssignedAt: string | null };
   };
 }
+export interface ClusterEvidenceReport {
+  id: string; publicId: string; description: string | null; status: string;
+  submittedAt: string; updatedAt: string; category: { slug: string; label: string };
+  location: { latitude: number; longitude: number; accuracy: number | null; address: string | null } | null;
+  photos: Array<{ id: string; mediaType: string; displayOrder: number; url: string | null }>;
+}
+export interface ClusterEvidenceSnapshot {
+  generatedAt: string; page: number; limit: number; total: number;
+  cluster: { id: string; publicId: string }; reports: ClusterEvidenceReport[];
+  photosExpireInSeconds: number;
+}
 export type MapLayer = 'reports' | 'clusters' | 'all';
 export interface MapFilters { bbox: [number, number, number, number]; layer: MapLayer; status?: string; category?: string; limit?: number }
 export interface MapFeature {

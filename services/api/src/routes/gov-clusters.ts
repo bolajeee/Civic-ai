@@ -13,6 +13,18 @@ const filters = z.object({
 }).strict();
 
 const params = z.object({ id: z.uuid() });
+const evidenceFilters = z.object({
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
+
+interface EvidencePhoto { id: string; storageKey: string; mediaType: string; displayOrder: number }
+interface EvidenceReport { photos: EvidencePhoto[]; [key: string]: unknown }
+interface EvidenceResult {
+  generatedAt: string; page: number; limit: number; total: number;
+  cluster: { id: string; publicId: string } | null; reports: EvidenceReport[];
+}
+interface Options { signPhotos?: (keys: string[], ttl: number) => Promise<Record<string, string>> }
 
 function prioritySql(enabled: boolean) {
   if (!enabled) return {
@@ -58,7 +70,7 @@ const summaryColumns = (priority: string) => `ic.id, ic.public_id AS "publicId",
     WHERE membership.issue_cluster_id = ic.id) AS "reportStatuses",
   ${priority} AS priority`;
 
-export default async function govClustersRoutes(app: FastifyInstance) {
+export default async function govClustersRoutes(app: FastifyInstance, options: Options) {
   const access = [app.authenticate, governmentAccess(app)];
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); });
 
@@ -93,6 +105,65 @@ export default async function govClustersRoutes(app: FastifyInstance) {
             ORDER BY "updatedAt" DESC, id DESC), '[]'::jsonb) FROM cluster_page)) AS listing`,
         [status ?? null, category ?? null, q || null, limit, (page - 1) * limit, page, isPriorityEnabled()]);
       return result.rows[0].listing;
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/evidence', { preHandler: access }, async (request, reply) => {
+    const parsedParams = params.safeParse(request.params);
+    const parsedQuery = evidenceFilters.safeParse(request.query);
+    if (!parsedParams.success || !parsedQuery.success) {
+      return reply.status(400).send({ error: 'Invalid cluster evidence request' });
+    }
+    const { page, limit } = parsedQuery.data;
+    try {
+      const result = await query<{ evidence: EvidenceResult }>(`
+        WITH selected_cluster AS (
+          SELECT id, public_id FROM issue_clusters WHERE id = $1 AND report_count > 0
+        ), evidence_reports AS (
+          SELECT r.id, r.public_id AS "publicId", r.description, r.status,
+            r.submitted_at AS "submittedAt", r.updated_at AS "updatedAt",
+            jsonb_build_object('slug', category.slug, 'label', category.label) AS category,
+            CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'latitude', location.latitude, 'longitude', location.longitude,
+              'accuracy', location.accuracy, 'address', location.address) END AS location
+          FROM selected_cluster cluster
+          JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
+          JOIN reports r ON r.id = membership.report_id
+          JOIN report_categories category ON category.id = r.category_id
+          LEFT JOIN locations location ON location.id = r.location_id
+        ), evidence_page AS (
+          SELECT evidence_reports.*,
+            (SELECT coalesce(jsonb_agg(jsonb_build_object('id', media.id,
+              'storageKey', media.storage_key, 'mediaType', media.media_type,
+              'displayOrder', media.display_order) ORDER BY media.display_order, media.id), '[]'::jsonb)
+              FROM report_media media WHERE media.report_id = evidence_reports.id) AS photos
+          FROM evidence_reports ORDER BY "submittedAt" DESC, id DESC LIMIT $2 OFFSET $3
+        )
+        SELECT jsonb_build_object(
+          'generatedAt', NOW(), 'page', $4::int, 'limit', $2::int,
+          'total', (SELECT count(*)::int FROM evidence_reports),
+          'cluster', (SELECT jsonb_build_object('id', id, 'publicId', public_id) FROM selected_cluster),
+          'reports', (SELECT coalesce(jsonb_agg(to_jsonb(evidence_page)
+            ORDER BY "submittedAt" DESC, id DESC), '[]'::jsonb) FROM evidence_page)) AS evidence`,
+        [parsedParams.data.id, limit, (page - 1) * limit, page]);
+      const evidence = result.rows[0].evidence;
+      if (!evidence.cluster) return reply.status(404).send({ error: 'Cluster not found' });
+      const keys = evidence.reports.flatMap(report => report.photos.map(photo => photo.storageKey));
+      let urls: Record<string, string> = {};
+      if (keys.length) {
+        try {
+          const sign = options.signPhotos ?? (await import('../lib/storage')).getImageUrls;
+          urls = await sign(keys, 900);
+        } catch (error) { app.log.error(error, 'Cluster evidence photo signing failed'); }
+      }
+      return { ...evidence, reports: evidence.reports.map(report => ({
+        ...report, photos: report.photos.map(({ storageKey, ...photo }) => ({
+          ...photo, url: urls[storageKey] ?? null,
+        })),
+      })), photosExpireInSeconds: 900 };
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

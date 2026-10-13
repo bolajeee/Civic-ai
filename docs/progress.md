@@ -146,9 +146,13 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Issue clusters view
   - [x] Protected paginated API and dashboard list with reference/category/status search, non-empty clusters, lifecycle and review counts, centroid, and feature-aware priority state
   - [x] Independently loadable aggregate summary with grouping method counts, confidence, fixed anchor, first/last assignment times, retained refresh errors, responsive layout, and no citizen identity/evidence leakage
-  - [x] API/government builds, all 130 API tests and 14 web tests pass; live database fixture and browser interaction validation remain pending
+  - [x] API/government builds, all 133 API tests and 15 web tests pass; live database fixture and browser interaction validation remain pending
   - Contract and validation commands: [government issue clusters API](government-clusters-api.md)
-- [ ] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
+- [x] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
+  - [x] Independently paginated evidence endpoint and responsive source-report cards with ordered, renewable 15-minute photo links and unavailable-photo fallbacks
+  - [x] Evidence stays traceable to original observations without citizen identity, internal storage keys, AI estimates, inferred events, or grouping rationale leakage
+  - [x] Evidence pagination, authentication, strict input, photo signing/sanitization and storage-failure behavior covered by API and web-client tests
+  - Contract and validation commands: [government issue clusters API](government-clusters-api.md)
 - [ ] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
 - [ ] Filters & Search
   - Report search/filters and map category/status filters are implemented; cross-cluster and review-queue search remain pending.

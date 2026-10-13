@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { GovernmentApi } from './api';
-import type { ClusterDetailSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster } from './types';
+import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster } from './types';
 import './clusters.css';
 
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -117,8 +117,55 @@ function ClusterDetails({ api, id, close }: { api: GovernmentApi; id: string; cl
       <Fact title="First report grouped (WAT)" value={cluster.grouping.firstAssignedAt ? date(cluster.grouping.firstAssignedAt) : 'Unavailable'} />
       <Fact title="Last report grouped (WAT)" value={cluster.grouping.lastAssignedAt ? date(cluster.grouping.lastAssignedAt) : 'Unavailable'} />
     </dl><div className="cluster-summary-row"><div><h3>Supporting report lifecycle</h3><Lifecycle cluster={cluster} /></div><div><h3>Current priority</h3><Priority cluster={cluster} enabled={data.priorityEnabled} /></div></div>
-      <p className="cluster-scope-note">This summary shows aggregate operational data. Original evidence, grouping rationale, and review actions remain separate review steps.</p></>}
+      <p className="cluster-scope-note">The summary keeps cluster status separate from the statuses of its supporting citizen reports.</p>
+      <ClusterEvidence api={api} id={id} /></>}
   </section>;
 }
 
 function Fact({ title, value }: { title: string; value: string }) { return <div><dt>{title}</dt><dd>{value}</dd></div>; }
+
+function ClusterEvidence({ api, id }: { api: GovernmentApi; id: string }) {
+  const [page, setPage] = useState(1);
+  const [snapshot, setSnapshot] = useState<{ page: number; data: ClusterEvidenceSnapshot } | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  const data = snapshot?.page === page ? snapshot.data : null;
+  useEffect(() => {
+    let active = true;
+    setBusy(true); setError('');
+    api.clusterEvidence(id, page, 20).then(result => { if (active) setSnapshot({ page, data: result }); })
+      .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Unable to load cluster evidence.'); })
+      .finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, [api, id, page, revision]);
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
+  return <section className="cluster-evidence" aria-label="Supporting report evidence" aria-busy={busy}>
+    <div className="cluster-evidence-heading"><div><p className="eyebrow">TRACEABLE SOURCE EVIDENCE</p><h3>Supporting citizen reports</h3>
+      <p className="muted">Original observations are shown separately; they are not a generated incident narrative.</p></div>
+      <button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>Renew evidence</button></div>
+    {error && <p className="error" role="alert">{error} {data && 'Showing the previously loaded evidence page.'}</p>}
+    {busy && <p className="muted" role="status">Loading supporting evidence…</p>}
+    {data && <><div className="evidence-count"><strong>{data.total.toLocaleString('en-NG')} supporting reports</strong><span>Page {data.page} of {pages} · photo links expire after 15 minutes</span></div>
+      <div className="evidence-reports">{data.reports.map(report => <EvidenceReport key={report.id} report={report} revision={revision} />)}</div>
+      {!data.reports.length && <p className="empty muted">{data.total ? 'This evidence page is empty. Return to the first page.' : 'No supporting reports are available.'}</p>}
+      <div className="cluster-pagination"><span>Evidence page {data.page} of {pages}</span><div>
+        {data.page > pages && <button className="refresh" disabled={busy} onClick={() => setPage(1)}>First page</button>}
+        <button className="refresh" disabled={busy || data.page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button>
+        <button className="refresh" disabled={busy || data.page >= pages} onClick={() => setPage(value => value + 1)}>Next</button>
+      </div></div></>}
+  </section>;
+}
+
+function EvidenceReport({ report, revision }: { report: ClusterEvidenceReport; revision: number }) {
+  return <article className="evidence-report"><header><div><span className="reference">{report.publicId}</span><strong>{report.category.label}</strong></div><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></header>
+    <dl className="evidence-facts"><div><dt>Submitted (WAT)</dt><dd>{date(report.submittedAt)}</dd></div><div><dt>Last updated (WAT)</dt><dd>{date(report.updatedAt)}</dd></div><div><dt>Saved location</dt><dd>{report.location ? <>{report.location.address || 'Address unavailable'}<br />{report.location.latitude.toFixed(6)}, {report.location.longitude.toFixed(6)}<br />GPS accuracy: {report.location.accuracy == null ? 'Unknown' : `±${report.location.accuracy} metres`}</> : 'No GPS supplied'}</dd></div></dl>
+    <h4>Original description</h4><p className="evidence-description">{report.description || 'No description supplied.'}</p>
+    <h4>Original photos ({report.photos.length})</h4>{report.photos.length ? <div className="evidence-gallery">{report.photos.map((photo, index) => <EvidencePhoto key={`${photo.id}-${photo.url}-${revision}`} photo={photo} index={index} reportReference={report.publicId} />)}</div> : <p className="muted">No photos are attached to this report.</p>}
+  </article>;
+}
+
+function EvidencePhoto({ photo, index, reportReference }: { photo: ClusterEvidenceReport['photos'][number]; index: number; reportReference: string }) {
+  const [failed, setFailed] = useState(false);
+  return <figure>{photo.url && !failed ? <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`Original photo ${index + 1} for report ${reportReference}`} loading="lazy" onError={() => setFailed(true)} /></a> : <div className="evidence-photo-unavailable">Photo unavailable. Renew evidence to retry.</div>}<figcaption>Photo {index + 1} · {photo.mediaType}</figcaption></figure>;
+}
