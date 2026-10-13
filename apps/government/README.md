@@ -8,10 +8,9 @@ government client does not depend on the citizen Flutter app.
 ## Run locally
 
 Use Node.js 22.12+ or 24. Install and start the API in `services/api` with its
-existing database configuration. Apply migrations through
-`20261005120000_create_issue_clusters.sql`. If `AI_PRIORITY_ENABLED=true`, also
-apply the severity and priority migrations through
-`20261005140000_create_cluster_priorities.sql`.
+existing database configuration. Apply all migrations through
+`20261013120000_add_gov_invite_revocation.sql`. Priority processing still requires
+`AI_PRIORITY_ENABLED=true`; applying its schema does not enable the worker.
 
 From this directory:
 
@@ -23,9 +22,10 @@ npm run dev
 Open http://localhost:5173. Vite proxies `/api` to http://127.0.0.1:3000 during
 development. Sign in with an existing active OPERATOR or ADMIN account through
 the government login endpoint. Citizen accounts cannot access the workspace.
-There is no registration or account provisioning UI in this slice.
-See [government account setup](../../docs/government-accounts.md) for invite
-creation and API registration.
+Administrators can open **Administration** to create one-time registration
+links, revoke unused invitations, and suspend or reactivate accounts. See
+[government account setup](../../docs/government-accounts.md) for provisioning
+the first administrator.
 
 ```sh
 npm run build
@@ -42,6 +42,8 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
 
 - Government sign-in, in-memory access/refresh tokens, silent token rotation,
   single shared refresh for concurrent expired requests, and sign-out.
+- Admin-only invitation and account management, including one-time registration
+  links, revocation history, account suspension, and refresh-session revocation.
 - Reloading the page requires signing in again. Tokens are not persisted in
   browser storage. A persistent browser session is future work.
 - Global overview totals, report lifecycle, category breakdown, grouping-review

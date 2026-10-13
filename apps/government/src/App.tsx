@@ -3,6 +3,7 @@ import { GovernmentApi } from './api';
 import type { Overview, Session } from './types';
 import { MapView } from './MapView';
 import { ReportsView } from './ReportsView';
+import { AdminView } from './AdminView';
 
 const number = (value: number) => value.toLocaleString('en-NG');
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -14,26 +15,45 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [notice, setNotice] = useState('');
   const [signingOut, setSigningOut] = useState(false);
-  const [page, setPage] = useState<'overview' | 'map' | 'reports'>('overview');
-  const api = useMemo(() => new GovernmentApi(setSession), []);
+  const [page, setPage] = useState<'overview' | 'map' | 'reports' | 'admin'>('overview');
+  const [publicRoute, setPublicRoute] = useState(window.location.hash);
+  const api = useMemo(() => new GovernmentApi(value => {
+    setSession(value);
+    if (value) {
+      setPage('overview');
+      setPublicRoute('#overview');
+      window.history.replaceState(null, '', '#overview');
+    }
+  }), []);
+  useEffect(() => {
+    const update = () => setPublicRoute(window.location.hash);
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
   async function logout() {
     setSigningOut(true);
     try { await api.logout(); setNotice('You have signed out.'); }
     catch { setNotice('Signed out on this browser. Session revocation could not be confirmed by the server.'); }
     finally { setSigningOut(false); }
   }
-  if (!session) return <Login api={api} notice={notice} />;
+  if (!session) {
+    const query = publicRoute.startsWith('#register') ? publicRoute.split('?')[1] || '' : '';
+    return publicRoute.startsWith('#register')
+      ? <Register api={api} inviteCode={new URLSearchParams(query).get('invite') || ''} />
+      : <Login api={api} notice={notice} />;
+  }
   return <div className="workspace">
     <aside className="sidebar">
       <a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI<span className="brand-dot">●</span></a>
       <p className="workspace-label">GOVERNMENT WORKSPACE</p>
+      {session.user.role === 'ADMIN' && <nav aria-label="Administration"><a className={page === 'admin' ? 'nav-active' : ''} href="#admin" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}><span aria-hidden="true">⚙</span>Administration</a></nav>}
       <nav aria-label="Workspace">{(['overview', 'map', 'reports'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span aria-hidden="true">{item === 'overview' ? '▦' : item === 'map' ? '◎' : '▤'}</span>{item === 'overview' ? 'Overview' : item === 'map' ? 'Issue map' : 'Reports'}</a>)}</nav>
       <div className="sidebar-note"><span className="live-dot" />Citizen observations.<br />Better public decisions.</div>
       <div className="account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><div><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></div></div>
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
     </aside>
-    <main id={page}><header className="topbar"><span>Operations / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : 'Reports'}</strong></span><span className="workspace-tag">Government portal</span></header>
-      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : <ReportsView key={session.user.id} api={api} />}
+    <main id={page}><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
+      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
     </main>
   </div>;
 }
@@ -55,7 +75,33 @@ function Login({ api, notice }: { api: GovernmentApi; notice: string }) {
       <label>Email address<input name="email" type="email" autoComplete="username" placeholder="you@agency.gov.ng" required disabled={busy} /></label>
       <label>Password<input name="password" type="password" autoComplete="current-password" required disabled={busy} /></label>
       <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      <p className="login-help">Access is restricted to active government accounts. Contact your administrator if you need an account.</p>
+      <p className="login-help">Access is restricted to active government accounts. Contact your administrator if you need an account.<br /><a className="text-link" href="#register">Have an invitation?</a></p>
+    </form></section></main>;
+}
+
+function Register({ api, inviteCode }: { api: GovernmentApi; inviteCode: string }) {
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get('password'));
+    if (password !== String(form.get('confirmPassword'))) { setError('Passwords do not match.'); return; }
+    setBusy(true); setError('');
+    try { await api.register(String(form.get('email')).trim(), password, String(form.get('nin')).trim(), String(form.get('inviteCode')).trim()); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Unable to create account.'); }
+    finally { setBusy(false); }
+  }
+  return <main className="login-page"><section className="login-story"><a href="#" className="brand"><span className="brand-mark">C</span>CivicAI</a><div><p className="eyebrow">INVITED ACCESS</p><h1>Join your government<br />workspace.</h1><p>Use your one-time invitation to create<br />a protected operations account.</p></div><small>Government operations workspace</small></section>
+    <section className="login-panel"><form onSubmit={submit}><p className="eyebrow">CREATE ACCOUNT</p><h2>Accept your invitation</h2><p className="muted">Your administrator selected your access level.</p>
+      {error && <p role="alert" className="error">{error}</p>}
+      <label>Invitation code<input name="inviteCode" defaultValue={inviteCode} required readOnly={Boolean(inviteCode)} /></label>
+      <label>Email address<input name="email" type="email" autoComplete="username" placeholder="you@agency.gov.ng" required disabled={busy} /></label>
+      <label>NIN<input name="nin" inputMode="numeric" pattern="[0-9]{11}" minLength={11} maxLength={11} required disabled={busy} /></label>
+      <label>Password<input name="password" type="password" autoComplete="new-password" minLength={8} required disabled={busy} /></label>
+      <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required disabled={busy} /></label>
+      <button className="primary" disabled={busy}>{busy ? 'Creating account…' : 'Create government account'}</button>
+      <p className="login-help"><a className="text-link" href="#">Back to sign in</a></p>
     </form></section></main>;
 }
 

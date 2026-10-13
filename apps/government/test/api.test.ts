@@ -92,3 +92,40 @@ test('server revocation failure still clears local credentials', async () => {
   await assert.rejects(api.logout());
   assert.equal(current, null);
 });
+
+test('invite registration establishes the returned government session', async () => {
+  let current: Session | null = null;
+  const admin: Session = { accessToken: 'admin-access', refreshToken: 'admin-refresh',
+    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN' } };
+  const api = new GovernmentApi(value => { current = value; }, async (url, init) => {
+    assert.ok(String(url).endsWith('/auth/register'));
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      email: 'admin@example.gov', password: 'password123', nin: '12345678901', inviteCode: 'one-time-code',
+    });
+    return response(admin, 201);
+  });
+  await api.register('admin@example.gov', 'password123', '12345678901', 'one-time-code');
+  assert.equal((current as Session | null)?.user.role, 'ADMIN');
+});
+
+test('administration client encodes identifiers and sends admin mutations', async () => {
+  const admin: Session = { accessToken: 'admin-access', refreshToken: 'admin-refresh',
+    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN' } };
+  const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
+  const api = new GovernmentApi(() => {}, async (url, init) => {
+    if (String(url).endsWith('/login')) return response(admin);
+    calls.push({ url: String(url), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    if (init?.method === 'POST') return response({ invitation: {}, code: 'invite' }, 201);
+    if (init?.method === 'PATCH') return response({ account: {} });
+    return response({});
+  });
+  await api.login(admin.user.email, 'password');
+  await api.createInvitation('OPERATOR', 24);
+  await api.updateAccountStatus('account/unsafe', 'SUSPENDED');
+  await api.revokeInvitation('invite/unsafe');
+  assert.deepEqual(calls, [
+    { url: '/api/gov/admin/invitations', method: 'POST', body: { role: 'OPERATOR', expiresInHours: 24 } },
+    { url: '/api/gov/admin/accounts/account%2Funsafe/status', method: 'PATCH', body: { status: 'SUSPENDED' } },
+    { url: '/api/gov/admin/invitations/invite%2Funsafe', method: 'DELETE', body: undefined },
+  ]);
+});

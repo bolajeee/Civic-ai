@@ -1,5 +1,18 @@
 export interface GovernmentUser { id: string; email: string; role: 'ADMIN' | 'OPERATOR' }
 export interface Session { accessToken: string; refreshToken: string; user: GovernmentUser }
+export type GovernmentRole = 'ADMIN' | 'OPERATOR';
+export type GovernmentAccountStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
+export interface GovernmentAccount {
+  id: string; publicId: string; email: string; role: GovernmentRole; status: GovernmentAccountStatus;
+  createdAt: string; updatedAt: string;
+}
+export interface GovernmentInvitation {
+  id: string; role: GovernmentRole; expiresAt: string; createdAt: string;
+  usedAt: string | null; revokedAt: string | null; createdByEmail: string | null; usedByEmail: string | null;
+}
+export interface AdminSnapshot {
+  generatedAt: string; accounts: GovernmentAccount[]; invitations: GovernmentInvitation[];
+}
 export interface ReportFilters {
   page?: number; limit?: number; q?: string; status?: string; category?: string;
   grouping?: 'all' | 'assigned' | 'unassigned'; location?: 'all' | 'present' | 'missing'; from?: string; to?: string;

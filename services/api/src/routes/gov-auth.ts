@@ -36,6 +36,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         `SELECT id, role FROM gov_invite_codes
          WHERE code_hash = $1
            AND used_by   IS NULL
+           AND revoked_at IS NULL
            AND expires_at > NOW()`,
         [codeHash],
       );

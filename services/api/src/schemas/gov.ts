@@ -15,3 +15,12 @@ export const govLoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+export const govInviteCreateSchema = z.object({
+  role: z.enum(['OPERATOR', 'ADMIN']),
+  expiresInHours: z.number().int().min(1).max(168).default(24),
+});
+
+export const govAccountStatusSchema = z.object({
+  status: z.enum(['ACTIVE', 'SUSPENDED']),
+});

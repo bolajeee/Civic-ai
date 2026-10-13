@@ -25,6 +25,7 @@ import govPriorityRoutes from './routes/gov-priority';
 import govDashboardRoutes from './routes/gov-dashboard';
 import govMapRoutes from './routes/gov-map';
 import govReportsRoutes from './routes/gov-reports';
+import govAdminRoutes from './routes/gov-admin';
 
 const fastify = Fastify({ logger: true });
 let stopAIClassificationWorker = () => {};
@@ -73,6 +74,7 @@ fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
 fastify.register(govMapRoutes, { prefix: '/api/gov/dashboard' });
 fastify.register(govReportsRoutes, { prefix: '/api/gov/reports' });
+fastify.register(govAdminRoutes, { prefix: '/api/gov/admin' });
 
 // Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));

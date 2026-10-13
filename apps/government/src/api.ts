@@ -1,4 +1,4 @@
-import type { MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, Session } from './types';
+import type { AdminSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -29,6 +29,14 @@ export class GovernmentApi {
 
   async login(email: string, password: string) {
     const session = await this.send<Session>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    if (!['ADMIN', 'OPERATOR'].includes(session.user.role)) throw new ApiError(403, 'Access denied');
+    this.setSession(session);
+  }
+
+  async register(email: string, password: string, nin: string, inviteCode: string) {
+    const session = await this.send<Session>('/auth/register', {
+      method: 'POST', body: JSON.stringify({ email, password, nin, inviteCode }),
+    });
     if (!['ADMIN', 'OPERATOR'].includes(session.user.role)) throw new ApiError(403, 'Access denied');
     this.setSession(session);
   }
@@ -88,6 +96,19 @@ export class GovernmentApi {
     if (filters.category) params.set('category', filters.category);
     if (filters.limit !== undefined) params.set('limit', String(filters.limit));
     return this.authorized<MapSnapshot>(`/dashboard/map?${params}`);
+  }
+  administration() { return this.authorized<AdminSnapshot>('/admin/'); }
+  createInvitation(role: GovernmentRole, expiresInHours: number) {
+    return this.authorized<{ invitation: { id: string; role: GovernmentRole; expiresAt: string; createdAt: string }; code: string }>(
+      '/admin/invitations', { method: 'POST', body: JSON.stringify({ role, expiresInHours }) });
+  }
+  revokeInvitation(id: string) {
+    return this.authorized<void>(`/admin/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  updateAccountStatus(id: string, status: GovernmentAccountStatus) {
+    return this.authorized<{ account: GovernmentAccount }>(`/admin/accounts/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH', body: JSON.stringify({ status }),
+    });
   }
 
   async logout() {
