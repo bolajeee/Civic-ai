@@ -153,9 +153,12 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Evidence stays traceable to original observations without citizen identity, internal storage keys, AI estimates, inferred events, or grouping rationale leakage
   - [x] Evidence pagination, authentication, strict input, photo signing/sanitization and storage-failure behavior covered by API and web-client tests
   - Contract and validation commands: [government issue clusters API](government-clusters-api.md)
-- [ ] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
-- [ ] Filters & Search
-  - Report search/filters and map category/status filters are implemented; cross-cluster and review-queue search remain pending.
+- [x] Grouping explanation: match signals, score, threshold, assignment method, and competing candidates; show missing data and AI uncertainty
+  - [x] Evidence cards separate current membership from the original decision and expose matched report, distance, semantic/category signals, combined score, automatic threshold, versions, and retained competing review candidates
+  - [x] System singleton, AI and human assignment states are distinct; missing GPS/search/decision/signals, failures, and the unavailable visual-similarity capability are explicit; similarity scores are not presented as probabilities
+- [x] Filters & Search
+  - [x] Reports retain their full-dataset filters; maps retain category/status filters; clusters now search references, categories, member descriptions/addresses and related review references
+  - [x] Cluster filters cover lifecycle status, category, pending grouping review, assignment method, member GPS state, pagination and reset; review-related source and target clusters are both discoverable
 - [ ] Review queue
 - [ ] Administrator review actions: approve/dismiss candidates, remove/move reports, merge/split clusters, and record reviewer, timestamp, and reason
 

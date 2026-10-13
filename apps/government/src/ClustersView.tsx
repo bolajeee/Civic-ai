@@ -7,7 +7,7 @@ const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
 }).format(new Date(value));
 const label = (value: string) => value.toLowerCase().replaceAll('_', ' ');
-const initial: ClusterFilters = { q: '', status: '', category: '', limit: 20 };
+const initial: ClusterFilters = { q: '', status: '', category: '', review: 'all', assignment: 'all', location: 'all', limit: 20 };
 
 export function ClustersView({ api }: { api: GovernmentApi }) {
   const [draft, setDraft] = useState<ClusterFilters>(initial);
@@ -46,9 +46,12 @@ export function ClustersView({ api }: { api: GovernmentApi }) {
       <p className="muted">See the underlying issues formed from related citizen observations.</p></div>
       <button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>{busy ? 'Loading…' : 'Refresh'}</button></div>
     <form className="panel cluster-filters" onSubmit={apply}>
-      <label className="cluster-search">Search clusters<input aria-label="Search clusters" value={draft.q} maxLength={200} placeholder="Cluster reference or category" onChange={event => setDraft(value => ({ ...value, q: event.target.value }))} /></label>
+      <label className="cluster-search">Search clusters<input aria-label="Search clusters" value={draft.q} maxLength={200} placeholder="Cluster/report reference, description, address or category" onChange={event => setDraft(value => ({ ...value, q: event.target.value }))} /></label>
       <label>Status<select aria-label="Cluster status" value={draft.status} onChange={event => setDraft(value => ({ ...value, status: event.target.value }))}><option value="">All statuses</option>{['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'].map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>
       <label>Category<select aria-label="Cluster category" value={draft.category} onChange={event => setDraft(value => ({ ...value, category: event.target.value }))}><option value="">All categories</option>{categories.map(value => <option key={value.slug} value={value.slug}>{value.label}</option>)}</select></label>
+      <label>Grouping review<select aria-label="Grouping review" value={draft.review} onChange={event => setDraft(value => ({ ...value, review: event.target.value as ClusterFilters['review'] }))}><option value="all">All clusters</option><option value="pending">Pending review</option><option value="clear">No pending review</option></select></label>
+      <label>Assignment method<select aria-label="Assignment method" value={draft.assignment} onChange={event => setDraft(value => ({ ...value, assignment: event.target.value as ClusterFilters['assignment'] }))}><option value="all">Any method</option><option value="AI">AI assignment</option><option value="HUMAN">Human assignment</option><option value="SYSTEM">System singleton</option></select></label>
+      <label>Supporting-report GPS<select aria-label="Supporting-report GPS" value={draft.location} onChange={event => setDraft(value => ({ ...value, location: event.target.value as ClusterFilters['location'] }))}><option value="all">Any GPS state</option><option value="present">At least one with GPS</option><option value="missing">At least one missing GPS</option></select></label>
       <label>Clusters per page<select aria-label="Clusters per page" value={draft.limit} onChange={event => setDraft(value => ({ ...value, limit: Number(event.target.value) }))}>{[20, 50, 100].map(value => <option key={value} value={value}>{value}</option>)}</select></label>
       <div className="cluster-filter-actions"><button className="refresh" type="button" onClick={reset}>Reset</button><button className="primary" type="submit">Apply filters</button></div>
     </form>
@@ -162,10 +165,61 @@ function EvidenceReport({ report, revision }: { report: ClusterEvidenceReport; r
     <dl className="evidence-facts"><div><dt>Submitted (WAT)</dt><dd>{date(report.submittedAt)}</dd></div><div><dt>Last updated (WAT)</dt><dd>{date(report.updatedAt)}</dd></div><div><dt>Saved location</dt><dd>{report.location ? <>{report.location.address || 'Address unavailable'}<br />{report.location.latitude.toFixed(6)}, {report.location.longitude.toFixed(6)}<br />GPS accuracy: {report.location.accuracy == null ? 'Unknown' : `±${report.location.accuracy} metres`}</> : 'No GPS supplied'}</dd></div></dl>
     <h4>Original description</h4><p className="evidence-description">{report.description || 'No description supplied.'}</p>
     <h4>Original photos ({report.photos.length})</h4>{report.photos.length ? <div className="evidence-gallery">{report.photos.map((photo, index) => <EvidencePhoto key={`${photo.id}-${photo.url}-${revision}`} photo={photo} index={index} reportReference={report.publicId} />)}</div> : <p className="muted">No photos are attached to this report.</p>}
+    <GroupingExplanation report={report} />
   </article>;
 }
 
 function EvidencePhoto({ photo, index, reportReference }: { photo: ClusterEvidenceReport['photos'][number]; index: number; reportReference: string }) {
   const [failed, setFailed] = useState(false);
   return <figure>{photo.url && !failed ? <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`Original photo ${index + 1} for report ${reportReference}`} loading="lazy" onError={() => setFailed(true)} /></a> : <div className="evidence-photo-unavailable">Photo unavailable. Renew evidence to retry.</div>}<figcaption>Photo {index + 1} · {photo.mediaType}</figcaption></figure>;
+}
+
+const score = (value: number | null) => value == null ? 'Unavailable' : value.toFixed(3);
+
+function GroupingExplanation({ report }: { report: ClusterEvidenceReport }) {
+  const grouping = report.grouping;
+  const decision = grouping.decision;
+  const signals = decision?.signals;
+  return <details className="grouping-explanation"><summary>Why this report is grouped here</summary>
+    <p className="grouping-plain">{grouping.assignmentMethod === 'AI'
+      ? `Automatically assigned${decision?.matchedReport ? ` after matching ${decision.matchedReport.publicId}` : ''}. The recorded similarity score is a routing aid, not a verified probability.`
+      : grouping.assignmentMethod === 'HUMAN'
+        ? 'A government reviewer assigned this report. Any automated decision below is retained as historical context, not the reviewer’s reasoning.'
+        : decision?.outcome === 'REVIEW'
+          ? 'The system created a separate cluster because the match needed review.'
+          : 'The system created a singleton cluster because it did not record an eligible automatic match.'}</p>
+    <dl className="grouping-facts">
+      <Fact title="Current assignment method" value={label(grouping.assignmentMethod)} />
+      <Fact title="Membership confidence" value={score(grouping.confidence)} />
+      <Fact title="Assigned (WAT)" value={date(grouping.assignedAt)} />
+      <Fact title="Original decision" value={decision ? label(decision.outcome) : 'Unavailable'} />
+      <Fact title="Decision recorded (WAT)" value={decision?.decidedAt ? date(decision.decidedAt) : 'Unavailable'} />
+      <Fact title="Duplicate search status" value={grouping.search ? label(grouping.search.status) : 'Unavailable'} />
+      <Fact title="Scored candidates found" value={grouping.search ? grouping.search.candidateCount.toLocaleString('en-NG') : 'Unavailable'} />
+      <Fact title="Matched report" value={decision?.matchedReport?.publicId || 'None recorded'} />
+      <Fact title="Combined similarity score" value={score(signals?.combinedScore ?? grouping.confidence)} />
+      <Fact title="Automatic assignment threshold" value={score(decision?.autoMinScore ?? null)} />
+      <Fact title="Geographic distance" value={signals ? `${Math.round(signals.distanceMeters)} metres` : 'Unavailable'} />
+      <Fact title="Semantic similarity" value={score(signals?.semanticSimilarity ?? null)} />
+      <Fact title="Category match" value={signals ? (signals.categoryMatch ? 'Yes' : 'No') : 'Unavailable'} />
+      <Fact title="Visual similarity" value="Unavailable · image-vector matching is not implemented" />
+      <Fact title="Search radius" value={decision?.radiusMeters == null ? 'Unavailable' : `${decision.radiusMeters} metres`} />
+      <Fact title="Ambiguity margin" value={score(decision?.ambiguityMargin ?? null)} />
+      <Fact title="Scoring version" value={signals?.scoringVersion || decision?.scoringVersion || grouping.search?.scoringVersion || 'Unavailable'} />
+      <Fact title="Clustering version" value={decision?.clusteringVersion || 'Unavailable'} />
+    </dl>
+    <div className="grouping-uncertainty"><strong>Uncertainty and missing data</strong><ul>
+      {!report.location && <li>No GPS was supplied, so geographic matching was unavailable.</li>}
+      {!grouping.search && <li>No duplicate-search record is available for this report.</li>}
+      {grouping.search?.status === 'FAILED' && <li>Duplicate search failed{grouping.search.errorCode ? ` (${grouping.search.errorCode})` : ''}.</li>}
+      {grouping.search?.status === 'NO_LOCATION' && <li>Duplicate search could not run without a saved location.</li>}
+      {!decision && <li>No original clustering decision is available; this may be a legacy or manually created membership.</li>}
+      {decision && !signals && grouping.assignmentMethod === 'AI' && <li>The matched report’s detailed scoring signals are unavailable.</li>}
+      <li>Visual similarity was not calculated; its planned signal is absent from this scoring version.</li>
+      {decision?.errorCode && <li>Clustering recorded an error: {decision.errorCode}.</li>}
+    </ul></div>
+    <div className="competing-candidates"><h4>Competing candidates ({grouping.competingCandidates.length})</h4>
+      {grouping.competingCandidates.length ? <div className="table-scroll"><table><thead><tr><th>Candidate cluster / report</th><th>Score</th><th>Distance</th><th>Semantic</th><th>Category</th><th>Reason</th><th>Review status</th></tr></thead><tbody>{grouping.competingCandidates.map(candidate => <tr key={`${candidate.cluster.id}-${candidate.report?.id || 'missing'}`}><td><strong>{candidate.cluster.publicId}</strong><small>{candidate.report?.publicId || 'Candidate report unavailable'}</small></td><td>{score(candidate.score)}</td><td>{candidate.distanceMeters == null ? 'Unavailable' : `${Math.round(candidate.distanceMeters)} m`}</td><td>{score(candidate.semanticSimilarity)}</td><td>{candidate.categoryMatch == null ? 'Unavailable' : candidate.categoryMatch ? 'Match' : 'Different'}</td><td>{label(candidate.reason)}</td><td><span className="badge">{label(candidate.status)}</span></td></tr>)}</tbody></table></div> : <p className="muted">No competing cluster candidates were retained for review.</p>}
+    </div>
+  </details>;
 }

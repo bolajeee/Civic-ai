@@ -11,13 +11,15 @@ test('clusters client encodes filters and keeps zero-free pagination values', as
     assert.equal(parsed.pathname, '/api/gov/issue-clusters/');
     assert.deepEqual(Object.fromEntries(parsed.searchParams), {
       page: '2', limit: '50', q: 'flood & %_', status: 'IN_PROGRESS', category: 'FLOODING',
+      review: 'pending', assignment: 'AI', location: 'missing',
     });
     assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer access');
     assert.equal(init?.cache, 'no-store');
     return new Response(JSON.stringify({ total: 24, clusters: [] }));
   });
   await api.login('operator@example.gov', 'password');
-  assert.equal((await api.clusters({ page: 2, limit: 50, q: 'flood & %_', status: 'IN_PROGRESS', category: 'FLOODING' })).total, 24);
+  assert.equal((await api.clusters({ page: 2, limit: 50, q: 'flood & %_', status: 'IN_PROGRESS', category: 'FLOODING',
+    review: 'pending', assignment: 'AI', location: 'missing' })).total, 24);
 });
 
 test('cluster summary uses an authenticated escaped route', async () => {

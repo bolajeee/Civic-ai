@@ -67,9 +67,13 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
   anchor, and first/last grouping times.
 - Paginated cluster evidence cards with source references, original descriptions,
   saved GPS/accuracy, dates, report statuses, and renewable signed photo links.
+- Expandable grouping explanations with original/current assignment state,
+  available similarity signals, threshold and version provenance, competing
+  review candidates, and explicit missing-data/AI uncertainty notices.
+- Cross-cluster search over cluster and source-report fields, plus lifecycle,
+  category, grouping-review, assignment-method and member-GPS filters.
 
-Grouping explanations, review actions, and exported government reports remain
-subsequent slices. The recent
+Review actions and exported government reports remain subsequent slices. The recent
 observations table is an overview, not a complete searchable reports view.
 
 The map uses [Leaflet 1.9.4](https://leafletjs.com/reference-1.9.4.html) and

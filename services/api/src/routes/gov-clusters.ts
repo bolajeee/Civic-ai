@@ -10,6 +10,9 @@ const filters = z.object({
   status: z.enum(['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED']).optional(),
   category: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional(),
   q: z.string().trim().max(200).optional(),
+  review: z.enum(['all', 'pending', 'clear']).default('all'),
+  assignment: z.enum(['all', 'AI', 'HUMAN', 'SYSTEM']).default('all'),
+  location: z.enum(['all', 'present', 'missing']).default('all'),
 }).strict();
 
 const params = z.object({ id: z.uuid() });
@@ -60,7 +63,9 @@ const summaryColumns = (priority: string) => `ic.id, ic.public_id AS "publicId",
   CASE WHEN ic.centroid IS NULL THEN NULL ELSE jsonb_build_object(
     'latitude', ST_Y(ic.centroid), 'longitude', ST_X(ic.centroid)) END AS centroid,
   (SELECT count(*)::int FROM issue_cluster_review_candidates review
-    WHERE review.issue_cluster_id = ic.id AND review.status = 'PENDING') AS "pendingReviewCount",
+    LEFT JOIN issue_cluster_reports review_source ON review_source.report_id = review.report_id
+    WHERE review.status = 'PENDING'
+      AND (review.issue_cluster_id = ic.id OR review_source.issue_cluster_id = ic.id)) AS "pendingReviewCount",
   (SELECT jsonb_build_object(
       'pending', count(*) FILTER (WHERE r.status = 'PENDING')::int,
       'inProgress', count(*) FILTER (WHERE r.status = 'IN_PROGRESS')::int,
@@ -77,7 +82,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
   app.get('/', { preHandler: access }, async (request, reply) => {
     const parsed = filters.safeParse(request.query);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster filters', details: parsed.error.flatten() });
-    const { page, limit, status, category, q } = parsed.data;
+    const { page, limit, status, category, q, review, assignment, location } = parsed.data;
     const priority = prioritySql(isPriorityEnabled());
     try {
       const result = await query<{ listing: unknown }>(`
@@ -87,23 +92,53 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           WHERE ic.report_count > 0
             AND ($1::text IS NULL OR ic.status::text = $1)
             AND ($2::text IS NULL OR c.slug = $2)
-            AND ($3::text IS NULL OR strpos(lower(concat_ws(' ', ic.public_id, c.label)), lower($3)) > 0)
+            AND ($3::text IS NULL OR strpos(lower(concat_ws(' ', ic.public_id, c.label)), lower($3)) > 0
+              OR EXISTS (SELECT 1 FROM issue_cluster_reports search_membership
+                JOIN reports search_report ON search_report.id = search_membership.report_id
+                LEFT JOIN locations search_location ON search_location.id = search_report.location_id
+                WHERE search_membership.issue_cluster_id = ic.id
+                  AND strpos(lower(concat_ws(' ', search_report.public_id, search_report.description,
+                    search_location.address)), lower($3)) > 0)
+              OR EXISTS (SELECT 1 FROM issue_cluster_review_candidates search_review
+                JOIN reports source_report ON source_report.id = search_review.report_id
+                LEFT JOIN reports candidate_report ON candidate_report.id = search_review.candidate_report_id
+                LEFT JOIN issue_cluster_reports source_membership ON source_membership.report_id = source_report.id
+                WHERE (search_review.issue_cluster_id = ic.id OR source_membership.issue_cluster_id = ic.id)
+                  AND strpos(lower(concat_ws(' ', source_report.public_id, candidate_report.public_id)), lower($3)) > 0))
+            AND ($4::text = 'all' OR ($4 = 'pending' AND EXISTS (
+              SELECT 1 FROM issue_cluster_review_candidates review_filter
+              LEFT JOIN issue_cluster_reports review_source ON review_source.report_id = review_filter.report_id
+              WHERE review_filter.status = 'PENDING'
+                AND (review_filter.issue_cluster_id = ic.id OR review_source.issue_cluster_id = ic.id)))
+              OR ($4 = 'clear' AND NOT EXISTS (
+              SELECT 1 FROM issue_cluster_review_candidates review_filter
+              LEFT JOIN issue_cluster_reports review_source ON review_source.report_id = review_filter.report_id
+              WHERE review_filter.status = 'PENDING'
+                AND (review_filter.issue_cluster_id = ic.id OR review_source.issue_cluster_id = ic.id))))
+            AND ($5::text = 'all' OR EXISTS (SELECT 1 FROM issue_cluster_reports assignment_filter
+              WHERE assignment_filter.issue_cluster_id = ic.id AND assignment_filter.assignment_method = $5))
+            AND ($6::text = 'all' OR EXISTS (SELECT 1 FROM issue_cluster_reports location_membership
+              JOIN reports location_report ON location_report.id = location_membership.report_id
+              WHERE location_membership.issue_cluster_id = ic.id
+                AND (($6 = 'present' AND location_report.location_id IS NOT NULL)
+                  OR ($6 = 'missing' AND location_report.location_id IS NULL))))
         ), page_ids AS (
-          SELECT id FROM matches ORDER BY updated_at DESC, id DESC LIMIT $4 OFFSET $5
+          SELECT id FROM matches ORDER BY updated_at DESC, id DESC LIMIT $7 OFFSET $8
         ), cluster_page AS (
           SELECT ${summaryColumns(priority.projection)}
           FROM page_ids page JOIN issue_clusters ic ON ic.id = page.id
           JOIN report_categories c ON c.id = ic.category_id
           ${priority.joins}
         )
-        SELECT jsonb_build_object('generatedAt', NOW(), 'page', $6::int, 'limit', $4::int,
+        SELECT jsonb_build_object('generatedAt', NOW(), 'page', $9::int, 'limit', $7::int,
           'total', (SELECT count(*)::int FROM matches),
-          'priorityEnabled', $7::boolean,
+          'priorityEnabled', $10::boolean,
           'categories', (SELECT coalesce(jsonb_agg(jsonb_build_object('slug', slug, 'label', label)
             ORDER BY display_order, slug), '[]'::jsonb) FROM report_categories),
           'clusters', (SELECT coalesce(jsonb_agg(to_jsonb(cluster_page)
             ORDER BY "updatedAt" DESC, id DESC), '[]'::jsonb) FROM cluster_page)) AS listing`,
-        [status ?? null, category ?? null, q || null, limit, (page - 1) * limit, page, isPriorityEnabled()]);
+        [status ?? null, category ?? null, q || null, review, assignment, location,
+          limit, (page - 1) * limit, page, isPriorityEnabled()]);
       return result.rows[0].listing;
     } catch (error) {
       app.log.error(error);
@@ -128,7 +163,63 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
             jsonb_build_object('slug', category.slug, 'label', category.label) AS category,
             CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
               'latitude', location.latitude, 'longitude', location.longitude,
-              'accuracy', location.accuracy, 'address', location.address) END AS location
+              'accuracy', location.accuracy, 'address', location.address) END AS location,
+            jsonb_build_object(
+              'assignmentMethod', membership.assignment_method,
+              'confidence', membership.confidence,
+              'assignedAt', membership.assigned_at,
+              'visualSimilarity', NULL,
+              'visualSignalStatus', 'not_implemented',
+              'search', (SELECT jsonb_build_object('status', duplicate_search.status,
+                'candidateCount', duplicate_search.candidate_count,
+                'scoringVersion', duplicate_search.scoring_version,
+                'errorCode', duplicate_search.error_code)
+                FROM report_duplicate_searches duplicate_search WHERE duplicate_search.report_id = r.id),
+              'decision', (SELECT jsonb_build_object(
+                  'outcome', decision.outcome,
+                  'decidedAt', decision.decided_at,
+                  'clusteringVersion', decision.clustering_version,
+                  'scoringVersion', decision.scoring_version,
+                  'errorCode', decision.error_code,
+                  'autoMinScore', CASE WHEN jsonb_typeof(decision.config->'autoMinScore') = 'number'
+                    THEN (decision.config->>'autoMinScore')::double precision ELSE NULL END,
+                  'ambiguityMargin', CASE WHEN jsonb_typeof(decision.config->'ambiguityMargin') = 'number'
+                    THEN (decision.config->>'ambiguityMargin')::double precision ELSE NULL END,
+                  'radiusMeters', CASE WHEN jsonb_typeof(decision.config->'radiusMeters') = 'number'
+                    THEN (decision.config->>'radiusMeters')::double precision ELSE NULL END,
+                  'matchedReport', CASE WHEN matched.id IS NULL THEN NULL ELSE jsonb_build_object(
+                    'id', matched.id, 'publicId', matched.public_id) END,
+                  'signals', CASE WHEN matched_signal.report_id IS NULL THEN NULL ELSE jsonb_build_object(
+                    'distanceMeters', matched_signal.distance_meters,
+                    'semanticSimilarity', matched_signal.semantic_similarity,
+                    'categoryMatch', matched_signal.category_match,
+                    'combinedScore', matched_signal.score,
+                    'scoringVersion', matched_signal.scoring_version) END)
+                FROM report_cluster_decisions decision
+                LEFT JOIN reports matched ON matched.id = decision.matched_report_id
+                LEFT JOIN report_duplicate_candidates matched_signal
+                  ON matched_signal.report_id = decision.report_id
+                  AND matched_signal.candidate_report_id = decision.matched_report_id
+                WHERE decision.report_id = r.id),
+              'competingCandidates', (SELECT coalesce(jsonb_agg(jsonb_build_object(
+                  'cluster', jsonb_build_object('id', candidate_cluster.id,
+                    'publicId', candidate_cluster.public_id),
+                  'report', CASE WHEN candidate_report.id IS NULL THEN NULL ELSE jsonb_build_object(
+                    'id', candidate_report.id, 'publicId', candidate_report.public_id) END,
+                  'score', review.score, 'reason', review.reason, 'status', review.status,
+                  'scoringVersion', review.scoring_version,
+                  'distanceMeters', candidate_signal.distance_meters,
+                  'semanticSimilarity', candidate_signal.semantic_similarity,
+                  'categoryMatch', candidate_signal.category_match)
+                ORDER BY review.score DESC, candidate_cluster.id), '[]'::jsonb)
+                FROM issue_cluster_review_candidates review
+                JOIN issue_clusters candidate_cluster ON candidate_cluster.id = review.issue_cluster_id
+                LEFT JOIN reports candidate_report ON candidate_report.id = review.candidate_report_id
+                LEFT JOIN report_duplicate_candidates candidate_signal
+                  ON candidate_signal.report_id = review.report_id
+                  AND candidate_signal.candidate_report_id = review.candidate_report_id
+                WHERE review.report_id = r.id)
+            ) AS grouping
           FROM selected_cluster cluster
           JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
           JOIN reports r ON r.id = membership.report_id

@@ -32,7 +32,11 @@ export interface ReportDetailSnapshot {
   report: GovernmentReport & { photos: Array<{ id: string; mediaType: string; displayOrder: number; url: string | null }> };
   photosExpireInSeconds: number;
 }
-export interface ClusterFilters { page?: number; limit?: number; q?: string; status?: string; category?: string }
+export interface ClusterFilters {
+  page?: number; limit?: number; q?: string; status?: string; category?: string;
+  review?: 'all' | 'pending' | 'clear'; assignment?: 'all' | 'AI' | 'HUMAN' | 'SYSTEM';
+  location?: 'all' | 'present' | 'missing';
+}
 export interface ClusterPriority { status: string; score: number | null; band: string | null }
 export interface IssueCluster {
   id: string; publicId: string; status: string; reportCount: number; createdAt: string; updatedAt: string;
@@ -59,6 +63,20 @@ export interface ClusterEvidenceReport {
   submittedAt: string; updatedAt: string; category: { slug: string; label: string };
   location: { latitude: number; longitude: number; accuracy: number | null; address: string | null } | null;
   photos: Array<{ id: string; mediaType: string; displayOrder: number; url: string | null }>;
+  grouping: {
+    assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM'; confidence: number | null; assignedAt: string;
+    visualSimilarity: null; visualSignalStatus: 'not_implemented';
+    search: null | { status: string; candidateCount: number; scoringVersion: string; errorCode: string | null };
+    decision: null | { outcome: string; decidedAt: string; clusteringVersion: string; scoringVersion: string | null;
+      errorCode: string | null; autoMinScore: number | null; ambiguityMargin: number | null; radiusMeters: number | null;
+      matchedReport: { id: string; publicId: string } | null;
+      signals: null | { distanceMeters: number; semanticSimilarity: number; categoryMatch: boolean;
+        combinedScore: number; scoringVersion: string } };
+    competingCandidates: Array<{ cluster: { id: string; publicId: string };
+      report: { id: string; publicId: string } | null; score: number; reason: string; status: string;
+      scoringVersion: string; distanceMeters: number | null; semanticSimilarity: number | null;
+      categoryMatch: boolean | null }>;
+  };
 }
 export interface ClusterEvidenceSnapshot {
   generatedAt: string; page: number; limit: number; total: number;

@@ -8,10 +8,18 @@ the database on every request. Responses use `Cache-Control: no-store`.
 ## Cluster listing
 
 The list accepts `page` (1–1,000,000), `limit` (1–100), optional exact `status`
-and `category`, and a case-insensitive literal `q` search over cluster reference
-and category label. Unknown parameters are rejected. Filters are bound SQL
-parameters, run before pagination, and return only clusters with at least one
-supporting report.
+and `category`, and these discovery controls:
+
+| Query | Meaning |
+| --- | --- |
+| `q` | Case-insensitive literal search over cluster/category, supporting report reference/description/address, and related review source/candidate references; maximum 200 characters |
+| `review` | `all` (default), `pending`, or `clear`; pending includes proposals where the cluster is either the current source cluster or proposed target |
+| `assignment` | `all` (default), `AI`, `HUMAN`, or `SYSTEM`; matches when at least one current member uses the method |
+| `location` | `all` (default), `present`, or `missing`; matches when at least one current member has that GPS state |
+
+Unknown parameters are rejected. Filters are bound SQL parameters, run before
+pagination, and return only clusters with at least one supporting report. `%`
+and `_` in search text are literal characters rather than SQL wildcards.
 
 The response contains `generatedAt`, `page`, `limit`, matching `total`, all
 selectable categories, `priorityEnabled`, and newest-changed `clusters`. Each
@@ -37,11 +45,30 @@ reference, original description, category and status, submitted/updated times,
 nullable saved location with GPS accuracy, and ordered photos. It loads directly
 from cluster membership, independently of the currently loaded cluster page.
 
+Each report also includes a grouping explanation that separates its current
+membership from the original automated decision. It contains:
+
+- Current `assignmentMethod`, nullable membership `confidence`, and `assignedAt`.
+- Duplicate-search status and candidate count when a search record exists.
+- Original decision outcome/time, automatic threshold, ambiguity margin, search
+  radius, matched report, and clustering/scoring versions when retained.
+- Matched geographic distance, semantic similarity, category match and combined
+  score when the scored pair still exists.
+- Retained review candidates with proposed cluster/report references, score,
+  signals, reason, and review status.
+
+Missing records and signals stay null. The UI distinguishes system singletons,
+automatic assignments, human assignments, failed/no-location searches and legacy
+memberships. Scores are similarity heuristics, not calibrated probabilities.
+Visual similarity is explicitly unavailable because image-vector matching is not
+implemented; the `geo-semantic-category-v1` scorer redistributed that planned
+weight across geographic, semantic and category signals.
+
 Photo URLs are signed in one batch and expire after 15 minutes. A signing or
 individual object failure leaves the report available with a null URL. Internal
 storage keys are removed. Reloading the evidence page renews its links. The route
-does not return citizen identifiers, contact details, AI classifications or
-severity, grouping scores/thresholds, competing candidates, or inferred events.
+does not return citizen identifiers, contact details, AI classifications,
+severity estimates, or inferred events.
 
 Cluster status and supporting-report statuses are separate. Centroids summarize
 available member GPS points and are not asserted as an exact incident location.
@@ -73,7 +100,8 @@ npm run build
 
 Automated tests cover authentication and current database authorization,
 strict filters, literal search and pagination bindings, disabled/enabled
-priority SQL, identity exclusions, bounded evidence pagination, photo ordering,
+priority SQL, cross-cluster/review search and filters, identity exclusions,
+bounded evidence pagination, grouping audit projections, photo ordering,
 batch signing and safe signing failures, missing clusters, sanitized errors,
 and authenticated client URL construction. Live database fixture and browser
 interaction validation remain to be completed.

@@ -51,10 +51,11 @@ test('database role and status override stale government token claims', async ()
 test('list rejects unknown, invalid and unbounded filters', async () => {
   const db = mock.method(pool, 'query', async () => ({ rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] }));
   for (const value of ['page=0', 'page=1000001', 'limit=101', 'page=1.2', 'status=OPEN',
-    'category=%27%3BDROP', `q=${'a'.repeat(201)}`, 'citizenId=someone']) {
+    'category=%27%3BDROP', `q=${'a'.repeat(201)}`, 'review=maybe', 'assignment=ai',
+    'location=unknown', 'citizenId=someone']) {
     assert.equal((await app.inject({ url: `${url}?${value}`, headers: headers() })).statusCode, 400, value);
   }
-  assert.equal(db.mock.callCount(), 8);
+  assert.equal(db.mock.callCount(), 11);
 });
 
 test('disabled-priority list binds literal search and paginates a consistent non-empty snapshot', async () => {
@@ -62,14 +63,18 @@ test('disabled-priority list binds literal search and paginates a consistent non
   const listing = { page: 2, limit: 20, total: 21, priorityEnabled: false, categories: [], clusters: [] };
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
     if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
-    assert.deepEqual(values, ['IN_PROGRESS', 'POTHOLE', '%_literal', 20, 20, 2, false]);
+    assert.deepEqual(values, ['IN_PROGRESS', 'POTHOLE', '%_literal', 'pending', 'AI', 'missing', 20, 20, 2, false]);
     assert.match(sql, /ic\.report_count > 0/);
     assert.match(sql, /strpos\(lower\(concat_ws/);
-    assert.match(sql, /ORDER BY updated_at DESC, id DESC LIMIT \$4 OFFSET \$5/);
-    assert.doesNotMatch(sql, /issue_cluster_priority_jobs|citizen_id|email|nin|description|storage_key/);
+    assert.match(sql, /search_report\.description/);
+    assert.match(sql, /search_review/);
+    assert.match(sql, /assignment_filter\.assignment_method = \$5/);
+    assert.match(sql, /location_report\.location_id IS NULL/);
+    assert.match(sql, /ORDER BY updated_at DESC, id DESC LIMIT \$7 OFFSET \$8/);
+    assert.doesNotMatch(sql, /issue_cluster_priority_jobs|citizen_id|email|nin|storage_key/);
     return { rows: [{ listing }] };
   });
-  const response = await app.inject({ url: `${url}?page=2&status=IN_PROGRESS&category=POTHOLE&q=%20%25_literal%20`, headers: headers() });
+  const response = await app.inject({ url: `${url}?page=2&status=IN_PROGRESS&category=POTHOLE&q=%20%25_literal%20&review=pending&assignment=AI&location=missing`, headers: headers() });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), listing);
 });
@@ -78,7 +83,7 @@ test('enabled list includes current priority state without returning calculation
   process.env.AI_PRIORITY_ENABLED = 'true';
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
     if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(values, [null, null, null, 20, 0, 1, true]);
+    assert.deepEqual(values, [null, null, null, 'all', 'all', 'all', 20, 0, 1, true]);
     assert.match(sql, /issue_cluster_priority_jobs/);
     assert.match(sql, /evaluated_revision IS DISTINCT FROM/);
     assert.doesNotMatch(sql, /input_snapshot|population_source|location_importance_source/);
@@ -130,6 +135,10 @@ test('evidence paginates reports, batch-signs ordered photos and removes storage
     assert.match(sql, /JOIN issue_cluster_reports/);
     assert.match(sql, /ORDER BY "submittedAt" DESC, id DESC LIMIT \$2 OFFSET \$3/);
     assert.match(sql, /ORDER BY media\.display_order, media\.id/);
+    assert.match(sql, /report_cluster_decisions/);
+    assert.match(sql, /report_duplicate_candidates/);
+    assert.match(sql, /issue_cluster_review_candidates/);
+    assert.match(sql, /'visualSignalStatus', 'not_implemented'/);
     assert.doesNotMatch(sql, /citizen_id|email|nin|phone/);
     return { rows: [{ evidence }] };
   });
