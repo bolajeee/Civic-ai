@@ -36,7 +36,6 @@ abstract final class AppRoutes {
   static const String about = '/profile/about';
   static const String reportDetails = '/report-details/:id';
 }
-
 /// Decides where a navigation to [location] should actually land.
 ///
 /// Extracted from [buildRouter] as a pure function so the routing rules — the
@@ -171,9 +170,10 @@ GoRouter buildRouter(AuthProvider authProvider) {
               ? null
               : context.read<ReportHistoryProvider>().byPublicId(id);
 
-          return report == null
-              ? const _ReportNotFoundScreen()
-              : ReportDetailsScreen(report: report);
+          return ReportDetailsLoaderScreen(
+            publicId: id ?? '',
+            initialReport: report,
+          );
         },
       ),
       GoRoute(
@@ -202,50 +202,4 @@ GoRouter buildRouter(AuthProvider authProvider) {
       ),
     ],
   );
-}
-
-/// Shown when a report id does not resolve.
-///
-/// The realistic way to land here is a stale or shared link: the id is
-/// well-formed but the report is not in the page this device has loaded —
-/// `fetchHistory` returns the newest twenty, so an older report is simply not
-/// held. It offers a way onward rather than the dead end this used to be.
-///
-/// Deliberately plain, and deliberately the only widget in this file: the
-/// router is not where presentation lives.
-class _ReportNotFoundScreen extends StatelessWidget {
-  const _ReportNotFoundScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Report Details')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.search_off_rounded, size: 40),
-              const SizedBox(height: 16),
-              const Text(
-                'Report not found',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'It may not be in the reports loaded on this device.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => context.go(AppRoutes.history),
-                child: const Text('Back to my reports'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

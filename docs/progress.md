@@ -65,7 +65,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] `ReportHistoryProvider` — loading / error / empty states, pull-to-refresh, stale list kept on a failed refresh
   - [x] `/reports` — newest-first list with thumbnail, category, `CR-` number, location and relative date
   - [x] Status badges (Pending / In Progress / Resolved / Rejected) coloured from `AppColors`
-  - [x] Detail screen and status filters use loaded report data
+  - [x] Status filters use loaded history data; detail screens refresh from the owner-scoped report-detail endpoint
   - [ ] Load additional history pages and filter/search the full history — currently only the first 20 reports are loaded; Home search and History filters operate on that page
   - [x] Home/Profile counts use `GET /api/reports/summary` through a shared model/service/provider, independently of history; loading, retry, pull-to-refresh, refresh after submission, and account-change clearing included
   - [x] Submit now clears the draft and returns Home with the new report number
@@ -78,14 +78,14 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 - [x] Profile: Dark Mode changes `ThemeMode`, includes a dark palette, and persists through `SharedPreferences`
 - [x] Profile: Impact Score is returned by `/api/reports/summary` using a documented 0–100 contribution/engagement/resolution model
 - [x] Home/Profile: names use stored `full_name`; location uses the newest report with a saved location (or an honest empty state); version/build comes from the installed package
-- [ ] Report Details: both Share receipt actions only show a snackbar; no receipt generation or system share sheet
-- [ ] Report Details: Priority, Assigned agency, and Citizen reference are unavailable placeholders; timeline is inferred from current status, with no event history/timestamps
-- [ ] Report Details: only the thumbnail is displayed, with no full photo gallery; direct links require the report to exist in loaded history (no report-detail fetch endpoint)
+- [x] Report Details: both Share receipt actions generate a text receipt and open the native system share sheet
+- [x] Report Details: owner-scoped API supplies cluster priority, assigned-agency state, citizen reference, and timestamped lifecycle events
+- [x] Report Details: ordered photo gallery supports full-screen zoom; direct links fetch report details independently of loaded history
 - [ ] Notifications: permission request exists, but delivery, device-token registration, and notification preferences are not implemented
 
 Citizen validation (re-run 2026-10-13): `flutter analyze` reports no issues and
-all 38 Flutter tests pass, including settings persistence, summary parsing and
-router redirects.
+all 39 Flutter tests pass, including receipt generation, detail parsing, settings
+persistence, summary parsing and router redirects.
 - [x] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)

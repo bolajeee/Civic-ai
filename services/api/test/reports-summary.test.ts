@@ -95,3 +95,58 @@ test('database failures return the standard error without leaking details', asyn
     query.mock.restore();
   }
 });
+
+test('report detail is owner-scoped and returns recorded metadata and events', async () => {
+  const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const query = mock.method(pool, 'query', async (sql: string, params: unknown[]) => {
+    calls.push({ sql, params });
+    if (sql.includes('FROM reports r')) {
+      assert.match(sql, /r\.public_id = \$1 AND r\.citizen_id = \$2/);
+      assert.deepEqual(params, ['CR-1000', citizenId]);
+      return { rows: [{
+        id: '33333333-3333-4333-8333-333333333333', public_id: 'CR-1000', status: 'IN_PROGRESS',
+        description: 'Flooded road', submitted_at: '2026-10-13T08:00:00.000Z',
+        assigned_agency: 'Lagos Public Works', citizen_reference: 'USR-42',
+        category_id: '44444444-4444-4444-8444-444444444444', category_slug: 'FLOODING', category_label: 'Flooding',
+        latitude: 6.5, longitude: 3.3, accuracy: 8, address: 'Ikeja', cluster_public_id: 'IC-1000',
+        priority_band: 'HIGH', ai_analysis_status: null,
+      }] };
+    }
+    if (sql.includes('FROM report_media')) return { rows: [] };
+    assert.match(sql, /FROM report_status_events/);
+    return { rows: [
+      { id: '55555555-5555-4555-8555-555555555555', status: 'PENDING', occurred_at: '2026-10-13T08:00:00.000Z' },
+      { id: '66666666-6666-4666-8666-666666666666', status: 'IN_PROGRESS', occurred_at: '2026-10-13T09:00:00.000Z' },
+    ] };
+  });
+  try {
+    const response = await app.inject({ url: '/api/reports/CR-1000', headers: headers() });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    const report = response.json().report;
+    assert.equal(report.priority, 'HIGH');
+    assert.equal(report.assignedAgency, 'Lagos Public Works');
+    assert.equal(report.citizenReference, 'USR-42');
+    assert.equal(report.events.length, 2);
+    assert.deepEqual(report.photos, []);
+    assert.equal(calls.length, 3);
+  } finally { query.mock.restore(); }
+});
+
+test('report detail validates references before querying and hides missing or foreign reports', async () => {
+  let calls = 0;
+  const query = mock.method(pool, 'query', async (_sql: string, params: unknown[]) => {
+    calls++;
+    assert.deepEqual(params, ['CR-9999', citizenId]);
+    return { rows: [] };
+  });
+  try {
+    const invalid = await app.inject({ url: '/api/reports/not-a-report', headers: headers() });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(calls, 0);
+    const missing = await app.inject({ url: '/api/reports/CR-9999', headers: headers() });
+    assert.equal(missing.statusCode, 404);
+    assert.deepEqual(missing.json(), { error: 'Report not found' });
+    assert.equal(calls, 1);
+  } finally { query.mock.restore(); }
+});

@@ -151,6 +151,24 @@ class ReportService {
     }
   }
 
+  /// One complete owner-scoped report, including fresh photo links and events.
+  Future<SubmittedReport> fetchReport(String publicId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/reports/${Uri.encodeComponent(publicId)}',
+      );
+      final report = response.data?['report'] as Map<String, dynamic>?;
+      if (report == null) {
+        throw const ReportSubmissionException(
+          'The server returned no report details.',
+        );
+      }
+      return SubmittedReport.fromJson(report);
+    } on DioException catch (err) {
+      throw ReportSubmissionException(_messageFor(err));
+    }
+  }
+
   /// Turns a transport or HTTP failure into something worth showing a citizen.
   ///
   /// The API's own error body wins when there is one — "At least one photo is

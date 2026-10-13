@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { pool, query } from '../db';
 import { calculateImpactScore } from '../lib/impact-score';
 import { uploadImage, getImageUrls, deleteImages } from '../lib/storage';
-import { createReportSchema, listReportsSchema } from '../schemas/report';
+import { createReportSchema, listReportsSchema, reportPublicIdSchema } from '../schemas/report';
 import {
   classificationModel,
   isSupportedClassificationImageType,
@@ -11,6 +11,7 @@ import {
 } from '../ai/classification';
 import { embeddingModel, isEmbeddingEnabled } from '../ai/embedding';
 import { severityModel, isSeverityEnabled } from '../ai/severity';
+import { isPriorityEnabled } from '../ai/priority';
 
 /** Matches the client-side cap in the Flutter app. */
 const MAX_PHOTOS = 5;
@@ -141,6 +142,110 @@ export default async function reportRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send({ categories: result.rows });
       } catch (err: any) {
+        fastify.log.error(err);
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // GET /api/reports/:publicId — one complete report owned by this citizen
+  // ---------------------------------------------------------------------------
+  fastify.get(
+    '/:publicId',
+    { preHandler: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        const publicId = reportPublicIdSchema.parse(
+          (request.params as { publicId?: string }).publicId,
+        );
+        const citizenId = (request.user as { id: string }).id;
+        const priorityEnabled = isPriorityEnabled();
+        const priorityColumn = priorityEnabled
+          ? `CASE WHEN pc.result->>'status' = 'COMPLETED' THEN pc.result->>'band' END AS priority_band`
+          : `NULL::text AS priority_band`;
+        const priorityJoins = priorityEnabled
+          ? `LEFT JOIN issue_cluster_priority_jobs pj ON pj.issue_cluster_id = ic.id
+             LEFT JOIN issue_cluster_priority_calculations pc ON pc.id = pj.last_calculation_id`
+          : '';
+        const result = await query(
+          `SELECT r.id, r.public_id, r.status, r.description, r.submitted_at,
+                  r.assigned_agency, u.public_id AS citizen_reference,
+                  c.id AS category_id, c.slug AS category_slug, c.label AS category_label,
+                  l.latitude, l.longitude, l.accuracy, l.address,
+                  ic.public_id AS cluster_public_id,
+                  ${priorityColumn},
+                  ai.status AS ai_analysis_status, ai.model_name AS ai_model_name,
+                  ai.model_version AS ai_model_version,
+                  ai.predicted_category_id AS ai_predicted_category_id,
+                  ai_category.slug AS ai_predicted_category_slug,
+                  ai_category.label AS ai_predicted_category_label,
+                  ai.confidence AS ai_confidence, ai.prediction AS ai_prediction
+           FROM reports r
+           JOIN users u ON u.id = r.citizen_id
+           JOIN report_categories c ON c.id = r.category_id
+           LEFT JOIN locations l ON l.id = r.location_id
+           LEFT JOIN issue_cluster_reports membership ON membership.report_id = r.id
+           LEFT JOIN issue_clusters ic ON ic.id = membership.issue_cluster_id
+           ${priorityJoins}
+           LEFT JOIN report_ai_analyses ai ON ai.report_id = r.id
+             AND ai.analysis_type = 'IMAGE_CLASSIFICATION'
+           LEFT JOIN report_categories ai_category ON ai_category.id = ai.predicted_category_id
+           WHERE r.public_id = $1 AND r.citizen_id = $2`,
+          [publicId, citizenId],
+        );
+        const row = result.rows[0];
+        if (!row) return reply.status(404).send({ error: 'Report not found' });
+
+        const [mediaResult, eventResult] = await Promise.all([
+          query(
+            `SELECT id, storage_key, media_type, display_order
+             FROM report_media WHERE report_id = $1
+             ORDER BY display_order, id`, [row.id]),
+          query(
+            `SELECT id, status, occurred_at
+             FROM report_status_events WHERE report_id = $1
+             ORDER BY occurred_at, id`, [row.id]),
+        ]);
+        const signed = await getImageUrls(
+          mediaResult.rows.map((media) => media.storage_key),
+          15 * 60,
+        );
+
+        return reply.status(200).send({ report: {
+          id: row.id, publicId: row.public_id, status: row.status,
+          description: row.description, submittedAt: row.submitted_at,
+          category: { id: row.category_id, slug: row.category_slug, label: row.category_label },
+          location: row.latitude !== null && row.longitude !== null
+            ? { latitude: row.latitude, longitude: row.longitude, accuracy: row.accuracy, address: row.address }
+            : null,
+          photoCount: mediaResult.rows.length,
+          thumbnailUrl: mediaResult.rows[0] ? (signed[mediaResult.rows[0].storage_key] ?? null) : null,
+          photos: mediaResult.rows.map((media) => ({
+            id: media.id, mediaType: media.media_type, displayOrder: media.display_order,
+            url: signed[media.storage_key] ?? null,
+          })),
+          priority: row.priority_band,
+          assignedAgency: row.assigned_agency,
+          citizenReference: row.citizen_reference,
+          clusterPublicId: row.cluster_public_id,
+          events: eventResult.rows.map((event) => ({
+            id: event.id, status: event.status, occurredAt: event.occurred_at,
+          })),
+          aiClassification: row.ai_analysis_status ? {
+            status: row.ai_analysis_status.toLowerCase(), model: row.ai_model_name,
+            modelVersion: row.ai_model_version,
+            category: row.ai_predicted_category_id ? {
+              id: row.ai_predicted_category_id, slug: row.ai_predicted_category_slug,
+              label: row.ai_predicted_category_label,
+            } : null,
+            confidence: row.ai_confidence === null ? null : Number(row.ai_confidence),
+            evidence: row.ai_prediction?.evidence ?? null,
+          } : null,
+        } });
+      } catch (err: any) {
+        if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }

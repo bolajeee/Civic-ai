@@ -2,6 +2,7 @@ import 'package:civic_report/features/report/models/ai_classification.dart';
 import 'package:civic_report/features/report/models/report_category.dart';
 import 'package:civic_report/features/report/models/report_location.dart';
 import 'package:civic_report/features/report/models/submitted_report.dart';
+import 'package:civic_report/features/report/screens/report_details_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tests for the report models.
@@ -129,6 +130,36 @@ void main() {
       },
       'photoCount': 3,
       'thumbnailUrl': 'https://example.test/signed/one.jpg',
+      'priority': 'HIGH',
+      'assignedAgency': 'Lagos State Public Works',
+      'citizenReference': 'USR-42',
+      'clusterPublicId': 'IC-1000',
+      'photos': [
+        {
+          'id': 'm1',
+          'mediaType': 'image/jpeg',
+          'displayOrder': 0,
+          'url': 'https://example.test/one.jpg'
+        },
+        {
+          'id': 'm2',
+          'mediaType': 'image/png',
+          'displayOrder': 1,
+          'url': 'https://example.test/two.png'
+        },
+      ],
+      'events': [
+        {
+          'id': 'e1',
+          'status': 'PENDING',
+          'occurredAt': '2026-09-27T10:30:00.000Z'
+        },
+        {
+          'id': 'e2',
+          'status': 'IN_PROGRESS',
+          'occurredAt': '2026-09-28T09:00:00.000Z'
+        },
+      ],
     };
 
     test('parses a complete row', () {
@@ -143,6 +174,12 @@ void main() {
       expect(report.submittedAt, DateTime.utc(2026, 9, 27, 10, 30));
       expect(report.location?.displayLabel, 'Ikeja, Lagos');
       expect(report.thumbnailUrl, 'https://example.test/signed/one.jpg');
+      expect(report.priority, 'HIGH');
+      expect(report.assignedAgency, 'Lagos State Public Works');
+      expect(report.citizenReference, 'USR-42');
+      expect(report.photos.map((photo) => photo.id), ['m1', 'm2']);
+      expect(report.events.last.status, ReportStatus.inProgress);
+      expect(report.events.last.occurredAt, DateTime.utc(2026, 9, 28, 9));
     });
 
     test('tolerates a report with no location', () {
@@ -168,6 +205,15 @@ void main() {
       });
 
       expect(report.submittedAt, isNull);
+    });
+
+    test('receipt is generated from recorded detail values and events', () {
+      final receipt = buildReportReceipt(SubmittedReport.fromJson(json));
+      expect(receipt, contains('CivicAI Report Receipt'));
+      expect(receipt, contains('Report: CR-1000'));
+      expect(receipt, contains('Priority: High'));
+      expect(receipt, contains('Assigned agency: Lagos State Public Works'));
+      expect(receipt, contains('In Progress:'));
     });
   });
 

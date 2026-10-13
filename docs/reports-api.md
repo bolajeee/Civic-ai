@@ -1,4 +1,42 @@
-# Citizen report summary
+# Citizen reports API
+
+## Citizen report details
+
+`GET /api/reports/:publicId`
+
+Requires the citizen access token. `publicId` is the citizen-facing `CR-…`
+reference. The query also scopes by the JWT user ID; a valid reference owned by
+someone else returns the same `404` as a missing report.
+
+The response contains the full report, current cluster priority band when a
+completed calculation exists, assigned agency or `null`, the citizen's public
+reference, ordered photos with renewable 15-minute signed URLs, and durable
+status events with timestamps. It uses `Cache-Control: no-store`.
+
+```json
+{
+  "report": {
+    "publicId": "CR-1000",
+    "status": "IN_PROGRESS",
+    "priority": "HIGH",
+    "assignedAgency": "Lagos State Public Works",
+    "citizenReference": "USR-42",
+    "photos": [
+      { "id": "…", "mediaType": "image/jpeg", "displayOrder": 0, "url": "https://…" }
+    ],
+    "events": [
+      { "id": "…", "status": "PENDING", "occurredAt": "2026-10-13T08:00:00.000Z" },
+      { "id": "…", "status": "IN_PROGRESS", "occurredAt": "2026-10-13T09:00:00.000Z" }
+    ]
+  }
+}
+```
+
+The citizen app always refreshes this endpoint on opening details. This allows
+direct links to older reports, refreshes expiring photo URLs, and avoids
+inventing timeline steps from the current status.
+
+## Citizen report summary
 
 `GET /api/reports/summary`
 

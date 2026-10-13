@@ -48,3 +48,6 @@ export const listReportsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+/** Citizen-facing report reference used by detail routes and deep links. */
+export const reportPublicIdSchema = z.string().regex(/^CR-\d+$/, 'Invalid report reference');

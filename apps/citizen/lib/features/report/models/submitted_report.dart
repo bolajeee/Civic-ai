@@ -2,6 +2,47 @@ import 'ai_classification.dart';
 import 'report_category.dart';
 import 'report_location.dart';
 
+class SubmittedReportPhoto {
+  const SubmittedReportPhoto({
+    required this.id,
+    required this.mediaType,
+    required this.displayOrder,
+    this.url,
+  });
+
+  final String id;
+  final String mediaType;
+  final int displayOrder;
+  final String? url;
+
+  factory SubmittedReportPhoto.fromJson(Map<String, dynamic> json) =>
+      SubmittedReportPhoto(
+        id: json['id'] as String,
+        mediaType: json['mediaType'] as String,
+        displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+        url: json['url'] as String?,
+      );
+}
+
+class ReportStatusEvent {
+  const ReportStatusEvent({
+    required this.id,
+    required this.status,
+    required this.occurredAt,
+  });
+
+  final String id;
+  final ReportStatus status;
+  final DateTime occurredAt;
+
+  factory ReportStatusEvent.fromJson(Map<String, dynamic> json) =>
+      ReportStatusEvent(
+        id: json['id'] as String,
+        status: ReportStatus.fromApi(json['status'] as String?),
+        occurredAt: DateTime.parse(json['occurredAt'] as String),
+      );
+}
+
 /// Lifecycle of a submitted report.
 ///
 /// Mirrors the `report_status` enum in the database. `pending`, `inProgress`
@@ -45,6 +86,12 @@ class SubmittedReport {
     this.location,
     this.thumbnailUrl,
     this.aiClassification,
+    this.photos = const [],
+    this.events = const [],
+    this.priority,
+    this.assignedAgency,
+    this.citizenReference,
+    this.clusterPublicId,
   });
 
   final String id;
@@ -65,10 +112,18 @@ class SubmittedReport {
 
   /// The AI's photo check, or null when the server has AI switched off.
   final AiClassification? aiClassification;
+  final List<SubmittedReportPhoto> photos;
+  final List<ReportStatusEvent> events;
+  final String? priority;
+  final String? assignedAgency;
+  final String? citizenReference;
+  final String? clusterPublicId;
 
   factory SubmittedReport.fromJson(Map<String, dynamic> json) {
     final location = json['location'];
     final ai = json['aiClassification'];
+    final photos = json['photos'] as List<dynamic>? ?? const [];
+    final events = json['events'] as List<dynamic>? ?? const [];
 
     return SubmittedReport(
       id: json['id'] as String,
@@ -86,9 +141,22 @@ class SubmittedReport {
           ? ReportLocation.fromJson(location)
           : null,
       thumbnailUrl: json['thumbnailUrl'] as String?,
-      aiClassification: ai is Map<String, dynamic>
-          ? AiClassification.fromJson(ai)
-          : null,
+      aiClassification:
+          ai is Map<String, dynamic> ? AiClassification.fromJson(ai) : null,
+      photos: photos
+          .map((photo) => SubmittedReportPhoto.fromJson(
+                photo as Map<String, dynamic>,
+              ))
+          .toList(growable: false),
+      events: events
+          .map((event) => ReportStatusEvent.fromJson(
+                event as Map<String, dynamic>,
+              ))
+          .toList(growable: false),
+      priority: json['priority'] as String?,
+      assignedAgency: json['assignedAgency'] as String?,
+      citizenReference: json['citizenReference'] as String?,
+      clusterPublicId: json['clusterPublicId'] as String?,
     );
   }
 }

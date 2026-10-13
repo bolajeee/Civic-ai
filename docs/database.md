@@ -15,11 +15,16 @@
 
 ### 2. Reports (Citizen Submissions)
 - **Note:** A report is an observation, not the issue itself.
-- `id`, `public_id`, `citizen_id`, `description`, `category_id`, `status`, `location_id`, `submitted_at`
+- `id`, `public_id`, `citizen_id`, `description`, `category_id`, `status`, `location_id`, `assigned_agency`, `submitted_at`
+- `assigned_agency` is nullable; null explicitly means no agency is currently assigned.
 
 ### 3. Report Media
 - Stored in Object Storage, references kept in DB.
 - `id`, `report_id`, `storage_key`, `media_type`, `file_size`, `width`, `height`, `checksum`
+
+### 3a. Report Status Events
+- `report_status_events` stores each real lifecycle transition with `report_id`, `status`, and `occurred_at`.
+- A database trigger records new reports and status changes. Existing reports are backfilled only with their known submission event; unknown historical transition times are not invented.
 
 ### 4. Locations
 - Leverages PostGIS.
