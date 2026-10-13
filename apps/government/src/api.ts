@@ -1,4 +1,4 @@
-import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -108,6 +108,31 @@ export class GovernmentApi {
       if (value !== undefined && value !== '') params.set(key, String(value));
     }
     return this.authorized<ReviewQueueSnapshot>(`/issue-clusters/review-queue?${params}`);
+  }
+  private review(path: string, body: object) {
+    return this.authorized<ReviewActionResult>(`/issue-clusters${path}`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  approveProposal(reportId: string, clusterId: string, reason: string) {
+    return this.review(`/review-queue/${encodeURIComponent(reportId)}/${encodeURIComponent(clusterId)}/approve`, { reason });
+  }
+  dismissProposal(reportId: string, clusterId: string, reason: string) {
+    return this.review(`/review-queue/${encodeURIComponent(reportId)}/${encodeURIComponent(clusterId)}/dismiss`, { reason });
+  }
+  moveReport(clusterId: string, reportId: string, targetClusterId: string, reason: string) {
+    return this.review(`/${encodeURIComponent(clusterId)}/reports/${encodeURIComponent(reportId)}/move`, { targetClusterId, reason });
+  }
+  removeReport(clusterId: string, reportId: string, reason: string) {
+    return this.review(`/${encodeURIComponent(clusterId)}/reports/${encodeURIComponent(reportId)}/remove`, { reason });
+  }
+  mergeClusters(targetClusterId: string, sourceClusterId: string, reason: string) {
+    return this.review(`/${encodeURIComponent(targetClusterId)}/merge`, { sourceClusterId, reason });
+  }
+  splitCluster(clusterId: string, reportIds: string[], reason: string) {
+    return this.review(`/${encodeURIComponent(clusterId)}/split`, { reportIds, reason });
+  }
+  reviewHistory(clusterId: string, page = 1, limit = 10) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.authorized<ReviewHistorySnapshot>(`/issue-clusters/${encodeURIComponent(clusterId)}/review-actions?${params}`);
   }
   map(filters: MapFilters) {
     const params = new URLSearchParams({ bbox: filters.bbox.join(','), layer: filters.layer });

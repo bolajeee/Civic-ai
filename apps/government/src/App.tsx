@@ -55,7 +55,7 @@ export function App() {
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
     </aside>
     <main id={page}><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : page === 'clusters' ? 'Issue clusters' : page === 'review' ? 'Review queue' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
-      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : page === 'clusters' ? <ClustersView key={session.user.id} api={api} /> : page === 'review' ? <ReviewQueueView key={session.user.id} api={api} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
+      {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : page === 'clusters' ? <ClustersView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : page === 'review' ? <ReviewQueueView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
     </main>
   </div>;
 }

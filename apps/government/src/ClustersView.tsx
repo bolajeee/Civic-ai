@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ReviewerActions, ReviewHistory } from './ClusterActions';
 import type { GovernmentApi } from './api';
 import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster } from './types';
 import './clusters.css';
@@ -9,7 +10,7 @@ const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
 const label = (value: string) => value.toLowerCase().replaceAll('_', ' ');
 const initial: ClusterFilters = { q: '', status: '', category: '', review: 'all', assignment: 'all', location: 'all', limit: 20 };
 
-export function ClustersView({ api }: { api: GovernmentApi }) {
+export function ClustersView({ api, canAct }: { api: GovernmentApi; canAct: boolean }) {
   const [draft, setDraft] = useState<ClusterFilters>(initial);
   const [filters, setFilters] = useState<ClusterFilters>({ ...initial, page: 1 });
   const [snapshot, setSnapshot] = useState<{ key: string; data: ClustersSnapshot } | null>(null);
@@ -19,12 +20,16 @@ export function ClustersView({ api }: { api: GovernmentApi }) {
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
+  // After a reviewer change the list reloads, but the open cluster should stay open.
+  const keepSelected = useRef(false);
   const key = JSON.stringify(filters);
   const data = snapshot?.key === key ? snapshot.data : null;
 
   useEffect(() => {
     let active = true;
-    setBusy(true); setError(''); setSelected(null);
+    setBusy(true); setError('');
+    if (!keepSelected.current) setSelected(null);
+    keepSelected.current = false;
     api.clusters(filters).then(result => {
       if (active) { setSnapshot({ key, data: result }); setCategories(result.categories); }
     }).catch(error => {
@@ -72,7 +77,8 @@ export function ClustersView({ api }: { api: GovernmentApi }) {
           <button className="refresh" disabled={busy || data.page >= pages} onClick={() => setFilters(value => ({ ...value, page: (value.page ?? 1) + 1 }))}>Next</button>
         </div></div></>}
     </section>
-    {selected && <ClusterDetails key={selected} api={api} id={selected} close={close} />}
+    {selected && <ClusterDetails key={selected} api={api} id={selected} close={close} canAct={canAct} clusters={data?.clusters ?? []}
+      onChanged={() => { keepSelected.current = true; setRevision(value => value + 1); }} />}
   </div>;
 }
 
@@ -89,11 +95,12 @@ function Priority({ cluster, enabled }: { cluster: IssueCluster; enabled: boolea
   return <span className="muted">{label(cluster.priority.status)}</span>;
 }
 
-function ClusterDetails({ api, id, close }: { api: GovernmentApi; id: string; close: () => void }) {
+function ClusterDetails({ api, id, close, canAct, clusters, onChanged }: { api: GovernmentApi; id: string; close: () => void; canAct: boolean; clusters: IssueCluster[]; onChanged: () => void }) {
   const [data, setData] = useState<ClusterDetailSnapshot | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const [changes, setChanges] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     let active = true;
@@ -121,13 +128,16 @@ function ClusterDetails({ api, id, close }: { api: GovernmentApi; id: string; cl
       <Fact title="Last report grouped (WAT)" value={cluster.grouping.lastAssignedAt ? date(cluster.grouping.lastAssignedAt) : 'Unavailable'} />
     </dl><div className="cluster-summary-row"><div><h3>Supporting report lifecycle</h3><Lifecycle cluster={cluster} /></div><div><h3>Current priority</h3><Priority cluster={cluster} enabled={data.priorityEnabled} /></div></div>
       <p className="cluster-scope-note">The summary keeps cluster status separate from the statuses of its supporting citizen reports.</p>
-      <ClusterEvidence api={api} id={id} /></>}
+      <ClusterEvidence api={api} id={id} revision={changes} reviewer={canAct ? { cluster: { id, publicId: cluster.publicId, categorySlug: cluster.category.slug }, clusters,
+        onChanged: () => { setChanges(value => value + 1); setRevision(value => value + 1); onChanged(); } } : undefined} />
+      <ReviewHistory api={api} id={id} revision={changes} /></>}
   </section>;
 }
 
 function Fact({ title, value }: { title: string; value: string }) { return <div><dt>{title}</dt><dd>{value}</dd></div>; }
 
-function ClusterEvidence({ api, id }: { api: GovernmentApi; id: string }) {
+function ClusterEvidence({ api, id, revision: external, reviewer }: { api: GovernmentApi; id: string; revision: number;
+  reviewer?: { cluster: { id: string; publicId: string; categorySlug: string }; clusters: IssueCluster[]; onChanged: () => void } }) {
   const [page, setPage] = useState(1);
   const [snapshot, setSnapshot] = useState<{ page: number; data: ClusterEvidenceSnapshot } | null>(null);
   const [busy, setBusy] = useState(true);
@@ -141,7 +151,7 @@ function ClusterEvidence({ api, id }: { api: GovernmentApi; id: string }) {
       .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Unable to load cluster evidence.'); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [api, id, page, revision]);
+  }, [api, id, page, revision, external]);
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   return <section className="cluster-evidence" aria-label="Supporting report evidence" aria-busy={busy}>
     <div className="cluster-evidence-heading"><div><p className="eyebrow">TRACEABLE SOURCE EVIDENCE</p><h3>Supporting citizen reports</h3>
@@ -152,6 +162,7 @@ function ClusterEvidence({ api, id }: { api: GovernmentApi; id: string }) {
     {data && <><div className="evidence-count"><strong>{data.total.toLocaleString('en-NG')} supporting reports</strong><span>Page {data.page} of {pages} · photo links expire after 15 minutes</span></div>
       <div className="evidence-reports">{data.reports.map(report => <EvidenceReport key={report.id} report={report} revision={revision} />)}</div>
       {!data.reports.length && <p className="empty muted">{data.total ? 'This evidence page is empty. Return to the first page.' : 'No supporting reports are available.'}</p>}
+      {reviewer && data.reports.length > 0 && <ReviewerActions api={api} cluster={reviewer.cluster} reports={data.reports} candidates={reviewer.clusters} onChanged={reviewer.onChanged} />}
       <div className="cluster-pagination"><span>Evidence page {data.page} of {pages}</span><div>
         {data.page > pages && <button className="refresh" disabled={busy} onClick={() => setPage(1)}>First page</button>}
         <button className="refresh" disabled={busy || data.page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button>

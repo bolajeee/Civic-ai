@@ -181,6 +181,8 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           SELECT review.report_id AS "reportId", review.issue_cluster_id AS "proposedClusterId",
             review.score, review.reason, review.status, review.scoring_version AS "scoringVersion",
             review.created_at AS "createdAt",
+            review.reviewed_at AS "reviewedAt", review.review_reason AS "reviewReason",
+            reviewer.public_id AS "reviewedBy",
             jsonb_build_object('id', source.id, 'publicId', source.public_id,
               'description', source.description, 'status', source.status,
               'submittedAt', source.submitted_at,
@@ -220,6 +222,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           LEFT JOIN issue_clusters current_cluster ON current_cluster.id = current_membership.issue_cluster_id
           LEFT JOIN report_duplicate_candidates signal
             ON signal.report_id = review.report_id AND signal.candidate_report_id = review.candidate_report_id
+          LEFT JOIN users reviewer ON reviewer.id = review.reviewed_by
         )
         SELECT jsonb_build_object('generatedAt', NOW(), 'page', $7::int, 'limit', $5::int,
           'total', (SELECT count(*)::int FROM matches),

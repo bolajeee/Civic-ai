@@ -59,3 +59,42 @@ test('review queue client sends bounded filters on the authenticated route', asy
   assert.equal((await api.reviewQueue({ page: 2, limit: 50, status: 'PENDING', reason: 'LOW_SCORE',
     category: 'FLOODING', q: 'a & b' })).total, 51);
 });
+
+test('review actions post escaped, reason-bearing bodies to the authenticated routes', async () => {
+  const calls: Array<{ url: string; method?: string; body: unknown; auth: string | null }> = [];
+  const api = new GovernmentApi(() => {}, async (url, init) => {
+    if (String(url).endsWith('/login')) return new Response(JSON.stringify({ ...session, user: { id: 'admin', role: 'ADMIN' } }));
+    calls.push({ url: String(url), method: init?.method, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('Authorization') });
+    return new Response(JSON.stringify({ action: { id: 'a', type: 'MOVE_REPORT', reason: 'why', createdAt: 'now' }, clusters: [] }));
+  });
+  await api.login('admin@example.gov', 'password');
+  await api.approveProposal('r/1', 'c?1', 'same drain');
+  await api.dismissProposal('r1', 'c1', 'different street');
+  await api.moveReport('c/1', 'r1', 'c2', 'same issue');
+  await api.removeReport('c1', 'r1', 'unrelated');
+  await api.mergeClusters('c1', 'c2', 'duplicates');
+  await api.splitCluster('c1', ['r1', 'r2'], 'two issues');
+  assert.deepEqual(calls.map(call => [call.url, call.body]), [
+    ['/api/gov/issue-clusters/review-queue/r%2F1/c%3F1/approve', { reason: 'same drain' }],
+    ['/api/gov/issue-clusters/review-queue/r1/c1/dismiss', { reason: 'different street' }],
+    ['/api/gov/issue-clusters/c%2F1/reports/r1/move', { targetClusterId: 'c2', reason: 'same issue' }],
+    ['/api/gov/issue-clusters/c1/reports/r1/remove', { reason: 'unrelated' }],
+    ['/api/gov/issue-clusters/c1/merge', { sourceClusterId: 'c2', reason: 'duplicates' }],
+    ['/api/gov/issue-clusters/c1/split', { reportIds: ['r1', 'r2'], reason: 'two issues' }],
+  ]);
+  assert.ok(calls.every(call => call.method === 'POST' && call.auth === 'Bearer access'));
+});
+
+test('review actions surface server refusals and review history is paginated', async () => {
+  const api = new GovernmentApi(() => {}, async (url) => {
+    if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
+    if (String(url).includes('review-actions')) {
+      assert.equal(String(url), '/api/gov/issue-clusters/c%2F1/review-actions?page=2&limit=10');
+      return new Response(JSON.stringify({ total: 11, actions: [] }));
+    }
+    return new Response(JSON.stringify({ error: 'This proposal has already been reviewed' }), { status: 409 });
+  });
+  await api.login('operator@example.gov', 'password');
+  await assert.rejects(api.approveProposal('r1', 'c1', 'x'), /already been reviewed/);
+  assert.equal((await api.reviewHistory('c/1', 2, 10)).total, 11);
+});

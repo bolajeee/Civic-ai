@@ -5,6 +5,46 @@
 valid bearer JWT and a currently ACTIVE OPERATOR or ADMIN account, checked in
 the database on every request. Responses use `Cache-Control: no-store`.
 
+## Administrator review actions
+
+All `POST` routes below require a currently ACTIVE **ADMIN** (OPERATORs get 403,
+checked in the database on every request) and a JSON body with a mandatory
+`reason` (trimmed, 1-1000 characters); bodies are strict. Each action runs in one
+transaction that first takes the clustering worker's advisory lock, then locks the
+affected clusters, so reviewers and the worker never interleave. Reports moved by
+a reviewer become `HUMAN` assignments with no confidence value.
+
+| Route | Body | Effect |
+| --- | --- | --- |
+| `POST /review-queue/:reportId/:clusterId/approve` | `reason` | Moves the report from its current cluster into the proposed one and marks that proposal ACCEPTED |
+| `POST /review-queue/:reportId/:clusterId/dismiss` | `reason` | Marks the proposal DISMISSED; the report stays where it is |
+| `POST /:id/reports/:reportId/move` | `targetClusterId`, `reason` | Moves a member of cluster `:id` into another cluster |
+| `POST /:id/reports/:reportId/remove` | `reason` | Moves the report into a new cluster of its own (refused if it is already alone) |
+| `POST /:id/merge` | `sourceClusterId`, `reason` | Moves every report of the source into `:id`; the source is left empty and hidden |
+| `POST /:id/split` | `reportIds` (1-100), `reason` | Moves the listed reports into a new cluster; at least one must stay behind |
+
+Destination clusters must be non-empty, open (PENDING or IN_PROGRESS) and have the
+report's category; merges need two open, non-empty clusters of one category.
+Violations return 409, unknown clusters, proposals or non-members 404. A merged
+or moved report keeps its original grouping decision; the cluster's fixed anchor
+location is not changed by a merge, so a merged cluster may extend beyond the
+usual radius. Resolving a report's placement also resolves its other pending
+proposals (the one for the destination is ACCEPTED, the rest DISMISSED), and
+pending proposals into a cluster that has become empty are dismissed
+automatically.
+
+Success returns `{ action: { id, type, reason, createdAt }, clusters: [{ id, publicId, reportCount }] }`.
+
+Every action is stored in the append-only `issue_cluster_review_actions` table
+(reviewer, timestamp, reason, affected clusters, and a snapshot of the report and
+cluster references). Resolved proposals also carry `reviewedBy`, `reviewedAt` and
+`reviewReason` in the review queue. `GET /:id/review-actions?page&limit` (OPERATOR
+or ADMIN, limit up to 50) lists actions touching a cluster, newest first, naming
+the reviewer by public reference rather than email.
+
+Repeatable live check (rolled back, nothing persisted), from `services/api`:
+`npx tsx scripts/validate-cluster-actions.ts`.
+
 ## Cluster listing
 
 The list accepts `page` (1–1,000,000), `limit` (1–100), optional exact `status`

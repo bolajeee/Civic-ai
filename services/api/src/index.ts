@@ -26,6 +26,7 @@ import govDashboardRoutes from './routes/gov-dashboard';
 import govMapRoutes from './routes/gov-map';
 import govReportsRoutes from './routes/gov-reports';
 import govClustersRoutes from './routes/gov-clusters';
+import govClusterActionRoutes from './routes/gov-cluster-actions';
 import govAdminRoutes from './routes/gov-admin';
 
 const fastify = Fastify({ logger: true });
@@ -76,6 +77,7 @@ fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
 fastify.register(govMapRoutes, { prefix: '/api/gov/dashboard' });
 fastify.register(govReportsRoutes, { prefix: '/api/gov/reports' });
 fastify.register(govClustersRoutes, { prefix: '/api/gov/issue-clusters' });
+fastify.register(govClusterActionRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govAdminRoutes, { prefix: '/api/gov/admin' });
 
 // Health check — no auth needed, safe to register inline

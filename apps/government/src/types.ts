@@ -90,6 +90,7 @@ export interface ReviewQueueFilters {
 export interface ReviewQueueItem {
   reportId: string; proposedClusterId: string; score: number; reason: 'LOW_SCORE' | 'AMBIGUOUS_MATCH';
   status: 'PENDING' | 'ACCEPTED' | 'DISMISSED'; scoringVersion: string; createdAt: string;
+  reviewedAt: string | null; reviewedBy: string | null; reviewReason: string | null;
   report: { id: string; publicId: string; description: string | null; status: string; submittedAt: string;
     category: { slug: string; label: string };
     location: { latitude: number; longitude: number; accuracy: number | null; address: string | null } | null };
@@ -106,6 +107,21 @@ export interface ReviewQueueSnapshot {
   generatedAt: string; page: number; limit: number; total: number;
   counts: { pending: number; accepted: number; dismissed: number };
   categories: Array<{ slug: string; label: string }>; items: ReviewQueueItem[];
+}
+export type ReviewActionType = 'APPROVE_CANDIDATE' | 'DISMISS_CANDIDATE' | 'MOVE_REPORT'
+  | 'REMOVE_REPORT' | 'MERGE_CLUSTERS' | 'SPLIT_CLUSTER';
+export interface ReviewActionResult {
+  action: { id: string; type: ReviewActionType; reason: string; createdAt: string };
+  clusters: Array<{ id: string; publicId: string; reportCount: number }>;
+}
+export interface ReviewHistorySnapshot {
+  generatedAt: string; page: number; limit: number; total: number;
+  actions: Array<{ id: string; type: ReviewActionType; reason: string; createdAt: string; reviewer: string;
+    clusterId: string; relatedClusterId: string | null;
+    details: { reports?: Array<{ id: string; publicId: string }>;
+      report?: { id: string; publicId: string };
+      fromCluster?: { id: string; publicId: string }; toCluster?: { id: string; publicId: string };
+      proposedCluster?: { id: string; publicId: string } } }>;
 }
 export type MapLayer = 'reports' | 'clusters' | 'all';
 export interface MapFilters { bbox: [number, number, number, number]; layer: MapLayer; status?: string; category?: string; limit?: number }

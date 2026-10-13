@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { GovernmentApi } from './api';
+import { ApiError, type GovernmentApi } from './api';
 import type { ReviewQueueFilters, ReviewQueueItem, ReviewQueueSnapshot } from './types';
 import './clusters.css';
 import './review.css';
@@ -11,7 +11,7 @@ const label = (value: string) => value.toLowerCase().replaceAll('_', ' ');
 const score = (value: number | null | undefined) => value == null ? 'Unavailable' : Number(value).toFixed(3);
 const initial: ReviewQueueFilters = { q: '', status: 'PENDING', reason: 'all', category: '', limit: 20 };
 
-export function ReviewQueueView({ api }: { api: GovernmentApi }) {
+export function ReviewQueueView({ api, canAct }: { api: GovernmentApi; canAct: boolean }) {
   const [draft, setDraft] = useState<ReviewQueueFilters>(initial);
   const [filters, setFilters] = useState<ReviewQueueFilters>({ ...initial, page: 1 });
   const [snapshot, setSnapshot] = useState<{ key: string; data: ReviewQueueSnapshot } | null>(null);
@@ -56,9 +56,9 @@ export function ReviewQueueView({ api }: { api: GovernmentApi }) {
     <section className="panel clusters-list" aria-label="Grouping review proposals" aria-busy={busy}>
       {busy && <p role="status" className="muted">Loading the review queue…</p>}
       {data && <><div className="cluster-list-heading"><div><h2>{data.total.toLocaleString('en-NG')} matching proposals</h2>
-        <p className="muted">All reviews: {data.counts.pending.toLocaleString('en-NG')} pending · {data.counts.accepted.toLocaleString('en-NG')} accepted · {data.counts.dismissed.toLocaleString('en-NG')} dismissed. Approving or dismissing proposals is not available yet.</p></div>
+        <p className="muted">All reviews: {data.counts.pending.toLocaleString('en-NG')} pending · {data.counts.accepted.toLocaleString('en-NG')} accepted · {data.counts.dismissed.toLocaleString('en-NG')} dismissed. {canAct ? 'Approving moves the report into the proposed cluster; both outcomes record your name, the time and your reason.' : 'Only administrators can approve or dismiss proposals.'}</p></div>
         <p className="updated">Snapshot: {date(data.generatedAt)} WAT</p></div>
-        {data.items.length ? <div className="review-items">{data.items.map(item => <ReviewItem key={`${item.reportId}-${item.proposedClusterId}`} item={item} />)}</div>
+        {data.items.length ? <div className="review-items">{data.items.map(item => <ReviewItem key={`${item.reportId}-${item.proposedClusterId}`} api={api} item={item} canAct={canAct} onResolved={() => setRevision(value => value + 1)} />)}</div>
           : <p className="empty muted">{data.total ? 'This page has no proposals. Return to the first page or refresh.' : 'No grouping proposals match these filters.'}</p>}
         <div className="cluster-pagination"><span>Page {data.page} of {pages}</span><div>
           {data.page > pages && <button className="refresh" disabled={busy} onClick={() => setFilters(value => ({ ...value, page: 1 }))}>First page</button>}
@@ -69,7 +69,7 @@ export function ReviewQueueView({ api }: { api: GovernmentApi }) {
   </div>;
 }
 
-function ReviewItem({ item }: { item: ReviewQueueItem }) {
+function ReviewItem({ api, item, canAct, onResolved }: { api: GovernmentApi; item: ReviewQueueItem; canAct: boolean; onResolved: () => void }) {
   const { report, proposedCluster, currentCluster, candidateReport, signals, decision } = item;
   return <article className="review-item">
     <header><div><span className="reference">{report.publicId}</span><strong>{report.category.label}</strong></div>
@@ -100,5 +100,38 @@ function ReviewItem({ item }: { item: ReviewQueueItem }) {
       {!decision && <li>The original clustering decision is unavailable.</li>}
       <li>Visual similarity was not calculated.</li>
     </ul></div>
+    {item.status === 'PENDING' ? canAct && <ProposalActions api={api} item={item} onResolved={onResolved} />
+      : <p className="review-outcome">{label(item.status)}{item.reviewedAt ? ` on ${date(item.reviewedAt)} WAT` : ''}{item.reviewedBy ? ` by ${item.reviewedBy}` : ' automatically or before reviewer records were kept'}.{item.reviewReason ? ` Reason: ${item.reviewReason}` : ''}</p>}
   </article>;
+}
+
+function ProposalActions({ api, item, onResolved }: { api: GovernmentApi; item: ReviewQueueItem; onResolved: () => void }) {
+  const [reason, setReason] = useState('');
+  const [working, setWorking] = useState<'approve' | 'dismiss' | null>(null);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
+  const from = item.currentCluster?.publicId ?? 'no cluster';
+  async function submit(kind: 'approve' | 'dismiss') {
+    if (!reason.trim()) { setError('Enter the reason for this decision.'); return; }
+    setWorking(kind); setError('');
+    try {
+      if (kind === 'approve') await api.approveProposal(item.reportId, item.proposedClusterId, reason.trim());
+      else await api.dismissProposal(item.reportId, item.proposedClusterId, reason.trim());
+      setDone(kind === 'approve' ? `Approved. ${item.report.publicId} now belongs to ${item.proposedCluster.publicId}.` : 'Dismissed. The report stays where it is.');
+      onResolved();
+    } catch (failure) {
+      setError(failure instanceof ApiError || failure instanceof Error ? failure.message : 'The decision could not be saved.');
+    } finally { setWorking(null); }
+  }
+  if (done) return <p className="review-outcome" role="status">{done}</p>;
+  return <form className="review-actions" onSubmit={event => event.preventDefault()}>
+    <label>Reason for your decision (recorded with your name and the time)
+      <textarea value={reason} maxLength={1000} rows={2} disabled={working !== null} aria-label={`Reason for ${item.report.publicId}`}
+        placeholder="For example: same blocked drain, confirmed from the photos" onChange={event => setReason(event.target.value)} /></label>
+    {error && <p className="error" role="alert">{error}</p>}
+    <div className="review-buttons">
+      <button type="button" className="primary" disabled={working !== null} onClick={() => submit('approve')}>{working === 'approve' ? 'Approving�' : `Approve: move ${item.report.publicId} from ${from} to ${item.proposedCluster.publicId}`}</button>
+      <button type="button" className="refresh" disabled={working !== null} onClick={() => submit('dismiss')}>{working === 'dismiss' ? 'Dismissing�' : 'Dismiss proposal'}</button>
+    </div>
+  </form>;
 }
