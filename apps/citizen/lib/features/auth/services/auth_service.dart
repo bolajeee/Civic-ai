@@ -135,6 +135,19 @@ class AuthService {
     );
   }
 
+  Future<UserModel> updateProfile({
+    required String fullName,
+    String? phone,
+  }) async {
+    final response = await _dio.patch(
+      '/api/auth/me',
+      data: {'fullName': fullName, 'phone': phone},
+    );
+    return UserModel.fromJson(
+      (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Logout
   // ---------------------------------------------------------------------------

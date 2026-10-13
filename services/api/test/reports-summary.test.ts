@@ -70,12 +70,12 @@ test('returns numeric aggregates scoped only by JWT owner, ignoring pagination a
     });
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json(), {
-      total: 44, pending: 10, inProgress: 15, resolved: 17, rejected: 2,
+      total: 44, pending: 10, inProgress: 15, resolved: 17, rejected: 2, impactScore: 65,
     });
     const empty = await app.inject({ url: '/api/reports/summary', headers: headers(otherCitizenId) });
     assert.equal(empty.statusCode, 200);
     assert.deepEqual(empty.json(), {
-      total: 0, pending: 0, inProgress: 0, resolved: 0, rejected: 0,
+      total: 0, pending: 0, inProgress: 0, resolved: 0, rejected: 0, impactScore: 0,
     });
     assert.equal(query.mock.callCount(), 2);
   } finally {

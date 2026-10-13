@@ -4,13 +4,15 @@ class ReportSummary {
       required this.pending,
       required this.inProgress,
       required this.resolved,
-      required this.rejected});
+      required this.rejected,
+      required this.impactScore});
 
   final int total;
   final int pending;
   final int inProgress;
   final int resolved;
   final int rejected;
+  final int impactScore;
 
   factory ReportSummary.fromJson(Map<String, dynamic> json) {
     int count(String key) {
@@ -26,6 +28,7 @@ class ReportSummary {
         pending: count('pending'),
         inProgress: count('inProgress'),
         resolved: count('resolved'),
-        rejected: count('rejected'));
+        rejected: count('rejected'),
+        impactScore: count('impactScore'));
   }
 }

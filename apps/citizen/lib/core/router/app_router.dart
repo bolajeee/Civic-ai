@@ -9,6 +9,11 @@ import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/about_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
+import '../../features/profile/screens/help_support_screen.dart';
+import '../../features/profile/screens/language_screen.dart';
+import '../../features/profile/screens/notifications_screen.dart';
 import '../../features/report/providers/report_history_provider.dart';
 import '../../features/report/screens/history_screen.dart';
 import '../../features/report/screens/report_screen.dart';
@@ -24,6 +29,11 @@ abstract final class AppRoutes {
   static const String report = '/report';
   static const String history = '/history';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
+  static const String notifications = '/notifications';
+  static const String language = '/profile/language';
+  static const String helpSupport = '/profile/help';
+  static const String about = '/profile/about';
   static const String reportDetails = '/report-details/:id';
 }
 
@@ -169,6 +179,26 @@ GoRouter buildRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.profile,
         builder: (_, __) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.editProfile,
+        builder: (_, __) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (_, __) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.language,
+        builder: (_, __) => const LanguageScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.helpSupport,
+        builder: (_, __) => const HelpSupportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.about,
+        builder: (_, __) => const AboutScreen(),
       ),
     ],
   );

@@ -4,7 +4,12 @@ import 'package:civic_report/features/report/providers/report_summary_provider.d
 import 'package:flutter_test/flutter_test.dart';
 
 const counts = ReportSummary(
-    total: 44, pending: 10, inProgress: 15, resolved: 17, rejected: 2);
+    total: 44,
+    pending: 10,
+    inProgress: 15,
+    resolved: 17,
+    rejected: 2,
+    impactScore: 65);
 
 void main() {
   test('parses the backend contract and rejects missing or invalid counts', () {
@@ -13,7 +18,8 @@ void main() {
       'pending': 10,
       'inProgress': 15,
       'resolved': 17,
-      'rejected': 2
+      'rejected': 2,
+      'impactScore': 65
     };
     final result = ReportSummary.fromJson(json);
     expect(result.total, 44);
@@ -44,7 +50,12 @@ void main() {
     expect(provider.errorMessage, contains('previous counts'));
     fail = false;
     result = const ReportSummary(
-        total: 0, pending: 0, inProgress: 0, resolved: 0, rejected: 0);
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        resolved: 0,
+        rejected: 0,
+        impactScore: 0);
     await provider.refresh();
     expect(provider.summary?.total, 0);
     expect(provider.errorMessage, isNull);
@@ -69,7 +80,12 @@ void main() {
     expect(provider.summary, isNull);
     expect(provider.isLoading, isTrue);
     requests.last.complete(const ReportSummary(
-        total: 1, pending: 1, inProgress: 0, resolved: 0, rejected: 0));
+        total: 1,
+        pending: 1,
+        inProgress: 0,
+        resolved: 0,
+        rejected: 0,
+        impactScore: 3));
     await newLoad;
     expect(provider.summary?.total, 1);
   });
@@ -91,7 +107,12 @@ void main() {
     requests.last.complete(counts);
     await newLoad;
     requests.first.complete(const ReportSummary(
-        total: 0, pending: 0, inProgress: 0, resolved: 0, rejected: 0));
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        resolved: 0,
+        rejected: 0,
+        impactScore: 0));
     await oldLoad;
     expect(provider.summary?.total, 44);
   });

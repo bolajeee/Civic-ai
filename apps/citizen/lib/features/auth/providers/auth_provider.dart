@@ -200,6 +200,27 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(false);
   }
 
+  Future<bool> updateProfile({
+    required String fullName,
+    String? phone,
+  }) async {
+    _setLoading(true);
+    _clearError();
+    try {
+      _user = await _service.updateProfile(fullName: fullName, phone: phone);
+      notifyListeners();
+      return true;
+    } on DioException catch (e) {
+      _setError(ApiException.fromDio(e).message);
+      return false;
+    } catch (_) {
+      _setError('Could not update your profile. Please try again.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Permissions
   // ---------------------------------------------------------------------------

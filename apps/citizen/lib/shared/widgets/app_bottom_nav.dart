@@ -37,9 +37,9 @@ class AppBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: const Border(
           top: BorderSide(color: AppColors.divider, width: 1),
         ),
       ),
@@ -114,8 +114,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        isActive ? AppColors.primary : AppColors.textSecondary;
+    final Color color = isActive ? AppColors.primary : AppColors.textSecondary;
 
     final Widget iconWidget = Icon(
       isActive ? activeIcon : icon,

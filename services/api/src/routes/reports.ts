@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import crypto from 'crypto';
 import { pool, query } from '../db';
+import { calculateImpactScore } from '../lib/impact-score';
 import { uploadImage, getImageUrls, deleteImages } from '../lib/storage';
 import { createReportSchema, listReportsSchema } from '../schemas/report';
 import {
@@ -102,12 +103,16 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         const counts = result.rows[0];
 
         // PostgreSQL COUNT returns bigint strings; the API exposes JSON numbers.
-        return reply.status(200).send({
+        const summary = {
           total: Number(counts.total),
           pending: Number(counts.pending),
           inProgress: Number(counts.in_progress),
           resolved: Number(counts.resolved),
           rejected: Number(counts.rejected),
+        };
+        return reply.status(200).send({
+          ...summary,
+          impactScore: calculateImpactScore(summary),
         });
       } catch (err) {
         fastify.log.error(err);

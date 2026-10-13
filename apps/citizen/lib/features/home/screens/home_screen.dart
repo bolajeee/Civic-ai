@@ -58,8 +58,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = context.watch<AuthProvider>().user;
     final history = context.watch<ReportHistoryProvider>();
     final summary = context.watch<ReportSummaryProvider>().summary;
-    final String initials = _initials(user?.email ?? '');
-    final String firstName = _firstName(user?.email ?? '');
+    final displayName = _displayName(user?.fullName, user?.email ?? '');
+    final String initials = _initials(displayName);
+    final nameParts = displayName.split(RegExp(r'\s+'));
+    final String firstName = nameParts.isEmpty ? 'there' : nameParts.first;
+    String? locationLabel;
+    for (final report in history.reports) {
+      if (report.location != null) {
+        locationLabel = report.location!.displayLabel;
+        break;
+      }
+    }
 
     // Mapped through the same adapter History and Details use, so a report
     // cannot read one way here and another way there.
@@ -78,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -104,7 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        _Header(initials: initials, firstName: firstName),
+                        _Header(
+                          initials: initials,
+                          firstName: firstName,
+                          location: locationLabel ?? 'No report location yet',
+                          onNotifications: () =>
+                              context.push(AppRoutes.notifications),
+                        ),
                         const SizedBox(height: 20),
                         _SearchBar(
                           controller: _searchController,
@@ -198,25 +213,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static String _initials(String email) {
-    final local = email.split('@').first;
-    final parts = local.split(RegExp(r'[.\-_]'));
+  static String _initials(String name) {
+    final parts = name
+        .split(RegExp(r'[\s.\-_]+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    if (local.length >= 2) {
-      return (local[0] + local[local.length - 1]).toUpperCase();
+    if (name.length >= 2) {
+      return name.substring(0, 2).toUpperCase();
     }
-    return local.toUpperCase();
+    return name.toUpperCase();
   }
 
-  static String _firstName(String email) {
+  static String _displayName(String? fullName, String email) {
+    if (fullName != null && fullName.trim().isNotEmpty) return fullName.trim();
     if (email.isEmpty) return 'there';
     final local = email.split('@').first;
     final parts = local.split(RegExp(r'[.\-_]'));
-    final name = parts.first;
-    if (name.isEmpty) return 'there';
-    return name[0].toUpperCase() + name.substring(1).toLowerCase();
+    return parts
+        .where((part) => part.isNotEmpty)
+        .map((part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
   }
 }
 
@@ -225,10 +245,17 @@ class _HomeScreenState extends State<HomeScreen> {
 // ---------------------------------------------------------------------------
 
 class _Header extends StatelessWidget {
-  const _Header({required this.initials, required this.firstName});
+  const _Header({
+    required this.initials,
+    required this.firstName,
+    required this.location,
+    required this.onNotifications,
+  });
 
   final String initials;
   final String firstName;
+  final String location;
+  final VoidCallback onNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -261,38 +288,45 @@ class _Header extends StatelessWidget {
             children: [
               Text(
                 'Hello, $firstName 👋',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   height: 1.2,
                 ),
               ),
               const SizedBox(height: 2),
-              const Text(
-                'Ikeja, Lagos',
+              Text(
+                location,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.2,
                 ),
               ),
             ],
           ),
         ),
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.inputBorder),
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          shape: const CircleBorder(
+            side: BorderSide(color: AppColors.inputBorder),
           ),
-          child: const Icon(
-            Icons.notifications_outlined,
-            size: 20,
-            color: AppColors.textPrimary,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onNotifications,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.notifications_outlined,
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
           ),
         ),
       ],
@@ -315,7 +349,7 @@ class _SearchBar extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
         border: Border.all(color: AppColors.inputBorder),
       ),
@@ -323,13 +357,18 @@ class _SearchBar extends StatelessWidget {
         controller: controller,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-        decoration: const InputDecoration(
+        style: TextStyle(
+          fontSize: 14,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        decoration: InputDecoration(
           hintText: 'Search reports by title, category or location...',
-          prefixIcon:
-              Icon(Icons.search_rounded, color: AppColors.textSecondary),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
@@ -419,7 +458,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       child: InkWell(
         onTap: onTap,
@@ -447,20 +486,20 @@ class _StatCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   height: 1.1,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.2,
                 ),
               ),

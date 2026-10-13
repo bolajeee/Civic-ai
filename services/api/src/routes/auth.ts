@@ -9,6 +9,7 @@ import {
   registerSchema,
   resetPasswordSchema,
   socialLoginSchema,
+  updateProfileSchema,
 } from '../schemas/auth';
 import {
   createRefreshToken,
@@ -424,6 +425,33 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send({ user: result.rows[0] });
       } catch (err: any) {
+        fastify.log.error(err);
+        return reply.status(500).send({ error: 'Internal Server Error' });
+      }
+    },
+  );
+
+  // Identity fields such as email, NIN, role and status remain server-owned.
+  fastify.patch(
+    '/me',
+    { preHandler: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const payload = request.user as { id: string };
+        const input = updateProfileSchema.parse(request.body);
+        const result = await query(
+          `UPDATE users
+           SET full_name = $2, phone = $3
+           WHERE id = $1 AND role = 'CITIZEN'
+           RETURNING id, public_id, full_name, email, phone, nin, role, status, created_at`,
+          [payload.id, input.fullName, input.phone || null],
+        );
+        if (result.rows.length === 0) {
+          return reply.status(404).send({ error: 'User not found' });
+        }
+        return reply.status(200).send({ user: result.rows[0] });
+      } catch (err: any) {
+        if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }

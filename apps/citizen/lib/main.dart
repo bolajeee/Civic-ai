@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/providers/app_settings_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/report/providers/report_draft_provider.dart';
 import 'features/report/providers/report_history_provider.dart';
@@ -21,23 +22,36 @@ void main() async {
   // and subscribed to the ChangeNotifier via refreshListenable, so the
   // notifyListeners() inside initialize() reliably triggers the redirect.
   final authProvider = AuthProvider();
+  final settingsProvider = AppSettingsProvider();
+  await settingsProvider.initialize();
 
-  runApp(CivicReportApp(authProvider: authProvider));
+  runApp(CivicReportApp(
+    authProvider: authProvider,
+    settingsProvider: settingsProvider,
+  ));
 
   // Kick off session restore now that the widget tree is listening.
   authProvider.initialize();
 }
 
 class CivicReportApp extends StatelessWidget {
-  const CivicReportApp({super.key, required this.authProvider});
+  const CivicReportApp({
+    super.key,
+    required this.authProvider,
+    required this.settingsProvider,
+  });
 
   final AuthProvider authProvider;
+  final AppSettingsProvider settingsProvider;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+        ChangeNotifierProvider<AppSettingsProvider>.value(
+          value: settingsProvider,
+        ),
         ChangeNotifierProxyProvider<AuthProvider, ReportSummaryProvider>(
           create: (_) => ReportSummaryProvider(),
           update: (_, auth, summary) =>
@@ -75,10 +89,14 @@ class _AppViewState extends State<_AppView> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<AppSettingsProvider>();
     return MaterialApp.router(
       title: 'Civic Report',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: settings.themeMode,
+      locale: settings.locale,
       routerConfig: router,
     );
   }

@@ -73,22 +73,20 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 ### Citizen UI functionality gaps (reviewed 2026-09-30)
 
 - [x] Login: password reset plus verified Google and Apple sign-in flows (social identities link to an existing NIN-backed citizen account)
-- [ ] Home: notification bell is decorative; no notification inbox or tap action
-- [ ] Profile: Edit Profile, Notifications, Language, Help & Support, and About rows have no tap handlers/screens
-- [ ] Profile: Dark Mode only toggles local switch state; it does not change the app theme or persist the preference
-- [ ] Profile: Impact Score has no scoring model/API and displays a dash
-- [ ] Home/Profile: location labels are hardcoded (Ikeja/Lagos); displayed names are derived from email rather than the stored full name; Profile version is hardcoded
+- [x] Home notification bell opens an in-app report-status inbox; activity rows open report details (push delivery remains separately scoped below)
+- [x] Profile: Edit Profile, Notifications, Language, Help & Support, and About have routed screens and working actions
+- [x] Profile: Dark Mode changes `ThemeMode`, includes a dark palette, and persists through `SharedPreferences`
+- [x] Profile: Impact Score is returned by `/api/reports/summary` using a documented 0–100 contribution/engagement/resolution model
+- [x] Home/Profile: names use stored `full_name`; location uses the newest report with a saved location (or an honest empty state); version/build comes from the installed package
 - [ ] Report Details: both Share receipt actions only show a snackbar; no receipt generation or system share sheet
 - [ ] Report Details: Priority, Assigned agency, and Citizen reference are unavailable placeholders; timeline is inferred from current status, with no event history/timestamps
 - [ ] Report Details: only the thumbnail is displayed, with no full photo gallery; direct links require the report to exist in loaded history (no report-detail fetch endpoint)
 - [ ] Notifications: permission request exists, but delivery, device-token registration, and notification preferences are not implemented
 
-Summary integration validation: `flutter analyze` passes; all four new summary
-model/provider tests pass. Full Flutter suite (re-run 2026-10-07): 33 passed, one
-failure (`authenticated real app routes pass through untouched`). That test is stale:
-it expects `/permissions` to remain open with permissions granted, while the router
-intentionally redirects it to Home. The test needs updating to match the router.
-- [ ] Update the stale router test so the Flutter suite is green
+Citizen validation (re-run 2026-10-13): `flutter analyze` reports no issues and
+all 38 Flutter tests pass, including settings persistence, summary parsing and
+router redirects.
+- [x] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)
 **Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Reviewed 2026-10-07: the dev database has only 11 migrations recorded. The cluster tables exist (applied by hand, not recorded), but the severity migration (`input_snapshot`, widened analysis-type constraint) and all `issue_cluster_priority_*` tables are missing. No AI flag is enabled and no OpenAI key is set, so none of the items below has run against a database or a model.
