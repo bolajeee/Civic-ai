@@ -159,7 +159,11 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Filters & Search
   - [x] Reports retain their full-dataset filters; maps retain category/status filters; clusters now search references, categories, member descriptions/addresses and related review references
   - [x] Cluster filters cover lifecycle status, category, pending grouping review, assignment method, member GPS state, pagination and reset; review-related source and target clusters are both discoverable
-- [ ] Review queue
+- [x] Review queue
+  - [x] Protected, paginated `GET /api/gov/issue-clusters/review-queue` lists grouping proposals oldest first (default pending) with status, reason, category and literal-search filters, plus overall pending/accepted/dismissed counts
+  - [x] Each proposal shows the report awaiting grouping, its current cluster and assignment method, the proposed cluster, the matched report, score, automatic threshold, ambiguity margin, distance/semantic/category signals and versions; missing signals, GPS and decisions are explicit
+  - [x] Read-only "Review queue" page in the government app; approving/dismissing is the next item. API (138) and web (16) tests and builds pass; live-database and browser validation of the queue remain pending
+  - Contract: [government issue clusters API](government-clusters-api.md)
 - [ ] Administrator review actions: approve/dismiss candidates, remove/move reports, merge/split clusters, and record reviewer, timestamp, and reason
 
 ### Phase 5: Government Reporting (Pending)

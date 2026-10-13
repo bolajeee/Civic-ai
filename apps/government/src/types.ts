@@ -83,6 +83,30 @@ export interface ClusterEvidenceSnapshot {
   cluster: { id: string; publicId: string }; reports: ClusterEvidenceReport[];
   photosExpireInSeconds: number;
 }
+export interface ReviewQueueFilters {
+  page?: number; limit?: number; q?: string; category?: string;
+  status?: 'PENDING' | 'ACCEPTED' | 'DISMISSED' | 'all'; reason?: 'all' | 'LOW_SCORE' | 'AMBIGUOUS_MATCH';
+}
+export interface ReviewQueueItem {
+  reportId: string; proposedClusterId: string; score: number; reason: 'LOW_SCORE' | 'AMBIGUOUS_MATCH';
+  status: 'PENDING' | 'ACCEPTED' | 'DISMISSED'; scoringVersion: string; createdAt: string;
+  report: { id: string; publicId: string; description: string | null; status: string; submittedAt: string;
+    category: { slug: string; label: string };
+    location: { latitude: number; longitude: number; accuracy: number | null; address: string | null } | null };
+  currentCluster: { id: string; publicId: string; status: string; reportCount: number;
+    assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM' } | null;
+  proposedCluster: { id: string; publicId: string; status: string; reportCount: number;
+    category: { slug: string; label: string } };
+  candidateReport: { id: string; publicId: string; description: string | null } | null;
+  signals: null | { distanceMeters: number; semanticSimilarity: number; categoryMatch: boolean; combinedScore: number };
+  decision: null | { outcome: string; decidedAt: string; clusteringVersion: string;
+    autoMinScore: number | null; ambiguityMargin: number | null };
+}
+export interface ReviewQueueSnapshot {
+  generatedAt: string; page: number; limit: number; total: number;
+  counts: { pending: number; accepted: number; dismissed: number };
+  categories: Array<{ slug: string; label: string }>; items: ReviewQueueItem[];
+}
 export type MapLayer = 'reports' | 'clusters' | 'all';
 export interface MapFilters { bbox: [number, number, number, number]; layer: MapLayer; status?: string; category?: string; limit?: number }
 export interface MapFeature {

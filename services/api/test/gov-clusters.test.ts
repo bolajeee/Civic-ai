@@ -178,3 +178,58 @@ test('list, summary and evidence database failures are sanitized', async () => {
     assert.deepEqual(response.json(), { error: 'Internal Server Error' });
   }
 });
+
+test('review queue requires authentication and current government access', async () => {
+  const db = mock.method(pool, 'query', async () => { throw new Error('Unexpected query'); });
+  for (const authorization of [undefined, 'Bearer invalid']) {
+    const response = await app.inject({ url: `${url}review-queue`, headers: authorization ? { authorization } : {} });
+    assert.equal(response.statusCode, 401);
+  }
+  assert.equal(db.mock.callCount(), 0);
+  mock.restoreAll();
+  mock.method(pool, 'query', async () => ({ rows: [{ role: 'CITIZEN', status: 'ACTIVE' }] }));
+  assert.equal((await app.inject({ url: `${url}review-queue`, headers: headers() })).statusCode, 403);
+});
+
+test('review queue rejects unknown, invalid and unbounded filters', async () => {
+  mock.method(pool, 'query', async () => ({ rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] }));
+  for (const value of ['page=0', 'limit=101', 'status=OPEN', 'status=pending', 'reason=other',
+    'category=%27%3BDROP', `q=${'a'.repeat(201)}`, 'citizenId=someone']) {
+    assert.equal((await app.inject({ url: `${url}review-queue?${value}`, headers: headers() })).statusCode, 400, value);
+  }
+});
+
+test('review queue defaults to pending oldest-first and binds literal filters', async () => {
+  const queue = { page: 1, limit: 20, total: 0, counts: { pending: 0, accepted: 0, dismissed: 0 }, categories: [], items: [] };
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    assert.deepEqual(values, ['PENDING', 'all', null, null, 20, 0, 1]);
+    assert.match(sql, /ORDER BY created_at ASC, report_id, issue_cluster_id LIMIT \$5 OFFSET \$6/);
+    assert.match(sql, /strpos\(lower\(concat_ws/);
+    assert.doesNotMatch(sql, /citizen_id|email|nin|storage_key/);
+    return { rows: [{ queue }] };
+  });
+  const response = await app.inject({ url: `${url}review-queue`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), queue);
+});
+
+test('review queue passes status, reason, category, search and pagination as bound values', async () => {
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
+    assert.deepEqual(values, ['all', 'AMBIGUOUS_MATCH', 'POTHOLE', '%_x', 50, 100, 3]);
+    return { rows: [{ queue: { items: [] } }] };
+  });
+  const response = await app.inject({ url: `${url}review-queue?status=all&reason=AMBIGUOUS_MATCH&category=POTHOLE&q=%20%25_x%20&limit=50&page=3`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+});
+
+test('review queue database failures are sanitized', async () => {
+  mock.method(pool, 'query', async (sql: string) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
+    throw new Error('private database details');
+  });
+  const response = await app.inject({ url: `${url}review-queue`, headers: headers() });
+  assert.equal(response.statusCode, 500);
+  assert.deepEqual(response.json(), { error: 'Internal Server Error' });
+});

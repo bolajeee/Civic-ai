@@ -1,4 +1,4 @@
-import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -101,6 +101,13 @@ export class GovernmentApi {
   clusterEvidence(id: string, page = 1, limit = 20) {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     return this.authorized<ClusterEvidenceSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/evidence?${params}`);
+  }
+  reviewQueue(filters: ReviewQueueFilters = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    }
+    return this.authorized<ReviewQueueSnapshot>(`/issue-clusters/review-queue?${params}`);
   }
   map(filters: MapFilters) {
     const params = new URLSearchParams({ bbox: filters.bbox.join(','), layer: filters.layer });

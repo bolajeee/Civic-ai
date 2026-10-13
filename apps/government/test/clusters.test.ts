@@ -43,3 +43,19 @@ test('cluster evidence uses bounded pagination on the authenticated route', asyn
   await api.login('operator@example.gov', 'password');
   assert.equal((await api.clusterEvidence('a/b', 3, 20)).total, 41);
 });
+
+test('review queue client sends bounded filters on the authenticated route', async () => {
+  const api = new GovernmentApi(() => {}, async (url, init) => {
+    if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
+    const parsed = new URL(String(url), 'https://civic.example');
+    assert.equal(parsed.pathname, '/api/gov/issue-clusters/review-queue');
+    assert.deepEqual(Object.fromEntries(parsed.searchParams), {
+      page: '2', limit: '50', status: 'PENDING', reason: 'LOW_SCORE', category: 'FLOODING', q: 'a & b',
+    });
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer access');
+    return new Response(JSON.stringify({ total: 51, items: [] }));
+  });
+  await api.login('operator@example.gov', 'password');
+  assert.equal((await api.reviewQueue({ page: 2, limit: 50, status: 'PENDING', reason: 'LOW_SCORE',
+    category: 'FLOODING', q: 'a & b' })).total, 51);
+});

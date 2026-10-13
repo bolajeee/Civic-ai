@@ -15,6 +15,15 @@ const filters = z.object({
   location: z.enum(['all', 'present', 'missing']).default('all'),
 }).strict();
 
+const reviewFilters = z.object({
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(['PENDING', 'ACCEPTED', 'DISMISSED', 'all']).default('PENDING'),
+  reason: z.enum(['all', 'LOW_SCORE', 'AMBIGUOUS_MATCH']).default('all'),
+  category: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/).optional(),
+  q: z.string().trim().max(200).optional(),
+}).strict();
+
 const params = z.object({ id: z.uuid() });
 const evidenceFilters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
@@ -140,6 +149,91 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
         [status ?? null, category ?? null, q || null, review, assignment, location,
           limit, (page - 1) * limit, page, isPriorityEnabled()]);
       return result.rows[0].listing;
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/review-queue', { preHandler: access }, async (request, reply) => {
+    const parsed = reviewFilters.safeParse(request.query);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid review queue filters', details: parsed.error.flatten() });
+    const { page, limit, status, reason, category, q } = parsed.data;
+    try {
+      const result = await query<{ queue: unknown }>(`
+        WITH matches AS (
+          SELECT review.report_id, review.issue_cluster_id, review.created_at
+          FROM issue_cluster_review_candidates review
+          JOIN reports source ON source.id = review.report_id
+          JOIN report_categories source_category ON source_category.id = source.category_id
+          JOIN issue_clusters proposed ON proposed.id = review.issue_cluster_id
+          LEFT JOIN reports candidate ON candidate.id = review.candidate_report_id
+          LEFT JOIN issue_cluster_reports current_membership ON current_membership.report_id = review.report_id
+          LEFT JOIN issue_clusters current_cluster ON current_cluster.id = current_membership.issue_cluster_id
+          WHERE ($1::text = 'all' OR review.status = $1)
+            AND ($2::text = 'all' OR review.reason = $2)
+            AND ($3::text IS NULL OR source_category.slug = $3)
+            AND ($4::text IS NULL OR strpos(lower(concat_ws(' ', source.public_id, source.description,
+              candidate.public_id, proposed.public_id, current_cluster.public_id)), lower($4)) > 0)
+        ), page_keys AS (
+          SELECT * FROM matches ORDER BY created_at ASC, report_id, issue_cluster_id LIMIT $5 OFFSET $6
+        ), queue_page AS (
+          SELECT review.report_id AS "reportId", review.issue_cluster_id AS "proposedClusterId",
+            review.score, review.reason, review.status, review.scoring_version AS "scoringVersion",
+            review.created_at AS "createdAt",
+            jsonb_build_object('id', source.id, 'publicId', source.public_id,
+              'description', source.description, 'status', source.status,
+              'submittedAt', source.submitted_at,
+              'category', jsonb_build_object('slug', source_category.slug, 'label', source_category.label),
+              'location', CASE WHEN source_location.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'latitude', source_location.latitude, 'longitude', source_location.longitude,
+                'accuracy', source_location.accuracy, 'address', source_location.address) END) AS report,
+            CASE WHEN current_cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', current_cluster.id, 'publicId', current_cluster.public_id, 'status', current_cluster.status,
+              'reportCount', current_cluster.report_count,
+              'assignmentMethod', current_membership.assignment_method) END AS "currentCluster",
+            jsonb_build_object('id', proposed.id, 'publicId', proposed.public_id, 'status', proposed.status,
+              'reportCount', proposed.report_count,
+              'category', jsonb_build_object('slug', proposed_category.slug, 'label', proposed_category.label)) AS "proposedCluster",
+            CASE WHEN candidate.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'id', candidate.id, 'publicId', candidate.public_id, 'description', candidate.description) END AS "candidateReport",
+            CASE WHEN signal.report_id IS NULL THEN NULL ELSE jsonb_build_object(
+              'distanceMeters', signal.distance_meters, 'semanticSimilarity', signal.semantic_similarity,
+              'categoryMatch', signal.category_match, 'combinedScore', signal.score) END AS signals,
+            (SELECT jsonb_build_object('outcome', decision.outcome, 'decidedAt', decision.decided_at,
+                'clusteringVersion', decision.clustering_version,
+                'autoMinScore', CASE WHEN jsonb_typeof(decision.config->'autoMinScore') = 'number'
+                  THEN (decision.config->>'autoMinScore')::double precision ELSE NULL END,
+                'ambiguityMargin', CASE WHEN jsonb_typeof(decision.config->'ambiguityMargin') = 'number'
+                  THEN (decision.config->>'ambiguityMargin')::double precision ELSE NULL END)
+              FROM report_cluster_decisions decision WHERE decision.report_id = review.report_id) AS decision
+          FROM page_keys keys
+          JOIN issue_cluster_review_candidates review
+            ON review.report_id = keys.report_id AND review.issue_cluster_id = keys.issue_cluster_id
+          JOIN reports source ON source.id = review.report_id
+          JOIN report_categories source_category ON source_category.id = source.category_id
+          LEFT JOIN locations source_location ON source_location.id = source.location_id
+          JOIN issue_clusters proposed ON proposed.id = review.issue_cluster_id
+          JOIN report_categories proposed_category ON proposed_category.id = proposed.category_id
+          LEFT JOIN reports candidate ON candidate.id = review.candidate_report_id
+          LEFT JOIN issue_cluster_reports current_membership ON current_membership.report_id = review.report_id
+          LEFT JOIN issue_clusters current_cluster ON current_cluster.id = current_membership.issue_cluster_id
+          LEFT JOIN report_duplicate_candidates signal
+            ON signal.report_id = review.report_id AND signal.candidate_report_id = review.candidate_report_id
+        )
+        SELECT jsonb_build_object('generatedAt', NOW(), 'page', $7::int, 'limit', $5::int,
+          'total', (SELECT count(*)::int FROM matches),
+          'counts', (SELECT jsonb_build_object(
+            'pending', count(*) FILTER (WHERE status = 'PENDING')::int,
+            'accepted', count(*) FILTER (WHERE status = 'ACCEPTED')::int,
+            'dismissed', count(*) FILTER (WHERE status = 'DISMISSED')::int)
+            FROM issue_cluster_review_candidates),
+          'categories', (SELECT coalesce(jsonb_agg(jsonb_build_object('slug', slug, 'label', label)
+            ORDER BY display_order, slug), '[]'::jsonb) FROM report_categories),
+          'items', (SELECT coalesce(jsonb_agg(to_jsonb(queue_page)
+            ORDER BY "createdAt" ASC, "reportId", "proposedClusterId"), '[]'::jsonb) FROM queue_page)) AS queue`,
+        [status, reason, category ?? null, q || null, limit, (page - 1) * limit, page]);
+      return result.rows[0].queue;
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

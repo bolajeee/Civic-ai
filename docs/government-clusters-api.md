@@ -78,6 +78,27 @@ unavailable rather than being inferred.
 Invalid input returns `400`, invalid tokens `401`, revoked access `403`, an
 unknown or empty cluster `404`, and database failures a sanitized `500`.
 
+## Review queue
+
+`GET /api/gov/issue-clusters/review-queue` lists proposed report-to-cluster
+matches that were not applied automatically (`issue_cluster_review_candidates`).
+It is read-only; approving and dismissing proposals is separate work.
+
+| Query | Meaning |
+| --- | --- |
+| `status` | `PENDING` (default), `ACCEPTED`, `DISMISSED`, or `all` |
+| `reason` | `all` (default), `LOW_SCORE`, or `AMBIGUOUS_MATCH` |
+| `category` | Exact category slug of the report awaiting grouping |
+| `q` | Case-insensitive literal search over report/candidate/cluster references and the report description; maximum 200 characters |
+| `page`, `limit` | Bounded pagination; `limit` is 1-100, default 20 |
+
+Items are ordered oldest first. Each item has the source report, current
+cluster and assignment method, proposed cluster, matched report, score, reason,
+status, scoring version, retained signals and the original decision's threshold
+and ambiguity margin. The response also carries overall `counts` and
+`categories`. Citizen identity, storage keys and photos are not returned.
+Invalid input returns `400`, invalid tokens `401`, revoked access `403`.
+
 ## Validation
 
 No new migration is needed; this uses the issue-clustering schema introduced by
