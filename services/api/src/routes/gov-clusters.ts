@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isPriorityEnabled } from '../ai/priority';
 import { query } from '../db';
-import { governmentAccess } from './gov-access';
+import { governmentAccess, governmentAdminAccess } from './gov-access';
 import { compileIssueReport, type CompilationInput } from '../lib/issue-report-compilation';
 import { renderIssueReportPdf } from '../lib/issue-report-pdf';
 
@@ -31,6 +31,11 @@ const versionParams = z.object({
   id: z.uuid(),
   version: z.coerce.number().int().min(1).max(1000000),
 });
+const approvalBody = z.object({ reason: z.string().trim().min(10).max(1000) }).strict();
+const auditFilters = z.object({
+  page: z.coerce.number().int().min(1).max(1000000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
 const evidenceFilters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -152,6 +157,7 @@ async function loadCompilation(id: string) {
 
 export default async function govClustersRoutes(app: FastifyInstance, options: Options) {
   const access = [app.authenticate, governmentAccess(app)];
+  const adminAccess = [app.authenticate, governmentAdminAccess(app)];
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); });
 
   app.get('/', { preHandler: access }, async (request, reply) => {
@@ -465,7 +471,17 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
             'id', version.id, 'number', version.version_number,
             'createdAt', version.created_at, 'createdBy', creator.public_id,
             'reviewStatus', version.snapshot->'review'->>'status',
-            'sourceCount', version.snapshot->'cluster'->'reportCount')
+            'sourceCount', version.snapshot->'cluster'->'reportCount',
+            'evidenceItems', jsonb_array_length(version.evidence_manifest),
+            'checksummedEvidenceItems', (SELECT count(*)::int
+              FROM jsonb_array_elements(version.evidence_manifest) item
+              WHERE item->>'checksum' IS NOT NULL),
+            'approval', (SELECT jsonb_build_object('id', approval.id,
+              'approvedAt', approval.approved_at, 'approvedBy', approver.public_id,
+              'reason', approval.reason)
+              FROM issue_report_version_approvals approval
+              JOIN users approver ON approver.id = approval.approved_by
+              WHERE approval.issue_report_version_id = version.id))
             ORDER BY version.version_number DESC)
             FROM issue_report_versions version
             JOIN users creator ON creator.id = version.created_by
@@ -493,8 +509,17 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           RETURNING id, next_report_version - 1 AS version_number
         ), inserted AS (
           INSERT INTO issue_report_versions
-            (issue_cluster_id, version_number, snapshot, created_by)
-          SELECT allocated.id, allocated.version_number, $2::jsonb, $3
+            (issue_cluster_id, version_number, snapshot, evidence_manifest, created_by)
+          SELECT allocated.id, allocated.version_number, $2::jsonb,
+            coalesce((SELECT jsonb_agg(jsonb_build_object(
+              'sourceReportId', report.public_id, 'mediaId', media.id,
+              'storageKey', media.storage_key, 'mediaType', media.media_type,
+              'fileSize', media.file_size, 'width', media.width, 'height', media.height,
+              'checksum', media.checksum, 'displayOrder', media.display_order)
+              ORDER BY report.public_id, media.display_order, media.id)
+              FROM jsonb_array_elements($2::jsonb->'evidenceAppendix') source
+              JOIN reports report ON report.public_id = source->>'sourceReportId'
+              JOIN report_media media ON media.report_id = report.id), '[]'::jsonb), $3
           FROM allocated
           RETURNING id, version_number, created_at
         )
@@ -508,24 +533,114 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     }
   });
 
+  app.post('/:id/report-versions/:version/approve', { preHandler: adminAccess }, async (request, reply) => {
+    const parsed = versionParams.safeParse(request.params);
+    const body = approvalBody.safeParse(request.body);
+    if (!parsed.success || !body.success) return reply.status(400).send({ error: 'Invalid report approval' });
+    try {
+      const actorId = (request.user as { id: string }).id;
+      const result = await query<{ outcome: string; approval: null | {
+        id: string; approvedAt: string; approvedBy: string; reason: string } }>(`
+        WITH selected AS (
+          SELECT version.id, version.snapshot->'review'->>'status' AS review_status
+          FROM issue_report_versions version
+          WHERE version.issue_cluster_id = $1 AND version.version_number = $2
+        ), inserted AS (
+          INSERT INTO issue_report_version_approvals
+            (issue_report_version_id, approved_by, reason)
+          SELECT selected.id, $3, $4 FROM selected
+          WHERE selected.review_status <> 'BLOCKED'
+          ON CONFLICT (issue_report_version_id) DO NOTHING
+          RETURNING id, approved_at
+        )
+        SELECT CASE
+          WHEN NOT EXISTS (SELECT 1 FROM selected) THEN 'NOT_FOUND'
+          WHEN (SELECT review_status FROM selected) = 'BLOCKED' THEN 'BLOCKED'
+          WHEN NOT EXISTS (SELECT 1 FROM inserted) THEN 'ALREADY_APPROVED'
+          ELSE 'APPROVED' END AS outcome,
+          (SELECT jsonb_build_object('id', inserted.id, 'approvedAt', inserted.approved_at,
+            'approvedBy', actor.public_id, 'reason', $4::text)
+           FROM inserted JOIN users actor ON actor.id = $3) AS approval`,
+      [parsed.data.id, parsed.data.version, actorId, body.data.reason]);
+      const row = result.rows[0];
+      if (row.outcome === 'NOT_FOUND') return reply.status(404).send({ error: 'Report version not found' });
+      if (row.outcome === 'BLOCKED') return reply.status(409).send({ error: 'Blocked report versions cannot be approved' });
+      if (row.outcome === 'ALREADY_APPROVED') return reply.status(409).send({ error: 'Report version is already approved' });
+      return reply.status(201).send({ approval: row.approval });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/report-audit', { preHandler: access }, async (request, reply) => {
+    const parsed = params.safeParse(request.params);
+    const filters = auditFilters.safeParse(request.query);
+    if (!parsed.success || !filters.success) return reply.status(400).send({ error: 'Invalid report audit request' });
+    const { page, limit } = filters.data;
+    try {
+      const result = await query<{ audit: unknown }>(`
+        WITH selected_cluster AS (
+          SELECT id, public_id FROM issue_clusters WHERE id = $1
+        ), events AS (
+          SELECT version.id, 'VERSION_CREATED'::text AS type, version.created_at AS occurred_at,
+            version.version_number, creator.public_id AS actor, NULL::text AS reason,
+            version.snapshot->'review'->>'status' AS review_status
+          FROM issue_report_versions version
+          JOIN users creator ON creator.id = version.created_by
+          WHERE version.issue_cluster_id = $1
+          UNION ALL
+          SELECT approval.id, 'VERSION_APPROVED', approval.approved_at,
+            version.version_number, approver.public_id, approval.reason,
+            version.snapshot->'review'->>'status'
+          FROM issue_report_version_approvals approval
+          JOIN issue_report_versions version ON version.id = approval.issue_report_version_id
+          JOIN users approver ON approver.id = approval.approved_by
+          WHERE version.issue_cluster_id = $1
+        ), event_page AS (
+          SELECT id, type, occurred_at AS "occurredAt", version_number AS "versionNumber",
+            actor, reason, review_status AS "reviewStatus"
+          FROM events ORDER BY occurred_at DESC, id DESC LIMIT $2 OFFSET $3
+        )
+        SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'cluster', jsonb_build_object('id', cluster.id, 'publicId', cluster.public_id),
+          'page', $4::int, 'limit', $2::int, 'total', (SELECT count(*)::int FROM events),
+          'events', (SELECT coalesce(jsonb_agg(to_jsonb(event_page)
+            ORDER BY "occurredAt" DESC, id DESC), '[]'::jsonb) FROM event_page)) END AS audit
+        FROM selected_cluster cluster`, [parsed.data.id, limit, (page - 1) * limit, page]);
+      if (!result.rows[0]?.audit) return reply.status(404).send({ error: 'Cluster not found' });
+      return result.rows[0].audit;
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
   app.get('/:id/report-versions/:version/report.pdf', { preHandler: access }, async (request, reply) => {
     const parsed = versionParams.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid report version' });
     try {
       const result = await query<{ report: null | { snapshot: ReturnType<typeof compileIssueReport>;
-        id: string; number: number; createdAt: string; createdBy: string; publicId: string } }>(`
+        id: string; number: number; createdAt: string; createdBy: string; publicId: string;
+        approval: null | { approvedAt: string; approvedBy: string; reason: string } } }>(`
         SELECT jsonb_build_object('snapshot', version.snapshot, 'id', version.id,
           'number', version.version_number, 'createdAt', version.created_at,
-          'createdBy', creator.public_id, 'publicId', cluster.public_id) AS report
+          'createdBy', creator.public_id, 'publicId', cluster.public_id,
+          'approval', CASE WHEN approval.id IS NULL THEN NULL ELSE jsonb_build_object(
+            'approvedAt', approval.approved_at, 'approvedBy', approver.public_id,
+            'reason', approval.reason) END) AS report
         FROM issue_report_versions version
         JOIN issue_clusters cluster ON cluster.id = version.issue_cluster_id
         JOIN users creator ON creator.id = version.created_by
+        LEFT JOIN issue_report_version_approvals approval ON approval.issue_report_version_id = version.id
+        LEFT JOIN users approver ON approver.id = approval.approved_by
         WHERE version.issue_cluster_id = $1 AND version.version_number = $2`,
       [parsed.data.id, parsed.data.version]);
       const stored = result.rows[0]?.report;
       if (!stored) return reply.status(404).send({ error: 'Report version not found' });
       const versioned = { ...stored.snapshot, liveDraft: false as const,
-        version: { id: stored.id, number: stored.number, createdAt: stored.createdAt, createdBy: stored.createdBy } };
+        version: { id: stored.id, number: stored.number, createdAt: stored.createdAt,
+          createdBy: stored.createdBy, approval: stored.approval } };
       return reply.header('Content-Type', 'application/pdf')
         .header('Content-Disposition', `attachment; filename="${stored.publicId}-issue-report-v${stored.number}.pdf"`)
         .send(renderIssueReportPdf(versioned));

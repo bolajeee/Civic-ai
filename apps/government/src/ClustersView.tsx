@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ReviewerActions, ReviewHistory } from './ClusterActions';
 import type { GovernmentApi } from './api';
-import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster, IssueCompilationSnapshot, IssueReportVersionsSnapshot } from './types';
+import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster, IssueCompilationSnapshot, IssueReportAuditSnapshot, IssueReportVersionsSnapshot } from './types';
 import './clusters.css';
 
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -128,7 +128,7 @@ function ClusterDetails({ api, id, close, canAct, clusters, onChanged }: { api: 
       <Fact title="Last report grouped (WAT)" value={cluster.grouping.lastAssignedAt ? date(cluster.grouping.lastAssignedAt) : 'Unavailable'} />
     </dl><div className="cluster-summary-row"><div><h3>Supporting report lifecycle</h3><Lifecycle cluster={cluster} /></div><div><h3>Current priority</h3><Priority cluster={cluster} enabled={data.priorityEnabled} /></div></div>
       <p className="cluster-scope-note">The summary keeps cluster status separate from the statuses of its supporting citizen reports.</p>
-      <CompiledIssueReport api={api} id={id} revision={changes} />
+      <CompiledIssueReport api={api} id={id} revision={changes} canApprove={canAct} />
       <ClusterEvidence api={api} id={id} revision={changes} reviewer={canAct ? { cluster: { id, publicId: cluster.publicId, categorySlug: cluster.category.slug }, clusters,
         onChanged: () => { setChanges(value => value + 1); setRevision(value => value + 1); onChanged(); } } : undefined} />
       <ReviewHistory api={api} id={id} revision={changes} /></>}
@@ -137,7 +137,7 @@ function ClusterDetails({ api, id, close, canAct, clusters, onChanged }: { api: 
 
 function Fact({ title, value }: { title: string; value: string }) { return <div><dt>{title}</dt><dd>{value}</dd></div>; }
 
-function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: string; revision: number }) {
+function CompiledIssueReport({ api, id, revision, canApprove }: { api: GovernmentApi; id: string; revision: number; canApprove: boolean }) {
   const [data, setData] = useState<IssueCompilationSnapshot | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -145,7 +145,11 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
   const [exporting, setExporting] = useState(false);
   const [versioning, setVersioning] = useState(false);
   const [versions, setVersions] = useState<IssueReportVersionsSnapshot | null>(null);
+  const [audit, setAudit] = useState<IssueReportAuditSnapshot | null>(null);
   const [versionsRevision, setVersionsRevision] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
+  const [approvalTarget, setApprovalTarget] = useState<number | null>(null);
+  const [approvalReason, setApprovalReason] = useState('');
   useEffect(() => {
     let active = true;
     setBusy(true); setError('');
@@ -156,10 +160,12 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
   }, [api, id, refresh, revision]);
   useEffect(() => {
     let active = true;
-    api.clusterReportVersions(id).then(result => { if (active) setVersions(result); })
+    Promise.all([api.clusterReportVersions(id), api.clusterReportAudit(id, auditPage, 20)]).then(([versionResult, auditResult]) => {
+      if (active) { setVersions(versionResult); setAudit(auditResult); }
+    })
       .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Unable to load report versions.'); });
     return () => { active = false; };
-  }, [api, id, versionsRevision]);
+  }, [api, id, versionsRevision, auditPage]);
   function saveBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -180,7 +186,7 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
   async function createVersion() {
     if (!data || !window.confirm('Create an immutable version from the current evidence snapshot?')) return;
     setVersioning(true); setError('');
-    try { await api.createClusterReportVersion(id); setVersionsRevision(value => value + 1); }
+    try { await api.createClusterReportVersion(id); setAuditPage(1); setVersionsRevision(value => value + 1); }
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to create a report version.'); }
     finally { setVersioning(false); }
   }
@@ -190,6 +196,16 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
     try { saveBlob(await api.clusterReportVersionPdf(id, number), `${data.cluster.publicId}-issue-report-v${number}.pdf`); }
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to download the report version.'); }
     finally { setExporting(false); }
+  }
+  async function approveVersion(event: FormEvent) {
+    event.preventDefault();
+    if (approvalTarget == null || approvalReason.trim().length < 10) return;
+    setVersioning(true); setError('');
+    try {
+      await api.approveClusterReportVersion(id, approvalTarget, approvalReason.trim());
+      setApprovalTarget(null); setApprovalReason(''); setAuditPage(1); setVersionsRevision(value => value + 1);
+    } catch (error) { setError(error instanceof Error ? error.message : 'Unable to approve the report version.'); }
+    finally { setVersioning(false); }
   }
   return <section className="issue-compilation" aria-label="Compiled issue report" aria-busy={busy}>
     <div className="cluster-evidence-heading"><div><p className="eyebrow">COMPILED ISSUE REPORT</p><h3>Current issue brief</h3>
@@ -230,8 +246,16 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
       </div>
       <details className="compiled-sources"><summary>Current source register ({data.sources.length})</summary><ul>{data.sources.map(source => <li key={source.id}><strong>{source.publicId}</strong><span>{label(source.status)} / {date(source.submittedAt)} WAT / {source.location?.address || (source.location ? `${source.location.latitude.toFixed(6)}, ${source.location.longitude.toFixed(6)}` : 'No saved GPS')}</span></li>)}</ul></details>
       <section className="report-versions"><h4>Immutable versions ({versions?.versions.length ?? 0})</h4>
-        {versions?.versions.length ? <ol>{versions.versions.map(version => <li key={version.id}><div><strong>Version {version.number}</strong><span>{date(version.createdAt)} WAT / {version.sourceCount} sources / {label(version.reviewStatus)} / created by {version.createdBy}</span></div><button className="refresh" disabled={exporting} onClick={() => downloadVersion(version.number)}>Download</button></li>)}</ol>
+        {versions?.versions.length ? <ol>{versions.versions.map(version => <li key={version.id}><div><strong>Version {version.number} {version.approval && <span className="approval-mark">Approved</span>}</strong><span>{date(version.createdAt)} WAT / {version.sourceCount} sources / {version.evidenceItems} media records ({version.checksummedEvidenceItems} checksummed) / {label(version.reviewStatus)} / created by {version.createdBy}</span>
+          {version.approval && <span>Approved {date(version.approval.approvedAt)} WAT by {version.approval.approvedBy}: {version.approval.reason}</span>}</div><div className="version-actions"><button className="refresh" disabled={exporting} onClick={() => downloadVersion(version.number)}>Download</button>
+            {canApprove && !version.approval && version.reviewStatus !== 'BLOCKED' && <button className="refresh" disabled={versioning} onClick={() => { setApprovalTarget(version.number); setApprovalReason(''); }}>Approve</button>}</div></li>)}</ol>
           : <p className="muted">No immutable report version has been saved.</p>}
+        {approvalTarget != null && <form className="approval-form" onSubmit={approveVersion}><label>Approval statement<textarea aria-label="Approval statement" required minLength={10} maxLength={1000} value={approvalReason} onChange={event => setApprovalReason(event.target.value)} placeholder="State why this exact evidence snapshot is approved." /></label><div><button className="refresh" type="button" onClick={() => setApprovalTarget(null)}>Cancel</button><button className="primary" disabled={versioning || approvalReason.trim().length < 10} type="submit">{versioning ? 'Approving...' : `Approve version ${approvalTarget}`}</button></div></form>}
+      </section>
+      <section className="report-audit"><h4>Reporting audit trail ({audit?.total ?? 0})</h4>
+        {audit?.events.length ? <ol>{audit.events.map(event => <li key={event.id}><strong>{event.type === 'VERSION_CREATED' ? 'Version created' : 'Version approved'} · v{event.versionNumber}</strong><span>{date(event.occurredAt)} WAT · {event.actor} · {label(event.reviewStatus)}</span>{event.reason && <p>{event.reason}</p>}</li>)}</ol>
+          : <p className="muted">No reporting events have been recorded.</p>}
+        {audit && audit.total > audit.limit && <div className="audit-pagination"><span>Page {audit.page} of {Math.ceil(audit.total / audit.limit)}</span><div><button className="refresh" disabled={audit.page <= 1} onClick={() => setAuditPage(value => Math.max(1, value - 1))}>Previous</button><button className="refresh" disabled={audit.page >= Math.ceil(audit.total / audit.limit)} onClick={() => setAuditPage(value => value + 1)}>Next</button></div></div>}
       </section>
     </>}
   </section>;

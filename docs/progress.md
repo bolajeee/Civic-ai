@@ -188,8 +188,12 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Active government users can save the current compilation as a numbered immutable JSONB snapshot, browse version metadata, and download a PDF reproduced from that exact snapshot
   - [x] Version numbers are allocated atomically per cluster and stored versions are protected by a database append-only trigger; creating a version does not imply formal approval
   - [x] API build and all 163 API tests; government production build and all 21 web tests pass (2026-10-15)
-- [ ] Preserve the reviewed evidence snapshot and approval details for each generated report version
-- [ ] Audit trail
+- [x] Preserve the reviewed evidence snapshot and approval details for each generated report version
+  - [x] Each version preserves the compiled source/evidence appendix plus a private media manifest containing exact media IDs, storage references, metadata, display order, and available checksums; listings expose coverage counts but never storage keys
+  - [x] Administrator approval is bound to one immutable version and its evidence manifest, and records the approver, timestamp, and required approval statement; blocked snapshots cannot be approved and approved PDFs reproduce these details
+- [x] Audit trail
+  - [x] Paginated reporting history combines append-only version-created and version-approved events with actor, WAT timestamp, version, captured review readiness, and approval statement; active operators have read access and only active administrators can approve
+  - [x] API build and all 167 API tests; government production build and all 21 web tests pass (2026-10-15)
 
 ### Phase 6: Hardening (Pending)
 - [ ] Security audits & least privilege (known now: `JWT_SECRET` falls back to a hardcoded default, CORS is `*`, `/api/test-upload` is still registered)

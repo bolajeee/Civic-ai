@@ -2,7 +2,8 @@ import type { compileIssueReport } from './issue-report-compilation';
 
 type CompiledReport = Omit<ReturnType<typeof compileIssueReport>, 'liveDraft'> & {
   liveDraft: boolean;
-  version?: { id: string; number: number; createdAt: string; createdBy: string };
+  version?: { id: string; number: number; createdAt: string; createdBy: string;
+    approval?: null | { approvedAt: string; approvedBy: string; reason: string } };
 };
 interface PdfLine { text: string; size?: number; bold?: boolean; gap?: number; keepWithNext?: boolean }
 
@@ -36,7 +37,9 @@ export function renderIssueReportPdf(report: CompiledReport): Buffer {
   add(lines, 'CivicAI Issue Report', { size: 18, bold: true, gap: 8 });
   add(lines, report.liveDraft
     ? 'LIVE DRAFT - NOT FORMALLY APPROVED'
-    : `IMMUTABLE VERSION ${report.version?.number ?? '?'} - NOT FORMALLY APPROVED`,
+    : report.version?.approval
+      ? `FORMALLY APPROVED IMMUTABLE VERSION ${report.version.number}`
+      : `IMMUTABLE VERSION ${report.version?.number ?? '?'} - NOT FORMALLY APPROVED`,
   { size: 11, bold: true, gap: 8 });
   add(lines, `${report.cluster.publicId} / ${report.cluster.category.label}`, { size: 15, bold: true, gap: 5 });
   add(lines, `Cluster status: ${report.cluster.status} | Review status: ${report.review.status}`);
@@ -45,6 +48,10 @@ export function renderIssueReportPdf(report: CompiledReport): Buffer {
   add(lines, `Coverage: ${report.coverage.withLocation} with GPS, ${report.coverage.withoutLocation} without GPS; ${report.coverage.withDescription} with descriptions, ${report.coverage.withoutDescription} without descriptions.`, { gap: 10 });
 
   if (report.version) add(lines, `Version created: ${displayDate(report.version.createdAt)} | Created by: ${report.version.createdBy}`, { gap: 9 });
+  if (report.version?.approval) {
+    add(lines, `Approved: ${displayDate(report.version.approval.approvedAt)} | Approved by: ${report.version.approval.approvedBy}`);
+    add(lines, `Approval statement: ${report.version.approval.reason}`, { gap: 9 });
+  }
   add(lines, 'Combined findings', { size: 13, bold: true, gap: 4, keepWithNext: true });
   for (const finding of report.findings) {
     add(lines, `${finding.text} [Sources: ${finding.sourceReportIds.join(', ') || 'none'}]`, { gap: 3 });
@@ -72,7 +79,9 @@ export function renderIssueReportPdf(report: CompiledReport): Buffer {
 
   add(lines, report.liveDraft
     ? 'This PDF is generated from live cluster membership. It is not an immutable report version or a record of formal approval.'
-    : 'This PDF reproduces an immutable evidence snapshot. It is not a record of formal approval.',
+    : report.version?.approval
+      ? 'This PDF reproduces the immutable evidence snapshot bound to the formal approval shown above.'
+      : 'This PDF reproduces an immutable evidence snapshot. It is not a record of formal approval.',
   { size: 9, bold: true, gap: 8 });
   return buildPdf(lines, report.cluster.publicId, report.version?.number);
 }

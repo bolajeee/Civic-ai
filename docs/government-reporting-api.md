@@ -56,19 +56,43 @@ first without returning stored snapshots. `POST` to the same path compiles the
 current live report and stores it as the next numbered immutable snapshot. Both
 active `ADMIN` and `OPERATOR` government accounts may create versions.
 
+Each version also stores a private evidence manifest for the exact source IDs in
+the snapshot. It records media IDs, private storage references, media type,
+display order, dimensions, file size, and any upload checksum. Storage references
+are never returned by version-list or audit APIs; version metadata exposes only
+total media records and checksum coverage.
+
 `GET /api/gov/issue-clusters/:id/report-versions/:version/report.pdf` reproduces
 a PDF from the stored snapshot even if cluster membership or source reports have
 subsequently changed. The database serializes per-cluster number allocation and
 rejects updates or deletions of version rows.
 
 Version creation records who created the snapshot and when, but does not record
-formal approval. Approval details and preservation of a specifically reviewed
-and approved snapshot remain a separate milestone.
+formal approval by itself.
+
+## Approval and audit trail
+
+`POST /api/gov/issue-clusters/:id/report-versions/:version/approve` requires a
+currently active administrator and a 10-1000 character approval statement. The
+approval is attached to that exact immutable snapshot and records the approver
+and timestamp. A version with `BLOCKED` review readiness cannot be approved, and
+an already-approved version cannot be approved again. `NEEDS_REVIEW` may be
+approved when the administrator's statement documents that judgment.
+
+Version PDFs show the approval identity, WAT timestamp, and statement. Approval
+does not mutate the snapshot or version row; approval records have their own
+append-only database trigger.
+
+`GET /api/gov/issue-clusters/:id/report-audit?page=1&limit=20` is available to
+active government users and returns a newest-first, paginated history combining
+`VERSION_CREATED` and `VERSION_APPROVED` events. Each event includes the actor,
+timestamp, version number, the review-readiness status captured by that version,
+and the approval statement where applicable.
 
 The live endpoints do not create an official record. `liveDraft: true` means that
 a membership or source-report change will affect the next compilation. A saved
-version freezes that compilation and remains explicitly unapproved until the
-separate formal-approval workflow is implemented.
+version freezes that compilation and remains explicitly unapproved until an
+administrator approves that exact version.
 
 Validation:
 

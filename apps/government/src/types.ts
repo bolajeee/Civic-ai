@@ -108,7 +108,15 @@ export interface IssueCompilationSnapshot {
 export interface IssueReportVersionsSnapshot {
   cluster: { id: string; publicId: string };
   versions: Array<{ id: string; number: number; createdAt: string; createdBy: string;
-    reviewStatus: 'BLOCKED' | 'NEEDS_REVIEW' | 'READY_FOR_REVIEW'; sourceCount: number }>;
+    reviewStatus: 'BLOCKED' | 'NEEDS_REVIEW' | 'READY_FOR_REVIEW'; sourceCount: number;
+    evidenceItems: number; checksummedEvidenceItems: number;
+    approval: null | { id: string; approvedAt: string; approvedBy: string; reason: string } }>;
+}
+export interface IssueReportAuditSnapshot {
+  cluster: { id: string; publicId: string }; page: number; limit: number; total: number;
+  events: Array<{ id: string; type: 'VERSION_CREATED' | 'VERSION_APPROVED'; occurredAt: string;
+    versionNumber: number; actor: string; reason: string | null;
+    reviewStatus: 'BLOCKED' | 'NEEDS_REVIEW' | 'READY_FOR_REVIEW' }>;
 }
 export interface ReviewIssue { kind: string; summary: string; sourceReportIds: string[] }
 export interface ReportClassificationReview { status: string; suggestedCategory: string | null;

@@ -1,4 +1,4 @@
-import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, IssueCompilationSnapshot, IssueReportVersionsSnapshot, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, IssueCompilationSnapshot, IssueReportAuditSnapshot, IssueReportVersionsSnapshot, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -140,6 +140,15 @@ export class GovernmentApi {
   createClusterReportVersion(id: string) {
     return this.authorized<{ version: { id: string; number: number; createdAt: string } }>(
       `/issue-clusters/${encodeURIComponent(id)}/report-versions`, { method: 'POST' });
+  }
+  approveClusterReportVersion(id: string, version: number, reason: string) {
+    return this.authorized<{ approval: { id: string; approvedAt: string; approvedBy: string; reason: string } }>(
+      `/issue-clusters/${encodeURIComponent(id)}/report-versions/${version}/approve`,
+      { method: 'POST', body: JSON.stringify({ reason }) });
+  }
+  clusterReportAudit(id: string, page = 1, limit = 20) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.authorized<IssueReportAuditSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/report-audit?${params}`);
   }
   clusterReportVersionPdf(id: string, version: number) {
     return this.authorizedBlob(`/issue-clusters/${encodeURIComponent(id)}/report-versions/${version}/report.pdf`);

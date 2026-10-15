@@ -75,16 +75,25 @@ test('report versions list, create and download use authenticated escaped routes
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
     calls.push({ url: String(url), method: init?.method || 'GET' });
     if (String(url).endsWith('/report.pdf')) return new Response(new Blob(['version pdf'], { type: 'application/pdf' }));
+    if (String(url).endsWith('/approve')) {
+      assert.deepEqual(JSON.parse(String(init?.body)), { reason: 'Reviewed against source evidence.' });
+      return new Response(JSON.stringify({ approval: { id: 'a1' } }), { status: 201 });
+    }
     if (init?.method === 'POST') return new Response(JSON.stringify({ version: { id: 'v1', number: 1 } }), { status: 201 });
+    if (String(url).includes('/report-audit')) return new Response(JSON.stringify({ total: 2, events: [] }));
     return new Response(JSON.stringify({ cluster: { id: 'c', publicId: 'IC-1' }, versions: [] }));
   });
   await api.login('operator@example.gov', 'password');
   await api.clusterReportVersions('a/b');
   assert.equal((await api.createClusterReportVersion('a/b')).version.number, 1);
+  await api.approveClusterReportVersion('a/b', 7, 'Reviewed against source evidence.');
+  assert.equal((await api.clusterReportAudit('a/b', 2, 10)).total, 2);
   assert.equal(await (await api.clusterReportVersionPdf('a/b', 7)).text(), 'version pdf');
   assert.deepEqual(calls, [
     { url: '/api/gov/issue-clusters/a%2Fb/report-versions', method: 'GET' },
     { url: '/api/gov/issue-clusters/a%2Fb/report-versions', method: 'POST' },
+    { url: '/api/gov/issue-clusters/a%2Fb/report-versions/7/approve', method: 'POST' },
+    { url: '/api/gov/issue-clusters/a%2Fb/report-audit?page=2&limit=10', method: 'GET' },
     { url: '/api/gov/issue-clusters/a%2Fb/report-versions/7/report.pdf', method: 'GET' },
   ]);
 });

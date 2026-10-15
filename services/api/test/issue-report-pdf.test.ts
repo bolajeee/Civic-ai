@@ -48,3 +48,15 @@ test('labels immutable versions and repeats their identity in page furniture', (
   assert.match(content, /immutable evidence snapshot/);
   assert.doesNotMatch(content, /generated from live cluster membership/);
 });
+
+test('binds formal approval details to the rendered immutable snapshot', () => {
+  const compiled = compileIssueReport(report('Approved evidence'));
+  const content = renderIssueReportPdf({ ...compiled, liveDraft: false,
+    version: { id: 'version-id', number: 4, createdAt: '2026-10-15T13:00:00.000Z', createdBy: 'GV-12',
+      approval: { approvedAt: '2026-10-15T14:00:00.000Z', approvedBy: 'GV-2',
+        reason: 'Reviewed against every cited source.' } } }).toString('latin1');
+  assert.match(content, /FORMALLY APPROVED IMMUTABLE VERSION 4/);
+  assert.match(content, /Approved by: GV-2/);
+  assert.match(content, /Reviewed against every cited source/);
+  assert.match(content, /snapshot bound to the formal approval/);
+});

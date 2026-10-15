@@ -30,7 +30,8 @@ after(async () => {
 
 test('cluster list and summary require authentication before database access', async () => {
   const db = mock.method(pool, 'query', async () => { throw new Error('Unexpected query'); });
-  for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`, `${url}${id}/report.pdf`]) {
+  for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`, `${url}${id}/report.pdf`,
+    `${url}${id}/report-versions`, `${url}${id}/report-audit`]) {
     for (const authorization of [undefined, 'Bearer invalid']) {
       const response = await app.inject({ url: path, headers: authorization ? { authorization } : {} });
       assert.equal(response.statusCode, 401);
@@ -43,8 +44,9 @@ test('cluster list and summary require authentication before database access', a
 test('database role and status override stale government token claims', async () => {
   for (const user of [null, { role: 'CITIZEN', status: 'ACTIVE' }, { role: 'ADMIN', status: 'SUSPENDED' }]) {
     const db = mock.method(pool, 'query', async () => ({ rows: user ? [user] : [] }));
-    for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`, `${url}${id}/report.pdf`]) assert.equal((await app.inject({ url: path, headers: headers() })).statusCode, 403);
-    assert.equal(db.mock.callCount(), 5);
+    for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`, `${url}${id}/report.pdf`,
+      `${url}${id}/report-versions`, `${url}${id}/report-audit`]) assert.equal((await app.inject({ url: path, headers: headers() })).statusCode, 403);
+    assert.equal(db.mock.callCount(), 7);
     mock.restoreAll();
   }
 });
@@ -227,7 +229,7 @@ test('PDF export returns an authenticated attachment generated from the same com
 test('report versions are listed without snapshot payloads and missing clusters return 404', async () => {
   const versions = { cluster: { id, publicId: 'IC-1000' }, versions: [
     { id: 'version-id', number: 2, createdAt: '2026-10-15T12:00:00.000Z', createdBy: 'GV-1',
-      reviewStatus: 'NEEDS_REVIEW', sourceCount: 3 },
+      reviewStatus: 'NEEDS_REVIEW', sourceCount: 3, evidenceItems: 4, checksummedEvidenceItems: 3 },
   ] };
   let found = true;
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
@@ -240,7 +242,7 @@ test('report versions are listed without snapshot payloads and missing clusters 
   const response = await app.inject({ url: `${url}${id}/report-versions`, headers: headers() });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), versions);
-  assert.doesNotMatch(response.body, /snapshot/);
+  assert.doesNotMatch(response.body, /snapshot|storageKey/);
   found = false;
   assert.equal((await app.inject({ url: `${url}${id}/report-versions`, headers: headers() })).statusCode, 404);
 });
@@ -258,6 +260,9 @@ test('creating a report version snapshots the compilation and atomically allocat
     assert.equal(JSON.parse(String(values?.[1])).cluster.publicId, 'IC-1000');
     assert.match(sql, /UPDATE issue_clusters SET next_report_version = next_report_version \+ 1/);
     assert.match(sql, /INSERT INTO issue_report_versions/);
+    assert.match(sql, /evidence_manifest/);
+    assert.match(sql, /media\.storage_key/);
+    assert.match(sql, /media\.checksum/);
     return { rows: [{ version: { id: 'version-id', number: 1, createdAt: '2026-10-15T12:01:00.000Z' } }] };
   });
   const response = await app.inject({ method: 'POST', url: `${url}${id}/report-versions`, headers: headers() });
@@ -279,6 +284,61 @@ test('versioned PDF is rendered from its immutable snapshot', async () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['content-disposition'], 'attachment; filename="IC-1000-issue-report-v4.pdf"');
   assert.match(response.rawPayload.toString('latin1'), /IMMUTABLE VERSION 4/);
+});
+
+test('only active administrators can approve an exact non-blocked report version', async () => {
+  let role = 'OPERATOR';
+  const db = mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role, status: 'ACTIVE' }] };
+    assert.deepEqual(values, [id, 4, userId, 'Reviewed against the cited source evidence.']);
+    assert.match(sql, /INSERT INTO issue_report_version_approvals/);
+    assert.match(sql, /review_status <> 'BLOCKED'/);
+    return { rows: [{ outcome: 'APPROVED', approval: { id: 'approval-id',
+      approvedAt: '2026-10-15T14:00:00.000Z', approvedBy: 'GV-1',
+      reason: 'Reviewed against the cited source evidence.' } }] };
+  });
+  const path = `${url}${id}/report-versions/4/approve`;
+  assert.equal((await app.inject({ method: 'POST', url: path, headers: headers(),
+    payload: { reason: 'Reviewed against the cited source evidence.' } })).statusCode, 403);
+  role = 'ADMIN';
+  assert.equal((await app.inject({ method: 'POST', url: path, headers: headers(),
+    payload: { reason: 'short' } })).statusCode, 400);
+  const response = await app.inject({ method: 'POST', url: path, headers: headers(),
+    payload: { reason: 'Reviewed against the cited source evidence.' } });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().approval.approvedBy, 'GV-1');
+  assert.equal(db.mock.callCount(), 4);
+});
+
+test('approval distinguishes missing, blocked and already-approved snapshots', async () => {
+  const outcomes = ['NOT_FOUND', 'BLOCKED', 'ALREADY_APPROVED'];
+  mock.method(pool, 'query', async (sql: string) => sql.startsWith('SELECT role, status')
+    ? { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] }
+    : { rows: [{ outcome: outcomes.shift(), approval: null }] });
+  const path = `${url}${id}/report-versions/2/approve`;
+  const request = () => app.inject({ method: 'POST', url: path, headers: headers(),
+    payload: { reason: 'Reviewed with the available source material.' } });
+  assert.equal((await request()).statusCode, 404);
+  assert.equal((await request()).statusCode, 409);
+  assert.equal((await request()).statusCode, 409);
+});
+
+test('reporting audit trail combines immutable creation and approval events', async () => {
+  const audit = { cluster: { id, publicId: 'IC-1000' }, page: 2, limit: 10, total: 12,
+    events: [{ id: 'event', type: 'VERSION_APPROVED', occurredAt: '2026-10-15T14:00:00.000Z',
+      versionNumber: 4, actor: 'GV-1', reason: 'Reviewed evidence', reviewStatus: 'NEEDS_REVIEW' }] };
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    assert.deepEqual(values, [id, 10, 10, 2]);
+    assert.match(sql, /'VERSION_CREATED'/);
+    assert.match(sql, /'VERSION_APPROVED'/);
+    assert.match(sql, /issue_report_version_approvals/);
+    return { rows: [{ audit }] };
+  });
+  assert.equal((await app.inject({ url: `${url}${id}/report-audit?page=0`, headers: headers() })).statusCode, 400);
+  const response = await app.inject({ url: `${url}${id}/report-audit?page=2&limit=10`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), audit);
 });
 
 type EvidenceFixture = { cluster: { id: string; publicId: string } | null; reports: Array<Record<string, unknown>> };
