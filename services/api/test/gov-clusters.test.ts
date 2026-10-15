@@ -169,13 +169,18 @@ test('compilation validates ids and returns a source-linked live draft without c
   const raw = { generatedAt: '2026-10-15T12:00:00.000Z', cluster: { id, publicId: 'IC-1000',
     category: { slug: 'POTHOLE', label: 'Pothole' }, status: 'PENDING', centroid: null }, sourceReports: [
       { id: 'report', publicId: 'CR-1', description: 'Road surface has failed', status: 'PENDING',
-        submittedAt: '2026-10-14T12:00:00.000Z', location: null },
+        submittedAt: '2026-10-14T12:00:00.000Z', location: null, photoCount: 1,
+        assignmentMethod: 'AI', pendingReviewCount: 0, classification: null, severity: null },
     ] };
   const db = mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
     if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
     assert.deepEqual(values, [id]);
     assert.match(sql, /JOIN issue_cluster_reports/);
     assert.match(sql, /ORDER BY "submittedAt", id/);
+    assert.match(sql, /report_ai_analyses classification/);
+    assert.match(sql, /report_ai_analyses severity/);
+    assert.match(sql, /issue_cluster_review_candidates/);
+    assert.match(sql, /count\(\*\)::int FROM report_media/);
     assert.doesNotMatch(sql, /citizen_id|email|nin|phone|storage_key/);
     return { rows: [{ compilation: raw }] };
   });
@@ -185,6 +190,10 @@ test('compilation validates ids and returns a source-linked live draft without c
   assert.equal(response.json().liveDraft, true);
   assert.deepEqual(response.json().findings[0].sourceReportIds, ['CR-1']);
   assert.deepEqual(response.json().observations, [{ text: 'Road surface has failed', sourceReportIds: ['CR-1'] }]);
+  assert.equal(response.json().review.status, 'NEEDS_REVIEW');
+  assert.deepEqual(response.json().uncertainties.map((item: { kind: string }) => item.kind),
+    ['MISSING_LOCATION', 'CLASSIFICATION_INCOMPLETE', 'SEVERITY_REVIEW']);
+  assert.equal(response.json().evidenceAppendix[0].sourceReportId, 'CR-1');
   assert.equal(db.mock.callCount(), 3);
 });
 

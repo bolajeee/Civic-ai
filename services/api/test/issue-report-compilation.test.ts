@@ -8,9 +8,17 @@ const input: CompilationInput = {
     category: { slug: 'POTHOLE', label: 'Pothole' }, centroid: { latitude: 6.5, longitude: 3.4 } },
   sourceReports: [
     { id: 'two', publicId: 'CR-2', description: ' Deep hole near the junction. ', status: 'IN_PROGRESS',
-      submittedAt: '2026-10-15T10:00:00.000Z', location: null },
+      submittedAt: '2026-10-15T10:00:00.000Z', location: null, photoCount: 1,
+      assignmentMethod: 'AI', pendingReviewCount: 1,
+      classification: { status: 'COMPLETED', suggestedCategory: 'FLOODING', acceptedCategory: 'FLOODING',
+        confidence: 0.91, evidence: 'Standing water.' },
+      severity: { status: 'COMPLETED', suggestedLevel: 'HIGH', acceptedLevel: 'HIGH', confidence: 0.88,
+        reviewRequired: false, uncertainty: 'Depth is not measurable.' } },
     { id: 'one', publicId: 'CR-1', description: null, status: 'PENDING',
-      submittedAt: '2026-10-14T10:00:00.000Z', location: { address: 'Main Road', latitude: 6.5, longitude: 3.4 } },
+      submittedAt: '2026-10-14T10:00:00.000Z', location: { address: 'Main Road', latitude: 6.5, longitude: 3.4 },
+      photoCount: 0, assignmentMethod: 'SYSTEM', pendingReviewCount: 0, classification: null,
+      severity: { status: 'COMPLETED', suggestedLevel: 'LOW', acceptedLevel: 'LOW', confidence: 0.8,
+        reviewRequired: false, uncertainty: null } },
   ],
 };
 
@@ -27,6 +35,11 @@ test('compiles deterministic, source-linked findings without inventing a narrati
   assert.deepEqual(result.findings[2].sourceReportIds, ['CR-1']);
   assert.deepEqual(result.observations, [{ text: 'Deep hole near the junction.', sourceReportIds: ['CR-2'] }]);
   assert.equal('description' in result.sources[0], false);
+  assert.equal(result.review.status, 'BLOCKED');
+  assert.deepEqual(result.disagreements.map(item => item.kind), ['GROUPING', 'CATEGORY', 'SEVERITY']);
+  assert.deepEqual(result.uncertainties.map(item => item.kind), ['MISSING_LOCATION', 'MISSING_DESCRIPTION',
+    'MISSING_MEDIA', 'CLASSIFICATION_INCOMPLETE']);
+  assert.equal(result.evidenceAppendix[1].classification?.evidence, 'Standing water.');
 });
 
 test('compiles an empty source set without false location or date claims', () => {
@@ -35,4 +48,5 @@ test('compiles an empty source set without false location or date claims', () =>
   assert.equal(result.coverage.lastObservedAt, null);
   assert.equal(result.findings[2].text, '0 of 0 source reports include saved GPS coordinates.');
   assert.deepEqual(result.observations, []);
+  assert.equal(result.review.status, 'READY_FOR_REVIEW');
 });

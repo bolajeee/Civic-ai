@@ -93,8 +93,23 @@ export interface IssueCompilationSnapshot {
   findings: Array<{ kind: 'OVERVIEW' | 'LIFECYCLE' | 'LOCATION'; text: string; sourceReportIds: string[] }>;
   observations: Array<{ text: string; sourceReportIds: string[] }>;
   sources: Array<{ id: string; publicId: string; status: string; submittedAt: string;
-    location: { address: string | null; latitude: number; longitude: number } | null }>;
+    location: { address: string | null; latitude: number; longitude: number } | null;
+    photoCount: number; assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM'; pendingReviewCount: number;
+    classification: ReportClassificationReview | null; severity: ReportSeverityReview | null }>;
+  disagreements: ReviewIssue[];
+  uncertainties: ReviewIssue[];
+  review: { status: 'BLOCKED' | 'NEEDS_REVIEW' | 'READY_FOR_REVIEW'; reasons: string[];
+    formalApprovalRecorded: false };
+  evidenceAppendix: Array<{ sourceReportId: string; description: string | null; status: string;
+    submittedAt: string; location: { address: string | null; latitude: number; longitude: number } | null;
+    photoCount: number; assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM';
+    classification: ReportClassificationReview | null; severity: ReportSeverityReview | null }>;
 }
+export interface ReviewIssue { kind: string; summary: string; sourceReportIds: string[] }
+export interface ReportClassificationReview { status: string; suggestedCategory: string | null;
+  acceptedCategory: string | null; confidence: number | null; evidence: string | null }
+export interface ReportSeverityReview { status: string; suggestedLevel: string | null;
+  acceptedLevel: string | null; confidence: number | null; reviewRequired: boolean | null; uncertainty: string | null }
 export interface ReviewQueueFilters {
   page?: number; limit?: number; q?: string; category?: string;
   status?: 'PENDING' | 'ACCEPTED' | 'DISMISSED' | 'all'; reason?: 'all' | 'LOW_SCORE' | 'AMBIGUOUS_MATCH';

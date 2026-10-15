@@ -166,6 +166,24 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
       <div className="compiled-observations"><h4>Reported observations</h4>
         {data.observations.length ? <ol>{data.observations.map((observation, index) => <li key={`${observation.sourceReportIds[0]}-${index}`}><p>{observation.text}</p><SourceReferences ids={observation.sourceReportIds} /></li>)}</ol> : <p className="muted">No source report includes a description.</p>}
       </div>
+      <div className={`report-review-state ${data.review.status.toLowerCase()}`}><div><span>Review status</span><strong>{label(data.review.status)}</strong></div>
+        <p>{data.review.status === 'READY_FOR_REVIEW' ? 'No unresolved conflicts or evidence gaps were detected by the compilation checks.'
+          : data.review.reasons.join(' / ')} Formal approval is not part of this live draft.</p></div>
+      <ReviewIssues title="Unresolved disagreements" empty="No explicit grouping, category, or severity disagreement was detected." issues={data.disagreements} />
+      <ReviewIssues title="Outstanding uncertainty" empty="No missing or incomplete evidence was detected." issues={data.uncertainties} />
+      <div className="evidence-appendix"><h4>Evidence appendix ({data.evidenceAppendix.length})</h4>
+        <p className="muted">Citizen observations, system suggestions, and grouping decisions remain visibly separate.</p>
+        <div>{data.evidenceAppendix.map(source => <article key={source.sourceReportId}><header><strong>{source.sourceReportId}</strong><span className={`badge ${source.status.toLowerCase()}`}>{label(source.status)}</span></header>
+          <p className="appendix-description"><b>Citizen observation:</b> {source.description || 'No description supplied.'}</p>
+          <dl><Fact title="Submitted (WAT)" value={date(source.submittedAt)} /><Fact title="Saved location" value={source.location?.address || (source.location ? `${source.location.latitude.toFixed(6)}, ${source.location.longitude.toFixed(6)}` : 'No saved GPS')} />
+            <Fact title="Attached photos" value={source.photoCount.toLocaleString('en-NG')} /><Fact title="Grouping" value={`${label(source.assignmentMethod)} assignment`} />
+            <Fact title="AI category suggestion" value={source.classification ? `${source.classification.suggestedCategory || 'Unavailable'} (${label(source.classification.status)})${source.classification.confidence == null ? '' : ` / ${Math.round(source.classification.confidence * 100)}% model confidence`}` : 'No analysis record'} />
+            <Fact title="AI severity suggestion" value={source.severity ? `${source.severity.suggestedLevel || 'Unavailable'} (${label(source.severity.status)})${source.severity.confidence == null ? '' : ` / ${Math.round(source.severity.confidence * 100)}% model confidence`}` : 'No analysis record'} />
+          </dl>
+          {source.classification?.evidence && <p><b>Classification visual evidence:</b> {source.classification.evidence}</p>}
+          {source.severity?.uncertainty && <p><b>Severity uncertainty:</b> {source.severity.uncertainty}</p>}
+        </article>)}</div>
+      </div>
       <details className="compiled-sources"><summary>Current source register ({data.sources.length})</summary><ul>{data.sources.map(source => <li key={source.id}><strong>{source.publicId}</strong><span>{label(source.status)} / {date(source.submittedAt)} WAT / {source.location?.address || (source.location ? `${source.location.latitude.toFixed(6)}, ${source.location.longitude.toFixed(6)}` : 'No saved GPS')}</span></li>)}</ul></details>
     </>}
   </section>;
@@ -173,6 +191,10 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
 
 function SourceReferences({ ids }: { ids: string[] }) {
   return <p className="source-references" aria-label="Supporting source reports">{ids.length ? ids.map(id => <span key={id}>{id}</span>) : <em>No geolocated source reports</em>}</p>;
+}
+
+function ReviewIssues({ title, empty, issues }: { title: string; empty: string; issues: IssueCompilationSnapshot['uncertainties'] }) {
+  return <section className="review-issues"><h4>{title} ({issues.length})</h4>{issues.length ? <ul>{issues.map(issue => <li key={issue.kind}><p>{issue.summary}</p><SourceReferences ids={issue.sourceReportIds} /></li>)}</ul> : <p className="muted">{empty}</p>}</section>;
 }
 
 function ClusterEvidence({ api, id, revision: external, reviewer }: { api: GovernmentApi; id: string; revision: number;

@@ -376,7 +376,33 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
             r.submitted_at AS "submittedAt",
             CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
               'address', location.address, 'latitude', location.latitude,
-              'longitude', location.longitude) END AS location
+              'longitude', location.longitude) END AS location,
+            (SELECT count(*)::int FROM report_media media WHERE media.report_id = r.id) AS "photoCount",
+            membership.assignment_method AS "assignmentMethod",
+            (SELECT count(*)::int FROM issue_cluster_review_candidates review
+              WHERE review.report_id = r.id AND review.status = 'PENDING') AS "pendingReviewCount",
+            (SELECT jsonb_build_object(
+                'status', classification.status,
+                'suggestedCategory', classification.prediction->>'categorySlug',
+                'acceptedCategory', accepted_category.slug,
+                'confidence', classification.confidence,
+                'evidence', classification.prediction->>'evidence')
+              FROM report_ai_analyses classification
+              LEFT JOIN report_categories accepted_category
+                ON accepted_category.id = classification.predicted_category_id
+              WHERE classification.report_id = r.id
+                AND classification.analysis_type = 'IMAGE_CLASSIFICATION') AS classification,
+            (SELECT jsonb_build_object(
+                'status', severity.status,
+                'suggestedLevel', severity.prediction->>'suggestedLevel',
+                'acceptedLevel', severity.prediction->>'level',
+                'confidence', severity.confidence,
+                'reviewRequired', CASE WHEN jsonb_typeof(severity.prediction->'reviewRequired') = 'boolean'
+                  THEN (severity.prediction->>'reviewRequired')::boolean ELSE NULL END,
+                'uncertainty', severity.prediction->>'uncertainty')
+              FROM report_ai_analyses severity
+              WHERE severity.report_id = r.id
+                AND severity.analysis_type = 'SEVERITY_ESTIMATION') AS severity
           FROM selected_cluster cluster
           JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
           JOIN reports r ON r.id = membership.report_id

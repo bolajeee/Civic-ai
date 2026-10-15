@@ -175,7 +175,10 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Protected live compilation API and dashboard brief combine current cluster metadata, observation window, lifecycle/location/description coverage, source-linked findings, original described observations, and a current source register without citizen identity
   - [x] Compilation is explicitly labelled a live, unapproved, non-versioned draft; immutable versions, approvals, PDF and print remain separate milestones below
   - Contract and validation commands: [government reporting API](government-reporting-api.md). API build and all 156 tests; government production build and all 19 web tests pass (2026-10-15).
-- [ ] Reviewable cluster report: combined findings linked to source reports, evidence appendix, unresolved disagreements, and review status
+- [x] Reviewable cluster report: combined findings linked to source reports, evidence appendix, unresolved disagreements, and review status
+  - [x] The live report separates cited findings and citizen observations from AI category/severity suggestions, grouping method, missing evidence, and the full photo evidence view
+  - [x] Explicit grouping proposals, accepted category mismatches, and differing accepted severity assessments are preserved as unresolved disagreements; evidence gaps remain separate uncertainties
+  - [x] Derived `BLOCKED`, `NEEDS_REVIEW`, or `READY_FOR_REVIEW` status explains readiness without implying formal approval
 - [ ] PDF generation
 - [ ] Print optimizations
 - [ ] Report versioning
