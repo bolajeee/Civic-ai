@@ -197,8 +197,8 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 
 ### Phase 6: Hardening (Pending)
 - [ ] Security audits & least privilege (done: `JWT_SECRET` and the reset pepper are required when `NODE_ENV=production`, CORS uses a `CORS_ORIGINS` allowlist, `/api/test-upload` removed; broader audit and least-privilege review still pending)
-- [ ] Rate limiting
-- [ ] Error handling
+- [x] Rate limiting (`@fastify/rate-limit`: 300/min per IP, 30/min on auth routes; set `TRUST_PROXY=true` behind a proxy; in-memory, so per instance)
+- [x] Error handling (global JSON error handler hides 5xx internals; JSON 404)
 - [ ] Offline handling (Flutter sync queue)
 - [ ] Monitoring & Observability
 - [ ] Automated Testing

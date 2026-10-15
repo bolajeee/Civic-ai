@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyMultipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 
 import authenticatePlugin from './plugins/authenticate';
 import authRoutes from './routes/auth';
@@ -28,7 +29,9 @@ import govClustersRoutes from './routes/gov-clusters';
 import govClusterActionRoutes from './routes/gov-cluster-actions';
 import govAdminRoutes from './routes/gov-admin';
 
-const fastify = Fastify({ logger: true });
+// Set TRUST_PROXY=true behind a reverse proxy so request.ip (used by rate
+// limiting) is the client address rather than the proxy's.
+const fastify = Fastify({ logger: true, trustProxy: process.env.TRUST_PROXY === 'true' });
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
@@ -73,6 +76,13 @@ fastify.register(cors, {
   origin: corsOrigins.length > 0 ? corsOrigins : !isProduction,
 });
 
+// Credential endpoints get a much tighter budget than the rest of the API.
+fastify.register(rateLimit, {
+  max: (request) =>
+    request.url.startsWith('/api/auth') || request.url.startsWith('/api/gov/auth') ? 30 : 300,
+  timeWindow: '1 minute',
+});
+
 fastify.register(fastifyJwt, {
   secret: resolveJwtSecret(),
 });
@@ -98,6 +108,21 @@ fastify.register(govReportsRoutes, { prefix: '/api/gov/reports' });
 fastify.register(govClustersRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govClusterActionRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govAdminRoutes, { prefix: '/api/gov/admin' });
+
+// Return consistent JSON errors and keep internals out of 5xx responses.
+fastify.setErrorHandler((error: any, request, reply) => {
+  const statusCode =
+    typeof error.statusCode === 'number' && error.statusCode >= 400 ? error.statusCode : 500;
+  if (statusCode >= 500) {
+    request.log.error(error);
+    return reply.status(statusCode).send({ error: 'Internal server error' });
+  }
+  return reply.status(statusCode).send({ error: error.message });
+});
+
+fastify.setNotFoundHandler((_request, reply) => {
+  reply.status(404).send({ error: 'Not found' });
+});
 
 // Health check — no auth needed, safe to register inline
 fastify.get('/api/health', async () => ({ status: 'ok' }));
