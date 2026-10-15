@@ -59,4 +59,11 @@ class ReportLocation {
       address: json['address'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'latitude': latitude,
+        'longitude': longitude,
+        if (accuracy != null) 'accuracy': accuracy,
+        if (address != null) 'address': address,
+      };
 }

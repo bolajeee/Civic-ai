@@ -347,11 +347,30 @@ export default async function reportRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({ error: 'Unknown category' });
         }
 
+        const citizenId = (request.user as { id: string }).id;
+        if (input.clientSubmissionId) {
+          const existing = await query(
+            `SELECT id, public_id, status, submitted_at
+             FROM reports
+             WHERE citizen_id = $1 AND client_submission_id = $2`,
+            [citizenId, input.clientSubmissionId],
+          );
+          if (existing.rows.length > 0) {
+            const report = existing.rows[0];
+            return reply.status(200).send({
+              report: {
+                id: report.id,
+                publicId: report.public_id,
+                status: report.status,
+                submittedAt: report.submitted_at,
+              },
+            });
+          }
+        }
+
         // Generated up front so the storage path and the database row share an
         // id, which lets the upload happen before the transaction opens.
         const reportId = crypto.randomUUID();
-        const citizenId = (request.user as { id: string }).id;
-
         for (const [index, file] of files.entries()) {
           const extension =
             EXTENSION_BY_MIME[file.mimetype] ??
@@ -387,8 +406,8 @@ export default async function reportRoutes(fastify: FastifyInstance) {
 
           const report = await client.query(
             `INSERT INTO reports
-               (id, citizen_id, category_id, description, location_id)
-             VALUES ($1, $2, $3, $4, $5)
+               (id, citizen_id, category_id, description, location_id, client_submission_id)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id, public_id, status, submitted_at`,
             [
               reportId,
@@ -396,6 +415,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
               input.categoryId,
               input.description ?? null,
               locationId,
+              input.clientSubmissionId ?? null,
             ],
           );
 

@@ -21,6 +21,12 @@ class ReportCategory {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'slug': slug,
+        'label': label,
+      };
+
   @override
   bool operator ==(Object other) =>
       other is ReportCategory && other.id == id;

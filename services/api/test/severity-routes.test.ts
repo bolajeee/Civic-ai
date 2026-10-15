@@ -30,9 +30,12 @@ beforeEach(() => {
 afterEach(() => { mock.restoreAll(); process.env = { ...savedEnv }; });
 after(async () => { await app.close(); await pool.end(); });
 function auth() { return { authorization: 'Bearer ' + app.jwt.sign({ id: citizen, role: 'CITIZEN' }) }; }
-function form(types: string[]) {
+function form(types: string[], clientSubmissionId?: string) {
   const boundary = 'severity-boundary';
-  const fields = `--${boundary}\r\nContent-Disposition: form-data; name="categoryId"\r\n\r\n${category}\r\n`;
+  const idempotencyField = clientSubmissionId
+    ? `--${boundary}\r\nContent-Disposition: form-data; name="clientSubmissionId"\r\n\r\n${clientSubmissionId}\r\n`
+    : '';
+  const fields = `${idempotencyField}--${boundary}\r\nContent-Disposition: form-data; name="categoryId"\r\n\r\n${category}\r\n`;
   const files = types.map((type, i) => `--${boundary}\r\nContent-Disposition: form-data; name="photos"; filename="${i}.photo"\r\nContent-Type: ${type}\r\n\r\nphoto\r\n`).join('');
   return { method: 'POST' as const, url: '/api/reports',
     headers: { ...auth(), 'content-type': 'multipart/form-data; boundary=' + boundary },
@@ -86,6 +89,23 @@ test('disabled severity requires no migration or job insert', async () => {
   assert.equal(response.statusCode, 201);
   assert.equal(response.json().report.aiSeverityStatus, 'disabled');
   assert.ok(!calls.some(c => c.sql.includes('report_ai_analyses')));
+});
+test('a repeated client submission id returns the original report without uploading', async () => {
+  const submissionId = '33333333-3333-4333-8333-333333333333';
+  mock.method(pool, 'query', async (sql: string, params: unknown[]) => {
+    if (sql.includes('FROM reports')) {
+      assert.deepEqual(params, [citizen, submissionId]);
+      return { rows: [{ id: 'original', public_id: 'CR-9', status: 'PENDING', submitted_at: new Date('2026-10-15T12:00:00Z') }] };
+    }
+    return { rows: [{ id: category }] };
+  });
+  mock.method(supabase.storage, 'from', () => ({
+    upload: async () => { throw new Error('must not upload'); },
+  }));
+  const response = await app.inject(form(['image/jpeg'], submissionId));
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().report.id, 'original');
+  assert.equal(response.json().report.publicId, 'CR-9');
 });
 test('job insertion failure rolls back report/media and cleans up uploads', async () => {
   const { calls, removed } = submissionDatabase(true);

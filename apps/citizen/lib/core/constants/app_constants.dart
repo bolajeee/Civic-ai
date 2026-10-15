@@ -42,6 +42,7 @@ abstract final class AppConstants {
   static const String keyDarkMode = 'dark_mode';
   static const String keyNotificationsEnabled = 'notifications_enabled';
   static const String keyLanguage = 'language';
+  static const String keyPendingReports = 'pending_reports_v1';
 
   // Citizen reports
   //

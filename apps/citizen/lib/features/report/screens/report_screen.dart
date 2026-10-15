@@ -14,6 +14,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../providers/report_draft_provider.dart';
 import '../providers/report_history_provider.dart';
 import '../providers/report_summary_provider.dart';
+import '../providers/report_sync_provider.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/description_field.dart';
 import '../widgets/location_field.dart';
@@ -66,15 +67,32 @@ class _ReportScreenState extends State<ReportScreen> {
     final draft = context.read<ReportDraftProvider>();
     final history = context.read<ReportHistoryProvider>();
 
-    final created = await draft.submit();
+    final result = await draft.submit();
     if (!mounted) return;
 
     // On failure the provider has written `errorMessage`, which is rendered
     // above the button; the draft is deliberately left intact so nothing the
     // citizen typed or photographed is lost.
-    if (created == null) return;
+    if (result == null) return;
 
     draft.clear();
+
+    if (result.queued) {
+      await context.read<ReportSyncProvider>().refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You are offline. The report is saved and will send automatically.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go(AppRoutes.home);
+      return;
+    }
+
+    final created = result.report!;
 
     // The new report should be on Home and in History the moment the citizen
     // gets there, rather than only after a pull-to-refresh.

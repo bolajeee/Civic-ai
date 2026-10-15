@@ -28,10 +28,25 @@ import govReportsRoutes from './routes/gov-reports';
 import govClustersRoutes from './routes/gov-clusters';
 import govClusterActionRoutes from './routes/gov-cluster-actions';
 import govAdminRoutes from './routes/gov-admin';
+import observabilityRoutes from './routes/observability';
+import { pool } from './db';
 
 // Set TRUST_PROXY=true behind a reverse proxy so request.ip (used by rate
 // limiting) is the client address rather than the proxy's.
-const fastify = Fastify({ logger: true, trustProxy: process.env.TRUST_PROXY === 'true' });
+const fastify = Fastify({
+  logger: {
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'request.headers.authorization',
+        'request.headers.cookie',
+      ],
+      censor: '[REDACTED]',
+    },
+  },
+  trustProxy: process.env.TRUST_PROXY === 'true',
+});
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
@@ -46,6 +61,7 @@ fastify.addHook('onClose', async () => {
   stopClusteringWorker();
   stopSeverityWorker();
   stopPriorityWorker();
+  await pool.end();
 });
 
 // ---------------------------------------------------------------------------
@@ -93,6 +109,7 @@ fastify.register(fastifyMultipart, {
 
 // Must be registered before any route that uses fastify.authenticate
 fastify.register(authenticatePlugin);
+fastify.register(observabilityRoutes);
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -123,9 +140,6 @@ fastify.setErrorHandler((error: any, request, reply) => {
 fastify.setNotFoundHandler((_request, reply) => {
   reply.status(404).send({ error: 'Not found' });
 });
-
-// Health check — no auth needed, safe to register inline
-fastify.get('/api/health', async () => ({ status: 'ok' }));
 
 // ---------------------------------------------------------------------------
 // Start
@@ -166,5 +180,22 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+let shuttingDown = false;
+const shutdown = async (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  fastify.log.info({ signal }, 'Graceful shutdown started');
+  try {
+    await fastify.close();
+    process.exit(0);
+  } catch (error) {
+    fastify.log.error({ err: error }, 'Graceful shutdown failed');
+    process.exit(1);
+  }
+};
+
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+process.once('SIGINT', () => void shutdown('SIGINT'));
 
 start();

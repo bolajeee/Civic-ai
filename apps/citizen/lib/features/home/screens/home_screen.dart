@@ -9,6 +9,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../report/models/submitted_report.dart';
 import '../../report/providers/report_history_provider.dart';
 import '../../report/providers/report_summary_provider.dart';
+import '../../report/providers/report_sync_provider.dart';
 import '../../report/widgets/report_summary_status.dart';
 import '../../report/models/relative_time.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
@@ -99,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 await Future.wait([
                   context.read<ReportHistoryProvider>().refresh(),
                   context.read<ReportSummaryProvider>().refresh(),
+                  context.read<ReportSyncProvider>().refreshAndSync(),
                 ]);
               },
               child: CustomScrollView(
@@ -132,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           pending: summary?.pending,
                         ),
                         const ReportSummaryStatus(),
+                        const _PendingSyncStatus(),
                         const SizedBox(height: 24),
                         _SectionHeader(
                           title: 'Recent Reports',
@@ -237,6 +240,47 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((part) =>
             '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
         .join(' ');
+  }
+}
+
+class _PendingSyncStatus extends StatelessWidget {
+  const _PendingSyncStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    final sync = context.watch<ReportSyncProvider>();
+    if (sync.pendingCount == 0) return const SizedBox.shrink();
+    final count = sync.pendingCount;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.statusPendingBg,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+      ),
+      child: Row(
+        children: [
+          if (sync.isSyncing)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            const Icon(Icons.cloud_upload_outlined, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count report${count == 1 ? '' : 's'} waiting to sync',
+            ),
+          ),
+          TextButton(
+            onPressed: sync.isSyncing ? null : sync.refreshAndSync,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

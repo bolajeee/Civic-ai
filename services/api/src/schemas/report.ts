@@ -24,6 +24,7 @@ const optionalText = (max: number) =>
  * does not block a submission; the route enforces that they arrive together.
  */
 export const createReportSchema = z.object({
+  clientSubmissionId: z.string().uuid().optional(),
   categoryId: z.string().uuid(),
   description: optionalText(2000),
   latitude: z.preprocess(

@@ -15,11 +15,20 @@ class AppSettingsProvider extends ChangeNotifier {
   Locale get locale => Locale(_languageCode);
 
   Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    _darkMode = prefs.getBool(AppConstants.keyDarkMode) ?? false;
-    _notificationsEnabled =
-        prefs.getBool(AppConstants.keyNotificationsEnabled) ?? true;
-    _languageCode = prefs.getString(AppConstants.keyLanguage) ?? 'en';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _darkMode = prefs.getBool(AppConstants.keyDarkMode) ?? false;
+      _notificationsEnabled =
+          prefs.getBool(AppConstants.keyNotificationsEnabled) ?? true;
+      _languageCode = prefs.getString(AppConstants.keyLanguage) ?? 'en';
+    } catch (_) {
+      // Keep the in-memory defaults if preferences are temporarily
+      // unavailable; settings can still be changed normally in this session.
+    } finally {
+      // Initialization now runs after runApp(), so publish the restored values
+      // to MaterialApp once the platform-backed preferences call completes.
+      notifyListeners();
+    }
   }
 
   Future<void> setDarkMode(bool value) async {

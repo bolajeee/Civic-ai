@@ -89,19 +89,20 @@ persistence, summary parsing and router redirects.
 - [x] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)
-**Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Reviewed 2026-10-07: the dev database has only 11 migrations recorded. The cluster tables exist (applied by hand, not recorded), but the severity migration (`input_snapshot`, widened analysis-type constraint) and all `issue_cluster_priority_*` tables are missing. No AI flag is enabled and no OpenAI key is set, so none of the items below has run against a database or a model.
+**Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Re-audited 2026-10-15: all 21 repository migrations are recorded in the configured development database, including clustering, severity, priority, report versioning, approvals, and submission idempotency. The live government validation passes with the priority branch enabled. No AI flag is enabled and no OpenAI key is configured, so the model-backed pipeline still has not been validated end to end.
 
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending; default model name `gpt-6-luna` unverified)
 - [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
+- [ ] Image-vector embeddings and visual-similarity scoring (the current duplicate score intentionally redistributes that weight across geo, semantic text, and category signals)
 - [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
-- [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code ready, migration applied by hand but not recorded, no clustering run yet)
-- [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, migration not applied to the dev database, OpenAI key configuration and database validation pending; default model name `gpt-6-luna` unverified)
-- [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, migration not applied to the dev database; scores stay INCOMPLETE until sourced context is entered)
-- [ ] Validate Phase 3 end to end: apply the severity and priority migrations, enable the flags with a key, and confirm a submitted report flows through classification, embedding, duplicate search, clustering, severity and priority
+- [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, migration recorded, no model-backed clustering run yet)
+- [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, migration recorded, OpenAI key configuration and model/database validation pending; default model name `gpt-6-luna` unverified)
+- [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, migration recorded; scores stay INCOMPLETE until sourced context is entered)
+- [ ] Validate Phase 3 end to end: enable the flags with a key and confirm a submitted report flows through classification, embedding, duplicate search, clustering, severity and priority
 - [ ] Pipeline gaps found in review:
-  - A report whose embedding ends `FAILED` is never duplicate-searched, so it is never clustered and stays "unclustered" with no retry or singleton fallback
-  - Duplicate search only considers earlier reports that are already clustered; if a later report's embedding finishes first, the pair is never matched and they form separate clusters
-  - `GET /api/gov/issue-clusters/:id/priority` returns an input snapshot containing each member report's `citizenId`; `requireGovernment` in `gov-priority.ts` has no error handling
+  - [ ] A report whose embedding ends `FAILED` is never duplicate-searched, so it is never clustered and stays "unclustered" with no retry or singleton fallback
+  - [ ] Duplicate search only considers earlier reports that are already clustered; if a later report's embedding finishes first, the pair is never matched and they form separate clusters
+  - [ ] `GET /api/gov/issue-clusters/:id/priority` returns an input snapshot containing each member report's `citizenId`; `requireGovernment` in `gov-priority.ts` has no error handling
 
 ### Phase 4: Government Dashboard (In Progress)
 
@@ -129,7 +130,7 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   states, responsive overflow, and sign-out. Live overview/map queries and account
   authorization pass with `AI_PRIORITY_ENABLED=false`; password-based browser
   sign-in remains pending.
-  - [ ] Live-validate the overview's priority branch (`priority_state` CTE). The live script forces priority off and the dev database lacks the priority tables, so that SQL has only been exercised through mocked tests.
+  - [x] Live-validate the overview's priority branch (`priority_state` CTE) against the migrated development database (`npm run validate:government`, re-run 2026-10-15).
 - [x] Map interface (PostGIS layers)
   - [x] Protected viewport GeoJSON API, report GPS and non-empty cluster centroids, exact category/status filters, per-layer caps and missing-coordinate counts
   - [x] Leaflet street map, layer controls, pan/zoom loading, selectable markers and accessible results, GPS accuracy and centroid uncertainty
@@ -146,7 +147,8 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Issue clusters view
   - [x] Protected paginated API and dashboard list with reference/category/status search, non-empty clusters, lifecycle and review counts, centroid, and feature-aware priority state
   - [x] Independently loadable aggregate summary with grouping method counts, confidence, fixed anchor, first/last assignment times, retained refresh errors, responsive layout, and no citizen identity/evidence leakage
-  - [x] API/government builds, all 133 API tests and 15 web tests pass; live database fixture and browser interaction validation remain pending
+  - [x] API/government builds, all 133 API tests and 15 web tests pass
+  - [ ] Validate the issue-cluster view with live database fixtures and browser interaction checks
   - Contract and validation commands: [government issue clusters API](government-clusters-api.md)
 - [x] Cluster evidence view: original report references, descriptions, photos, locations/GPS accuracy, dates, and statuses alongside the combined summary
   - [x] Independently paginated evidence endpoint and responsive source-report cards with ordered, renewable 15-minute photo links and unavailable-photo fallbacks
@@ -162,7 +164,8 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Review queue
   - [x] Protected, paginated `GET /api/gov/issue-clusters/review-queue` lists grouping proposals oldest first (default pending) with status, reason, category and literal-search filters, plus overall pending/accepted/dismissed counts
   - [x] Each proposal shows the report awaiting grouping, its current cluster and assignment method, the proposed cluster, the matched report, score, automatic threshold, ambiguity margin, distance/semantic/category signals and versions; missing signals, GPS and decisions are explicit
-  - [x] "Review queue" page in the government app. Live-database and browser validation of the read-only queue remain pending
+  - [x] "Review queue" page in the government app
+  - [ ] Validate the read-only review queue against the live database and with browser interaction checks
   - Contract: [government issue clusters API](government-clusters-api.md)
 - [x] Administrator review actions: approve/dismiss candidates, remove/move reports, merge/split clusters, and record reviewer, timestamp, and reason
   - [x] Administrator-only (database-checked) `POST` actions, each in one transaction serialized with the clustering worker; a reason (1-1000 characters) is mandatory and every action is stored in the append-only `issue_cluster_review_actions` table with reviewer, timestamp and before/after clusters
@@ -170,7 +173,7 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Review queue shows approve/dismiss with a reason; the cluster evidence view has move/remove/split/merge controls and a review history; operators see history read-only
   - [x] API (152) and web (18) tests and builds pass; the real SQL was validated against the dev PostgreSQL/PostGIS in a rolled-back transaction (`npx tsx scripts/validate-cluster-actions.ts` from `services/api`)
 
-### Phase 5: Government Reporting (In Progress)
+### Phase 5: Government Reporting (Implementation Complete; Shipping Validation Pending)
 - [x] Issue report compilation
   - [x] Protected live compilation API and dashboard brief combine current cluster metadata, observation window, lifecycle/location/description coverage, source-linked findings, original described observations, and a current source register without citizen identity
   - [x] Compilation is explicitly labelled a live, unapproved, non-versioned draft; immutable versions, approvals, PDF and print remain separate milestones below
@@ -199,6 +202,15 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [ ] Security audits & least privilege (done: `JWT_SECRET` and the reset pepper are required when `NODE_ENV=production`, CORS uses a `CORS_ORIGINS` allowlist, `/api/test-upload` removed; broader audit and least-privilege review still pending)
 - [x] Rate limiting (`@fastify/rate-limit`: 300/min per IP, 30/min on auth routes; set `TRUST_PROXY=true` behind a proxy; in-memory, so per instance)
 - [x] Error handling (global JSON error handler hides 5xx internals; JSON 404)
-- [ ] Offline handling (Flutter sync queue)
-- [ ] Monitoring & Observability
-- [ ] Automated Testing
+- [x] Offline handling (Flutter sync queue: durable account-scoped photo/metadata queue, reconnect/session/manual retry, pending-state UI, and queue tests)
+- [x] Monitoring & Observability (redacted structured logs, request IDs, liveness/readiness, protected Prometheus metrics, graceful shutdown, and endpoint tests)
+- [x] Automated Testing (pull-request/main CI for API and government test/build plus Flutter analyze/test gates; see [hardening operations](hardening.md))
+
+Hardening validation (re-audited 2026-10-15): all 171 API tests and the API
+build pass; all 21 government web tests and the production build pass; the live
+government database validation passes in both priority modes; Flutter analyze
+is clean. The most recent full citizen run recorded all 43 tests passing, but
+the tests were not re-run during this audit because an active Flutter debug
+session held the SDK lock. All 21 repository migrations, including report
+submission idempotency, are recorded in the configured development database.
+See [Shipping Checklist](shipping.md) for the remaining release gates.

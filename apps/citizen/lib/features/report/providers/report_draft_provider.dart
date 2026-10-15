@@ -6,19 +6,32 @@ import '../models/report_location.dart';
 import '../models/report_photo.dart';
 import '../models/submitted_report.dart';
 import '../services/location_service.dart';
+import '../services/offline_report_queue.dart';
 import '../services/photo_picker_service.dart';
 import '../services/report_service.dart';
 
 /// Holds the citizen's in-progress report, from the first photo to submission.
 ///
 /// One draft object owns every field so the screen stays a view over this state
-/// rather than a second place where the report is assembled. Nothing here is
-/// persisted: a report abandoned mid-way is dropped, which is what the citizen
-/// asked for by leaving.
+/// rather than a second place where the report is assembled. An abandoned
+/// in-progress draft is dropped; persistence begins only after a transient
+/// submission failure moves a complete report into the offline queue.
+class ReportSubmissionResult {
+  const ReportSubmissionResult.submitted(this.report) : queued = false;
+  const ReportSubmissionResult.queued()
+      : report = null,
+        queued = true;
+
+  final SubmittedReport? report;
+  final bool queued;
+}
+
 class ReportDraftProvider extends ChangeNotifier {
   final PhotoPickerService _photoPicker = PhotoPickerService.instance;
   final LocationService _locationService = LocationService.instance;
   final ReportService _reports = ReportService.instance;
+  final OfflineReportQueue _offlineQueue = OfflineReportQueue.instance;
+  String? _citizenId;
 
   // --- Photos ---------------------------------------------------------------
   List<ReportPhoto> _photos = <ReportPhoto>[];
@@ -95,6 +108,8 @@ class ReportDraftProvider extends ChangeNotifier {
   /// citizen who cannot get a fix must still be able to report a hazard.
   bool get canSubmit =>
       _category != null && _photos.isNotEmpty && !_isSubmitting;
+
+  void setCitizen(String? citizenId) => _citizenId = citizenId;
 
   // ---------------------------------------------------------------------------
   // Photos
@@ -193,16 +208,18 @@ class ReportDraftProvider extends ChangeNotifier {
   /// Posts the draft. Returns the created report, or null if it failed — in
   /// which case [errorMessage] explains why and the draft is left intact so
   /// nothing the citizen entered is lost.
-  Future<SubmittedReport?> submit() async {
+  Future<ReportSubmissionResult?> submit() async {
     final category = _category;
     if (category == null || _photos.isEmpty || _isSubmitting) return null;
 
     _isSubmitting = true;
     _errorMessage = null;
+    final clientSubmissionId = createClientSubmissionId();
     notifyListeners();
 
     try {
-      return await _reports.submit(
+      final report = await _reports.submit(
+        clientSubmissionId: clientSubmissionId,
         category: category,
         // A snapshot, not the live list. Building the multipart body awaits a
         // file read per photo, and the remove buttons are still tappable while
@@ -212,7 +229,26 @@ class ReportDraftProvider extends ChangeNotifier {
         description: _description,
         location: _location,
       );
+      return ReportSubmissionResult.submitted(report);
     } on ReportSubmissionException catch (e) {
+      final citizenId = _citizenId;
+      if (e.isRetryable && citizenId != null) {
+        try {
+          await _offlineQueue.enqueue(
+            clientSubmissionId: clientSubmissionId,
+            citizenId: citizenId,
+            category: category,
+            photos: List<ReportPhoto>.of(_photos),
+            description: _description,
+            location: _location,
+          );
+          return const ReportSubmissionResult.queued();
+        } catch (_) {
+          _errorMessage =
+              '${e.message} The report could not be saved for offline retry.';
+          return null;
+        }
+      }
       _errorMessage = e.message;
       return null;
     } catch (_) {

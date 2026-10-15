@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,14 +10,10 @@ import 'features/auth/providers/auth_provider.dart';
 import 'features/report/providers/report_draft_provider.dart';
 import 'features/report/providers/report_history_provider.dart';
 import 'features/report/providers/report_summary_provider.dart';
+import 'features/report/providers/report_sync_provider.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
 
   // Create the provider BEFORE runApp so the instance is ready.
   // initialize() is called AFTER runApp — by that point GoRouter has mounted
@@ -23,15 +21,21 @@ void main() async {
   // notifyListeners() inside initialize() reliably triggers the redirect.
   final authProvider = AuthProvider();
   final settingsProvider = AppSettingsProvider();
-  await settingsProvider.initialize();
 
   runApp(CivicReportApp(
     authProvider: authProvider,
     settingsProvider: settingsProvider,
   ));
 
-  // Kick off session restore now that the widget tree is listening.
-  authProvider.initialize();
+  // Platform channels can be slow while a fresh emulator is starting. Do not
+  // hold the first Flutter frame behind them: render the splash screen first,
+  // then restore preferences and the session in the background.
+  unawaited(SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]));
+  unawaited(settingsProvider.initialize());
+  unawaited(authProvider.initialize());
 }
 
 class CivicReportApp extends StatelessWidget {
@@ -60,8 +64,15 @@ class CivicReportApp extends StatelessWidget {
         // Owns the in-progress report. Registered app-wide so the form and its
         // fields share one draft; ReportScreen resets it on entry, so leaving
         // the form discards the staged photos.
-        ChangeNotifierProvider<ReportDraftProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, ReportDraftProvider>(
           create: (_) => ReportDraftProvider(),
+          update: (_, auth, draft) =>
+              draft!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, ReportSyncProvider>(
+          create: (_) => ReportSyncProvider(),
+          update: (_, auth, sync) =>
+              sync!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
         ),
         // Owns the report history. Registered here rather than on the history
         // screen so the list survives navigation and is already loaded when the

@@ -12,9 +12,10 @@ import '../models/submitted_report.dart';
 ///
 /// [message] is written to be shown as-is; the screens do not interpret it.
 class ReportSubmissionException implements Exception {
-  const ReportSubmissionException(this.message);
+  const ReportSubmissionException(this.message, {this.isRetryable = false});
 
   final String message;
+  final bool isRetryable;
 
   @override
   String toString() => 'ReportSubmissionException($message)';
@@ -36,7 +37,8 @@ class ReportService {
           await _dio.get<Map<String, dynamic>>('/api/reports/summary');
       return ReportSummary.fromJson(response.data ?? {});
     } on DioException catch (err) {
-      throw ReportSubmissionException(_messageFor(err));
+      throw ReportSubmissionException(_messageFor(err),
+          isRetryable: _isRetryable(err));
     }
   }
 
@@ -56,7 +58,8 @@ class ReportService {
           .map((json) => ReportCategory.fromJson(json as Map<String, dynamic>))
           .toList(growable: false);
     } on DioException catch (err) {
-      throw ReportSubmissionException(_messageFor(err));
+      throw ReportSubmissionException(_messageFor(err),
+          isRetryable: _isRetryable(err));
     }
   }
 
@@ -69,6 +72,7 @@ class ReportService {
   /// [location] is optional. A citizen indoors or underground still has a
   /// hazard worth reporting, so a missing fix is not a failure.
   Future<SubmittedReport> submit({
+    required String clientSubmissionId,
     required ReportCategory category,
     required List<ReportPhoto> photos,
     String? description,
@@ -77,6 +81,7 @@ class ReportService {
     final trimmedDescription = description?.trim();
 
     final formData = FormData.fromMap({
+      'clientSubmissionId': clientSubmissionId,
       'categoryId': category.id,
       if (trimmedDescription != null && trimmedDescription.isNotEmpty)
         'description': trimmedDescription,
@@ -123,7 +128,8 @@ class ReportService {
         location: location,
       );
     } on DioException catch (err) {
-      throw ReportSubmissionException(_messageFor(err));
+      throw ReportSubmissionException(_messageFor(err),
+          isRetryable: _isRetryable(err));
     }
   }
 
@@ -147,7 +153,8 @@ class ReportService {
           .map((json) => SubmittedReport.fromJson(json as Map<String, dynamic>))
           .toList(growable: false);
     } on DioException catch (err) {
-      throw ReportSubmissionException(_messageFor(err));
+      throw ReportSubmissionException(_messageFor(err),
+          isRetryable: _isRetryable(err));
     }
   }
 
@@ -165,7 +172,8 @@ class ReportService {
       }
       return SubmittedReport.fromJson(report);
     } on DioException catch (err) {
-      throw ReportSubmissionException(_messageFor(err));
+      throw ReportSubmissionException(_messageFor(err),
+          isRetryable: _isRetryable(err));
     }
   }
 
@@ -206,5 +214,16 @@ class ReportService {
         }
         return 'Something went wrong. Try again.';
     }
+  }
+
+  bool _isRetryable(DioException err) {
+    if (err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout) {
+      return true;
+    }
+    final status = err.response?.statusCode;
+    return status == 408 || status == 429 || (status != null && status >= 500);
   }
 }
