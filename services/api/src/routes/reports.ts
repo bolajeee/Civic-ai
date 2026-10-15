@@ -538,7 +538,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { limit, offset } = listReportsSchema.parse(request.query);
+        const { limit, offset, status, q } = listReportsSchema.parse(request.query);
         const citizenId = (request.user as { id: string }).id;
         const aiEnabled = isClassificationEnabled();
         const severityEnabled = isSeverityEnabled();
@@ -604,12 +604,17 @@ export default async function reportRoutes(fastify: FastifyInstance) {
            ${aiJoins}
            ${severityJoin}
            WHERE r.citizen_id = $1
-           ORDER BY r.submitted_at DESC
+             AND ($4::report_status IS NULL OR r.status = $4::report_status)
+             AND ($5::text IS NULL OR strpos(lower(concat_ws(' ', r.public_id,
+               r.description, c.label, c.slug, l.address)), lower($5)) > 0)
+           ORDER BY r.submitted_at DESC, r.id DESC
            LIMIT $2 OFFSET $3`,
-          [citizenId, limit, offset],
+          [citizenId, limit + 1, offset, status ?? null, q ?? null],
         );
 
-        const rows = result.rows as ReportRow[];
+        const fetchedRows = result.rows as ReportRow[];
+        const hasMore = fetchedRows.length > limit;
+        const rows = fetchedRows.slice(0, limit);
 
         // Signed in one batch rather than one call per row.
         const thumbnailUrls = await getImageUrls(
@@ -619,6 +624,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         );
 
         return reply.status(200).send({
+          pagination: { limit, offset, hasMore },
           reports: rows.map((row) => ({
             id: row.id,
             publicId: row.public_id,

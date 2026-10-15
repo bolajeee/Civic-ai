@@ -66,7 +66,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
   - [x] `/reports` — newest-first list with thumbnail, category, `CR-` number, location and relative date
   - [x] Status badges (Pending / In Progress / Resolved / Rejected) coloured from `AppColors`
   - [x] Status filters use loaded history data; detail screens refresh from the owner-scoped report-detail endpoint
-  - [ ] Load additional history pages and filter/search the full history — currently only the first 20 reports are loaded; Home search and History filters operate on that page
+  - [x] Load additional history pages and filter/search the full history — owner-scoped status/search parameters, deterministic API pagination, infinite History loading, debounced full-dataset Home search, account-switch clearing, and stale-response protection are implemented with API/provider regression tests
   - [x] Home/Profile counts use `GET /api/reports/summary` through a shared model/service/provider, independently of history; loading, retry, pull-to-refresh, refresh after submission, and account-change clearing included
   - [x] Submit now clears the draft and returns Home with the new report number
 
@@ -84,8 +84,9 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 - [x] Notifications: durable report-status inbox, owner-scoped preferences, FCM device-token registration/rotation, logout cleanup, retrying HTTP v1 delivery worker, deep links, and Android/iOS client wiring are implemented with API/model tests; production Firebase/APNs configuration and physical-device acceptance remain shipping gates ([setup and acceptance test](notifications.md))
 
 Citizen validation (re-run 2026-10-15): `flutter analyze` reports no issues and
-all 45 Flutter tests pass, including notification parsing, receipt generation,
-detail parsing, settings persistence, summary parsing and router redirects.
+all 48 Flutter tests pass, including history pagination/search, notification
+parsing, receipt generation, detail parsing, settings persistence, summary
+parsing and router redirects.
 - [x] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)
@@ -206,10 +207,10 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Monitoring & Observability (redacted structured logs, request IDs, liveness/readiness, protected Prometheus metrics, graceful shutdown, and endpoint tests)
 - [x] Automated Testing (pull-request/main CI for API and government test/build plus Flutter analyze/test gates; see [hardening operations](hardening.md))
 
-Hardening validation (re-audited 2026-10-15): all 175 API tests and the API
+Hardening validation (re-audited 2026-10-15): all 177 API tests and the API
 build pass; all 21 government web tests and the production build pass; the live
 government database validation passes in both priority modes; Flutter analyze
-is clean and all 45 citizen tests pass. All 21 previously existing repository
+is clean and all 48 citizen tests pass. All 21 previously existing repository
 migrations are recorded in the configured development database; the new
 notification migration is implemented but has not yet been applied or
 live-validated.

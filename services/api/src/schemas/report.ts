@@ -48,6 +48,11 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 export const listReportsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED']).optional(),
+  q: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().max(100).optional(),
+  ),
 });
 
 /** Citizen-facing report reference used by detail routes and deep links. */

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _searchController;
+  Timer? _searchDebounce;
   String _query = '';
 
   @override
@@ -43,13 +46,14 @@ class _HomeScreenState extends State<HomeScreen> {
       // Home shows the newest three, so it needs the list whether or not the
       // citizen has opened History yet. Skipped when it is already in hand —
       // returning from the Report tab must not re-fetch what we just refreshed.
-      if (!history.hasLoaded) history.load();
+      if (!history.hasRecentLoaded) history.load();
       context.read<ReportSummaryProvider>().refresh();
     });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -64,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final nameParts = displayName.split(RegExp(r'\s+'));
     final String firstName = nameParts.isEmpty ? 'there' : nameParts.first;
     String? locationLabel;
-    for (final report in history.reports) {
+    for (final report in history.recentReports) {
       if (report.location != null) {
         locationLabel = report.location!.displayLabel;
         break;
@@ -73,19 +77,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Mapped through the same adapter History and Details use, so a report
     // cannot read one way here and another way there.
-    final allReports =
-        history.reports.map(ReportCardData.fromSubmittedReport).toList();
-
     final query = _query.trim().toLowerCase();
-    final reports = allReports
-        .where((report) {
-          return query.isEmpty ||
-              report.title.toLowerCase().contains(query) ||
-              report.category.toLowerCase().contains(query) ||
-              report.location.toLowerCase().contains(query);
-        })
-        .take(3)
-        .toList();
+    final reports =
+        (query.isEmpty ? history.recentReports : history.searchResults)
+            .map(ReportCardData.fromSubmittedReport)
+            .take(3)
+            .toList();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -98,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
             RefreshIndicator(
               onRefresh: () async {
                 await Future.wait([
-                  context.read<ReportHistoryProvider>().refresh(),
+                  context.read<ReportHistoryProvider>().refreshRecent(),
                   context.read<ReportSummaryProvider>().refresh(),
                   context.read<ReportSyncProvider>().refreshAndSync(),
                 ]);
@@ -125,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 20),
                         _SearchBar(
                           controller: _searchController,
-                          onChanged: (value) => setState(() => _query = value),
+                          onChanged: _onSearchChanged,
                         ),
                         const SizedBox(height: 20),
                         _StatsRow(
@@ -143,7 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 12),
                         // The three most recent, narrowed by the search box.
-                        if (!history.hasLoaded)
+                        if (!history.hasRecentLoaded ||
+                            (query.isNotEmpty && history.isSearching))
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 32),
                             child: Center(
@@ -160,7 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _query.isEmpty
                                     ? 'No reports yet. Tap “Report Issue” to '
                                         'file your first one.'
-                                    : 'No reports match your search.',
+                                    : history.searchError ??
+                                        'No reports match your search.',
                               ),
                             ),
                           )
@@ -213,6 +212,17 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         },
       ),
+    );
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    _searchDebounce?.cancel();
+    final history = context.read<ReportHistoryProvider>()..clearSearch();
+    if (value.trim().isEmpty) return;
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => history.search(value),
     );
   }
 

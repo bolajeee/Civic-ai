@@ -22,9 +22,8 @@ import '../providers/report_summary_provider.dart';
 // "Assigned") the server has never had, so a citizen could narrow the list to
 // a state no report could ever be in.
 //
-// The server has no status query parameter either, so this filters the loaded
-// page client-side. With `fetchHistory` capped at the first twenty reports that
-// is honest; it becomes wrong the day the list pages.
+// Status filtering is sent to the owner-scoped API, so each filter covers the
+// complete history and can be paginated independently.
 // ---------------------------------------------------------------------------
 
 /// Maps a `?filter=` query value to a status.
@@ -74,7 +73,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final history = context.read<ReportHistoryProvider>();
-      if (!history.hasLoaded) history.load();
+      history.setStatus(_activeFilter);
     });
   }
 
@@ -84,19 +83,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     // The same route rebuilt with a different query — Home's "Pending" stat
     // card pushing onto a History that is already open, for instance.
     if (widget.initialFilter != oldWidget.initialFilter) {
-      setState(() => _activeFilter = _statusFromQuery(widget.initialFilter));
+      final filter = _statusFromQuery(widget.initialFilter);
+      setState(() => _activeFilter = filter);
+      context.read<ReportHistoryProvider>().setStatus(filter);
     }
   }
 
   void _setFilter(ReportStatus? value) {
     if (_activeFilter == value) return;
     setState(() => _activeFilter = value);
-  }
-
-  List<SubmittedReport> _apply(List<SubmittedReport> reports) {
-    final filter = _activeFilter;
-    if (filter == null) return reports;
-    return reports.where((report) => report.status == filter).toList();
+    context.read<ReportHistoryProvider>().setStatus(value);
   }
 
   @override
@@ -164,39 +160,57 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
 
-    final reports = _apply(history.reports);
+    final reports = history.reports;
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () async {
-        await Future.wait([
-          context.read<ReportHistoryProvider>().refresh(),
-          context.read<ReportSummaryProvider>().refresh(),
-        ]);
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 320) history.loadMore();
+        return false;
       },
-      child: reports.isEmpty
-          ? _EmptyState(
-              filter: _activeFilter,
-              errorMessage: history.errorMessage,
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              // One extra leading row when a refresh failed, so the error sits
-              // above the reports rather than replacing them.
-              itemCount:
-                  reports.length + (history.errorMessage != null ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, index) {
-                if (history.errorMessage != null) {
-                  if (index == 0) {
-                    return ErrorBanner(message: history.errorMessage!);
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          await Future.wait([
+            context.read<ReportHistoryProvider>().refresh(),
+            context.read<ReportSummaryProvider>().refresh(),
+          ]);
+        },
+        child: reports.isEmpty
+            ? _EmptyState(
+                filter: _activeFilter,
+                errorMessage: history.errorMessage,
+              )
+            : ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                // One extra leading row when a refresh failed, so the error sits
+                // above the reports rather than replacing them.
+                itemCount: reports.length +
+                    (history.errorMessage != null ? 1 : 0) +
+                    (history.isLoadingMore ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, index) {
+                  if (history.errorMessage != null) {
+                    if (index == 0) {
+                      return ErrorBanner(message: history.errorMessage!);
+                    }
+                    index--;
                   }
-                  return _card(reports[index - 1]);
-                }
-                return _card(reports[index]);
-              },
-            ),
+                  if (index == reports.length && history.isLoadingMore) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    );
+                  }
+                  return _card(reports[index]);
+                },
+              ),
+      ),
     );
   }
 

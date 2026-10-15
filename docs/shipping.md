@@ -16,7 +16,7 @@ following release gates remain open:
 - [ ] Decide whether image-vector embeddings/visual similarity are a release requirement or an explicitly deferred capability.
 - [ ] Configure a production-approved model and key, then validate the complete AI pipeline end to end.
 - [ ] Validate government password sign-in and the remaining cluster/review browser flows against a provisioned environment.
-- [ ] Resolve citizen full-history pagination/search and configure/live-validate the implemented push notification path.
+- [ ] Configure and live-validate the implemented push notification path.
 - [ ] Replace placeholder mobile application IDs and Android debug signing with production identities and signing.
 - [ ] Publish and verify the Terms, Privacy Policy, and support endpoints currently referenced by the citizen app.
 - [ ] Define the production hosting, deployment, backup, rollback, and secret-management procedures; the repository currently has no deployment manifest or environment template.
@@ -25,10 +25,10 @@ following release gates remain open:
 ## Verified in the 2026-10-15 audit
 
 - [x] All 21 pre-notification migrations are recorded in the configured development database; the notification migration remains unapplied.
-- [x] API: 175 tests pass and the TypeScript production build succeeds.
+- [x] API: 177 tests pass and the TypeScript production build succeeds.
 - [x] Government web: 21 tests pass and the Vite production build succeeds.
 - [x] Live government database validation passes for overview, priority modes, map, reports, authorization, and rolled-back fixtures.
-- [x] Citizen static analysis reports no issues and all 45 tests pass.
+- [x] Citizen static analysis reports no issues and all 48 tests pass.
 
 ## 1. Release scope and ownership
 
@@ -44,7 +44,7 @@ following release gates remain open:
 
 - [ ] Citizen report journey passes: register/sign in -> permissions -> photo -> GPS -> category/description -> submit -> receipt/history/detail.
 - [ ] Offline submission passes for disconnect, timeout, retry, app restart, account switch, and duplicate-safe recovery.
-- [ ] Decide and document the release treatment for first-page-only citizen history/search.
+- [x] Citizen History loads subsequent pages and applies owner-scoped server-side status filters; Home search queries the full owner-scoped dataset.
 - [x] Push delivery, device-token registration/rotation, logout cleanup, notification preferences, and the in-app inbox are implemented; configuration and acceptance remain below.
 - [ ] Government journey passes: password sign-in -> overview -> map -> reports -> cluster evidence -> review action -> version -> approval -> PDF/print.
 - [ ] Administrator and operator capabilities are verified separately; citizens cannot access government routes.

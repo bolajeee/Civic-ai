@@ -96,7 +96,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
     // The new report should be on Home and in History the moment the citizen
     // gets there, rather than only after a pull-to-refresh.
-    unawaited(history.refresh());
+    unawaited(history.refreshRecent());
     unawaited(context.read<ReportSummaryProvider>().refresh(force: true));
 
     ScaffoldMessenger.of(context).showSnackBar(

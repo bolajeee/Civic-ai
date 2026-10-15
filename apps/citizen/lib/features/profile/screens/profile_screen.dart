@@ -31,7 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       context.read<ReportSummaryProvider>().refresh();
       final history = context.read<ReportHistoryProvider>();
-      if (!history.hasLoaded) history.load();
+      if (!history.hasRecentLoaded) history.load();
     });
   }
 
@@ -45,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name = _displayName(user?.fullName, email);
     final initials = _initials(name);
     String? location;
-    for (final report in history.reports) {
+    for (final report in history.recentReports) {
       if (report.location != null) {
         location = report.location!.displayLabel;
         break;

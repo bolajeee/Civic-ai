@@ -1,5 +1,29 @@
 # Citizen reports API
 
+## Citizen report history
+
+`GET /api/reports`
+
+Requires the citizen access token and always scopes results to the JWT user ID.
+It accepts `limit` (1–100, default 20), `offset` (default 0), an optional exact
+`status`, and an optional `q` of at most 100 characters. Search is a
+case-insensitive literal match over the public reference, description, category,
+and saved address; `%` and `_` have no wildcard meaning.
+
+Results use deterministic newest-first ordering and return one pagination object:
+
+```json
+{
+  "pagination": { "limit": 20, "offset": 0, "hasMore": true },
+  "reports": []
+}
+```
+
+The Flutter History screen requests subsequent pages as the citizen approaches
+the end of the list. Status changes restart at offset zero. Home uses the same
+endpoint for a debounced full-dataset search but requests only its first three
+matches. Client-supplied citizen identifiers are ignored.
+
 ## Citizen report details
 
 `GET /api/reports/:publicId`

@@ -21,6 +21,13 @@ class ReportSubmissionException implements Exception {
   String toString() => 'ReportSubmissionException($message)';
 }
 
+class ReportHistoryPage {
+  const ReportHistoryPage({required this.reports, required this.hasMore});
+
+  final List<SubmittedReport> reports;
+  final bool hasMore;
+}
+
 /// The reports API: categories, submission, and the citizen's own history.
 ///
 /// Requests go through [ApiClient] so they inherit the base URL, the bearer
@@ -137,21 +144,38 @@ class ReportService {
   ///
   /// Scoping to the signed-in citizen is the server's job, not a filter
   /// applied here — see the isolation rule in `docs/architecture.md`.
-  Future<List<SubmittedReport>> fetchHistory({
+  Future<ReportHistoryPage> fetchHistory({
     int limit = 20,
     int offset = 0,
+    ReportStatus? status,
+    String? query,
   }) async {
     try {
+      final normalizedQuery = query?.trim();
       final response = await _dio.get<Map<String, dynamic>>(
         '/api/reports',
-        queryParameters: {'limit': limit, 'offset': offset},
+        queryParameters: {
+          'limit': limit,
+          'offset': offset,
+          if (status != null && status != ReportStatus.unknown)
+            'status': status.apiValue,
+          if (normalizedQuery != null && normalizedQuery.isNotEmpty)
+            'q': normalizedQuery,
+        },
       );
 
       final reports = response.data?['reports'] as List<dynamic>? ?? [];
+      final pagination =
+          response.data?['pagination'] as Map<String, dynamic>? ?? const {};
 
-      return reports
-          .map((json) => SubmittedReport.fromJson(json as Map<String, dynamic>))
-          .toList(growable: false);
+      return ReportHistoryPage(
+        reports: reports
+            .map(
+              (json) => SubmittedReport.fromJson(json as Map<String, dynamic>),
+            )
+            .toList(growable: false),
+        hasMore: pagination['hasMore'] as bool? ?? reports.length == limit,
+      );
     } on DioException catch (err) {
       throw ReportSubmissionException(_messageFor(err),
           isRetryable: _isRetryable(err));

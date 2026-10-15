@@ -84,8 +84,10 @@ class CivicReportApp extends StatelessWidget {
         // Owns the report history. Registered here rather than on the history
         // screen so the list survives navigation and is already loaded when the
         // citizen returns to it after submitting.
-        ChangeNotifierProvider<ReportHistoryProvider>(
+        ChangeNotifierProxyProvider<AuthProvider, ReportHistoryProvider>(
           create: (_) => ReportHistoryProvider(),
+          update: (_, auth, history) =>
+              history!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
         ),
       ],
       child: _AppView(authProvider: authProvider),

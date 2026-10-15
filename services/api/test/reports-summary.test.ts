@@ -96,6 +96,48 @@ test('database failures return the standard error without leaking details', asyn
   }
 });
 
+test('history applies owner-scoped status and literal search before pagination', async () => {
+  const query = mock.method(pool, 'query', async (sql: string, params: unknown[]) => {
+    assert.match(sql, /WHERE r\.citizen_id = \$1/);
+    assert.match(sql, /r\.status = \$4::report_status/);
+    assert.match(sql, /strpos\(lower\(concat_ws/);
+    assert.match(sql, /ORDER BY r\.submitted_at DESC, r\.id DESC/);
+    assert.deepEqual(params, [citizenId, 3, 20, 'RESOLVED', '%_ flooded']);
+    return { rows: [1, 2, 3].map((value) => ({
+      id: `report-${value}`, public_id: `CR-${value}`, status: 'RESOLVED',
+      description: 'Flooded road', submitted_at: new Date('2026-10-15T10:00:00Z'),
+      category_id: '44444444-4444-4444-8444-444444444444',
+      category_slug: 'FLOODING', category_label: 'Flooding', latitude: null,
+      longitude: null, accuracy: null, address: null, photo_count: '0',
+      thumbnail_key: null, ai_analysis_status: null, severity_status: null,
+    })) };
+  });
+  try {
+    const response = await app.inject({
+      url: '/api/reports?limit=2&offset=20&status=RESOLVED&q=%25_%20flooded',
+      headers: headers(),
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json().pagination, { limit: 2, offset: 20, hasMore: true });
+    assert.equal(response.json().reports.length, 2);
+  } finally { query.mock.restore(); }
+});
+
+test('history rejects invalid filters before querying', async () => {
+  const query = mock.method(pool, 'query', async () => {
+    throw new Error('must not query');
+  });
+  try {
+    for (const suffix of ['status=OPEN', 'limit=101', `q=${'a'.repeat(101)}`]) {
+      assert.equal((await app.inject({
+        url: `/api/reports?${suffix}`,
+        headers: headers(),
+      })).statusCode, 400);
+    }
+    assert.equal(query.mock.callCount(), 0);
+  } finally { query.mock.restore(); }
+});
+
 test('report detail is owner-scoped and returns recorded metadata and events', async () => {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const query = mock.method(pool, 'query', async (sql: string, params: unknown[]) => {
