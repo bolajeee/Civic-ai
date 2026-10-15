@@ -479,8 +479,12 @@ async function createSession(fastify: FastifyInstance, user: any) {
 }
 
 function hashResetCode(email: string, code: string): string {
-  const pepper = process.env.PASSWORD_RESET_PEPPER || process.env.JWT_SECRET || 'local-development-only';
-  return crypto.createHash('sha256').update(`${email}:${code}:${pepper}`).digest('hex');
+  const pepper = process.env.PASSWORD_RESET_PEPPER || process.env.JWT_SECRET;
+  if (!pepper && process.env.NODE_ENV === 'production') {
+    throw new Error('PASSWORD_RESET_PEPPER must be set when NODE_ENV=production');
+  }
+  const effectivePepper = pepper || 'local-development-only';
+  return crypto.createHash('sha256').update(`${email}:${code}:${effectivePepper}`).digest('hex');
 }
 
 function consumeResetRequest(key: string, limit: number): boolean {

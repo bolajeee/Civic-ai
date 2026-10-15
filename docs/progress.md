@@ -196,7 +196,7 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] API build and all 167 API tests; government production build and all 21 web tests pass (2026-10-15)
 
 ### Phase 6: Hardening (Pending)
-- [ ] Security audits & least privilege (known now: `JWT_SECRET` falls back to a hardcoded default, CORS is `*`, `/api/test-upload` is still registered)
+- [ ] Security audits & least privilege (done: `JWT_SECRET` and the reset pepper are required when `NODE_ENV=production`, CORS uses a `CORS_ORIGINS` allowlist, `/api/test-upload` removed; broader audit and least-privilege review still pending)
 - [ ] Rate limiting
 - [ ] Error handling
 - [ ] Offline handling (Flutter sync queue)
