@@ -29,6 +29,9 @@ import govClustersRoutes from './routes/gov-clusters';
 import govClusterActionRoutes from './routes/gov-cluster-actions';
 import govAdminRoutes from './routes/gov-admin';
 import observabilityRoutes from './routes/observability';
+import notificationRoutes from './routes/notifications';
+import { startPushWorker } from './notifications/push_worker';
+import { isPushDeliveryEnabled } from './lib/firebase-push';
 import { pool } from './db';
 
 // Set TRUST_PROXY=true behind a reverse proxy so request.ip (used by rate
@@ -53,6 +56,7 @@ let stopDuplicateWorker = () => {};
 let stopClusteringWorker = () => {};
 let stopSeverityWorker = () => {};
 let stopPriorityWorker = () => {};
+let stopPushWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
@@ -61,6 +65,7 @@ fastify.addHook('onClose', async () => {
   stopClusteringWorker();
   stopSeverityWorker();
   stopPriorityWorker();
+  stopPushWorker();
   await pool.end();
 });
 
@@ -118,6 +123,7 @@ fastify.register(observabilityRoutes);
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 fastify.register(reportRoutes, { prefix: '/api/reports' });
+fastify.register(notificationRoutes, { prefix: '/api/notifications' });
 fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
 fastify.register(govMapRoutes, { prefix: '/api/gov/dashboard' });
@@ -153,6 +159,8 @@ const start = async () => {
     stopAIClassificationWorker = startClassificationWorker(fastify.log);
     stopSeverityWorker = startSeverityWorker(fastify.log);
     stopPriorityWorker = startPriorityWorker(fastify.log);
+    stopPushWorker = startPushWorker(fastify.log);
+    fastify.log.info({ enabled: isPushDeliveryEnabled() }, 'Citizen push worker configuration');
     fastify.log.info({ enabled: isPriorityEnabled() }, 'Cluster priority worker configuration');
     fastify.log.info({ enabled: isSeverityEnabled() }, 'AI severity worker configuration');
     fastify.log.info(

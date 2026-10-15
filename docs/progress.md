@@ -81,7 +81,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 - [x] Report Details: both Share receipt actions generate a text receipt and open the native system share sheet
 - [x] Report Details: owner-scoped API supplies cluster priority, assigned-agency state, citizen reference, and timestamped lifecycle events
 - [x] Report Details: ordered photo gallery supports full-screen zoom; direct links fetch report details independently of loaded history
-- [ ] Notifications: permission request exists, but delivery, device-token registration, and notification preferences are not implemented
+- [x] Notifications: durable report-status inbox, owner-scoped preferences, FCM device-token registration/rotation, logout cleanup, retrying HTTP v1 delivery worker, deep links, and Android/iOS client wiring are implemented with API/model tests; production Firebase/APNs configuration and physical-device acceptance remain shipping gates ([setup and acceptance test](notifications.md))
 
 Citizen validation (re-run 2026-10-13): `flutter analyze` reports no issues and
 all 39 Flutter tests pass, including receipt generation, detail parsing, settings
@@ -206,11 +206,12 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Monitoring & Observability (redacted structured logs, request IDs, liveness/readiness, protected Prometheus metrics, graceful shutdown, and endpoint tests)
 - [x] Automated Testing (pull-request/main CI for API and government test/build plus Flutter analyze/test gates; see [hardening operations](hardening.md))
 
-Hardening validation (re-audited 2026-10-15): all 171 API tests and the API
+Hardening validation (re-audited 2026-10-15): all 175 API tests and the API
 build pass; all 21 government web tests and the production build pass; the live
 government database validation passes in both priority modes; Flutter analyze
 is clean. The most recent full citizen run recorded all 43 tests passing, but
 the tests were not re-run during this audit because an active Flutter debug
-session held the SDK lock. All 21 repository migrations, including report
-submission idempotency, are recorded in the configured development database.
+session held the SDK lock. All 21 previously existing repository migrations are
+recorded in the configured development database; the new notification migration
+is implemented but has not yet been applied or live-validated.
 See [Shipping Checklist](shipping.md) for the remaining release gates.

@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../features/notifications/providers/notification_provider.dart';
 import '../../../shared/widgets/primary_button.dart';
 
 /// Shown once after a successful login/register, before navigating to Home.
@@ -115,6 +116,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     if (permanentlyDenied && mounted) {
       _showSettingsDialog();
       return;
+    }
+
+    final notificationStatus = results[Permission.notification];
+    if (notificationStatus == PermissionStatus.granted ||
+        notificationStatus == PermissionStatus.provisional) {
+      await context.read<NotificationProvider>().registerAfterPermissionGrant();
     }
 
     await _proceed();

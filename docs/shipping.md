@@ -16,7 +16,7 @@ following release gates remain open:
 - [ ] Decide whether image-vector embeddings/visual similarity are a release requirement or an explicitly deferred capability.
 - [ ] Configure a production-approved model and key, then validate the complete AI pipeline end to end.
 - [ ] Validate government password sign-in and the remaining cluster/review browser flows against a provisioned environment.
-- [ ] Implement or explicitly remove from release scope citizen full-history pagination/search and push notifications.
+- [ ] Resolve citizen full-history pagination/search and configure/live-validate the implemented push notification path.
 - [ ] Replace placeholder mobile application IDs and Android debug signing with production identities and signing.
 - [ ] Publish and verify the Terms, Privacy Policy, and support endpoints currently referenced by the citizen app.
 - [ ] Define the production hosting, deployment, backup, rollback, and secret-management procedures; the repository currently has no deployment manifest or environment template.
@@ -46,7 +46,7 @@ following release gates remain open:
 - [ ] Citizen report journey passes: register/sign in -> permissions -> photo -> GPS -> category/description -> submit -> receipt/history/detail.
 - [ ] Offline submission passes for disconnect, timeout, retry, app restart, account switch, and duplicate-safe recovery.
 - [ ] Decide and document the release treatment for first-page-only citizen history/search.
-- [ ] Decide and document the release treatment for push delivery, device-token registration, and notification preferences.
+- [x] Push delivery, device-token registration/rotation, logout cleanup, notification preferences, and the in-app inbox are implemented; configuration and acceptance remain below.
 - [ ] Government journey passes: password sign-in -> overview -> map -> reports -> cluster evidence -> review action -> version -> approval -> PDF/print.
 - [ ] Administrator and operator capabilities are verified separately; citizens cannot access government routes.
 - [ ] Empty, loading, retry, partial-data, stale-data, permission-denied, and network-failure states are accepted on all critical screens.
@@ -57,7 +57,7 @@ following release gates remain open:
 - [ ] Back up the production database and verify restore into an isolated environment.
 - [ ] Record the production migration level before deployment.
 - [ ] Review every unapplied migration for locks, runtime, data backfills, extension requirements, and rollback behavior.
-- [ ] Apply all migrations in order and verify all 21 expected versions are recorded.
+- [ ] Apply all migrations in order and verify all 22 expected versions are recorded.
 - [ ] Verify PostgreSQL extensions required by the schema, including PostGIS and pgvector.
 - [ ] Verify uniqueness and foreign-key constraints for users, refresh tokens, reports, client submission IDs, clusters, memberships, report versions, and approvals.
 - [ ] Confirm the reports object-storage bucket exists, is private, and has the intended retention/CORS policy.
@@ -79,6 +79,7 @@ following release gates remain open:
 - [ ] Verify 4xx/5xx responses and logs do not leak SQL, tokens, storage keys, secrets, stack traces, or citizen identity.
 - [ ] Run dependency, license, secret, and static-security scans for Node, Flutter/Dart, Gradle, CocoaPods, and generated artifacts.
 - [ ] Confirm production logs redact authorization/cookie headers and carry `x-request-id` end to end.
+- [ ] Store the Firebase service-account credentials only in the API secret manager; enable `PUSH_NOTIFICATIONS_ENABLED` only after migration and mobile configuration are complete.
 - [ ] Review retention/deletion requirements for NIN, location, photos, auth sessions, AI snapshots, and audit records.
 
 ## 5. AI pipeline
@@ -116,6 +117,7 @@ following release gates remain open:
 - [ ] Replace the `com.example` Android/iOS identifiers with the registered production application identifiers.
 - [ ] Set a production version/build number and ensure it is greater than the last distributed build.
 - [ ] Build with the HTTPS `API_BASE_URL` and production OAuth identifiers; verify no localhost/emulator URL remains.
+- [ ] Build with the production Firebase Dart defines and verify device registration, token rotation, foreground inbox refresh, background delivery, deep-link opening, preference opt-out, and logout cleanup on physical devices ([runbook](notifications.md)).
 - [ ] Verify Google and Apple client IDs, redirect URIs, package/bundle identifiers, certificates, and server audience allowlists agree.
 - [ ] Test fresh install, upgrade, logout/login, expired session, password reset, offline queue migration, and account switching.
 - [ ] Test camera/gallery, permission denial/permanent denial, GPS off/no-fix, five-photo limit, large images, slow upload, retry, and duplicate-safe submission.
@@ -127,6 +129,7 @@ following release gates remain open:
 
 - [ ] Create and protect a production upload keystore; remove debug signing from the release build.
 - [ ] Configure Play App Signing, package ownership, SHA fingerprints, and Google sign-in credentials.
+- [ ] Register the production Android package in Firebase and verify FCM delivery on every supported Android API level.
 - [ ] Build and verify a release AAB with the intended Dart defines.
 - [ ] Run `bundletool`/Play pre-launch checks and verify 16 KB-page compatibility separately from normal acceptance testing.
 - [ ] Validate on a stable API 35/36 physical device or standard emulator; investigate renderer issues independently on experimental API 37 images.
@@ -136,6 +139,7 @@ following release gates remain open:
 
 - [ ] Register the production bundle ID and set the Apple development team, distribution certificate, and provisioning profile.
 - [ ] Configure Sign in with Apple identifiers, associated service configuration, and required capabilities.
+- [ ] Enable Apple Push Notifications and remote-notification background mode, upload the APNs key to Firebase, and verify the distribution profile contains the production `aps-environment` entitlement.
 - [ ] Archive a release build and pass Xcode validation/TestFlight processing.
 - [ ] Verify privacy usage descriptions and App Store privacy nutrition answers match actual behavior.
 - [ ] Test on physical iPhone hardware, including camera, photos, location, share sheet, secure storage, and Apple sign-in.

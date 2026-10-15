@@ -7,6 +7,7 @@ import '../../../core/services/api_client.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/social_auth_service.dart';
+import '../../notifications/services/notification_service.dart';
 
 enum AuthStatus {
   /// App just launched — checking storage for an existing session
@@ -195,6 +196,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     _setLoading(true);
+    await NotificationService.instance.unregisterCurrentDevice();
     await _service.logout();
     _clearSession();
     _setLoading(false);

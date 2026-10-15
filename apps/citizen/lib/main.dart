@@ -7,6 +7,8 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/app_settings_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/notifications/providers/notification_provider.dart';
+import 'features/notifications/services/notification_service.dart';
 import 'features/report/providers/report_draft_provider.dart';
 import 'features/report/providers/report_history_provider.dart';
 import 'features/report/providers/report_summary_provider.dart';
@@ -74,6 +76,11 @@ class CivicReportApp extends StatelessWidget {
           update: (_, auth, sync) =>
               sync!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
         ),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(),
+          update: (_, auth, notifications) => notifications!
+            ..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
+        ),
         // Owns the report history. Registered here rather than on the history
         // screen so the list survives navigation and is already loaded when the
         // citizen returns to it after submitting.
@@ -97,6 +104,20 @@ class _AppView extends StatefulWidget {
 class _AppViewState extends State<_AppView> {
   // Router is built once — not recreated on rebuild.
   late final router = buildRouter(widget.authProvider);
+  StreamSubscription<String>? _notificationRoutes;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationRoutes =
+        NotificationService.instance.openedRoutes.listen(router.go);
+  }
+
+  @override
+  void dispose() {
+    _notificationRoutes?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
