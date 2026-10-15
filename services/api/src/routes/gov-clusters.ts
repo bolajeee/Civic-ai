@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isPriorityEnabled } from '../ai/priority';
 import { query } from '../db';
 import { governmentAccess } from './gov-access';
+import { compileIssueReport, type CompilationInput } from '../lib/issue-report-compilation';
 
 const filters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
@@ -352,6 +353,48 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           ...photo, url: urls[storageKey] ?? null,
         })),
       })), photosExpireInSeconds: 900 };
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/compilation', { preHandler: access }, async (request, reply) => {
+    const parsed = params.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
+    try {
+      const result = await query<{ compilation: CompilationInput | null }>(`
+        WITH selected_cluster AS (
+          SELECT ic.id, ic.public_id, ic.status, c.slug, c.label,
+            CASE WHEN ic.centroid IS NULL THEN NULL ELSE jsonb_build_object(
+              'latitude', ST_Y(ic.centroid), 'longitude', ST_X(ic.centroid)) END AS centroid
+          FROM issue_clusters ic
+          JOIN report_categories c ON c.id = ic.category_id
+          WHERE ic.id = $1 AND ic.report_count > 0
+        ), source_reports AS (
+          SELECT r.id, r.public_id AS "publicId", r.description, r.status,
+            r.submitted_at AS "submittedAt",
+            CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
+              'address', location.address, 'latitude', location.latitude,
+              'longitude', location.longitude) END AS location
+          FROM selected_cluster cluster
+          JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
+          JOIN reports r ON r.id = membership.report_id
+          LEFT JOIN locations location ON location.id = r.location_id
+        )
+        SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'generatedAt', NOW(),
+          'cluster', jsonb_build_object(
+            'id', cluster.id, 'publicId', cluster.public_id, 'status', cluster.status,
+            'category', jsonb_build_object('slug', cluster.slug, 'label', cluster.label),
+            'centroid', cluster.centroid),
+          'sourceReports', (SELECT coalesce(jsonb_agg(to_jsonb(source_reports)
+            ORDER BY "submittedAt", id), '[]'::jsonb) FROM source_reports)
+        ) END AS compilation
+        FROM selected_cluster cluster`, [parsed.data.id]);
+      const compilation = result.rows[0]?.compilation;
+      if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
+      return compileIssueReport(compilation);
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

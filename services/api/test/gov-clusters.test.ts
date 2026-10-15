@@ -29,7 +29,7 @@ after(async () => {
 
 test('cluster list and summary require authentication before database access', async () => {
   const db = mock.method(pool, 'query', async () => { throw new Error('Unexpected query'); });
-  for (const path of [url, url + id, `${url}${id}/evidence`]) {
+  for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`]) {
     for (const authorization of [undefined, 'Bearer invalid']) {
       const response = await app.inject({ url: path, headers: authorization ? { authorization } : {} });
       assert.equal(response.statusCode, 401);
@@ -42,8 +42,8 @@ test('cluster list and summary require authentication before database access', a
 test('database role and status override stale government token claims', async () => {
   for (const user of [null, { role: 'CITIZEN', status: 'ACTIVE' }, { role: 'ADMIN', status: 'SUSPENDED' }]) {
     const db = mock.method(pool, 'query', async () => ({ rows: user ? [user] : [] }));
-    for (const path of [url, url + id, `${url}${id}/evidence`]) assert.equal((await app.inject({ url: path, headers: headers() })).statusCode, 403);
-    assert.equal(db.mock.callCount(), 3);
+    for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`]) assert.equal((await app.inject({ url: path, headers: headers() })).statusCode, 403);
+    assert.equal(db.mock.callCount(), 4);
     mock.restoreAll();
   }
 });
@@ -165,14 +165,45 @@ test('missing evidence cluster returns 404 and signing failure preserves origina
   assert.doesNotMatch(response.body, /private-key|credentials/);
 });
 
+test('compilation validates ids and returns a source-linked live draft without citizen identity', async () => {
+  const raw = { generatedAt: '2026-10-15T12:00:00.000Z', cluster: { id, publicId: 'IC-1000',
+    category: { slug: 'POTHOLE', label: 'Pothole' }, status: 'PENDING', centroid: null }, sourceReports: [
+      { id: 'report', publicId: 'CR-1', description: 'Road surface has failed', status: 'PENDING',
+        submittedAt: '2026-10-14T12:00:00.000Z', location: null },
+    ] };
+  const db = mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    assert.deepEqual(values, [id]);
+    assert.match(sql, /JOIN issue_cluster_reports/);
+    assert.match(sql, /ORDER BY "submittedAt", id/);
+    assert.doesNotMatch(sql, /citizen_id|email|nin|phone|storage_key/);
+    return { rows: [{ compilation: raw }] };
+  });
+  assert.equal((await app.inject({ url: `${url}invalid/compilation`, headers: headers() })).statusCode, 400);
+  const response = await app.inject({ url: `${url}${id}/compilation`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().liveDraft, true);
+  assert.deepEqual(response.json().findings[0].sourceReportIds, ['CR-1']);
+  assert.deepEqual(response.json().observations, [{ text: 'Road surface has failed', sourceReportIds: ['CR-1'] }]);
+  assert.equal(db.mock.callCount(), 3);
+});
+
+test('missing compilation cluster returns 404', async () => {
+  mock.method(pool, 'query', async (sql: string) => sql.startsWith('SELECT role, status')
+    ? { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] } : { rows: [{ compilation: null }] });
+  const response = await app.inject({ url: `${url}${id}/compilation`, headers: headers() });
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(response.json(), { error: 'Cluster not found' });
+});
+
 type EvidenceFixture = { cluster: { id: string; publicId: string } | null; reports: Array<Record<string, unknown>> };
 
-test('list, summary and evidence database failures are sanitized', async () => {
+test('list, summary, evidence and compilation database failures are sanitized', async () => {
   mock.method(pool, 'query', async (sql: string) => {
     if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
     throw new Error('private database details');
   });
-  for (const path of [url, url + id, `${url}${id}/evidence`]) {
+  for (const path of [url, url + id, `${url}${id}/evidence`, `${url}${id}/compilation`]) {
     const response = await app.inject({ url: path, headers: headers() });
     assert.equal(response.statusCode, 500);
     assert.deepEqual(response.json(), { error: 'Internal Server Error' });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ReviewerActions, ReviewHistory } from './ClusterActions';
 import type { GovernmentApi } from './api';
-import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster } from './types';
+import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster, IssueCompilationSnapshot } from './types';
 import './clusters.css';
 
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -128,6 +128,7 @@ function ClusterDetails({ api, id, close, canAct, clusters, onChanged }: { api: 
       <Fact title="Last report grouped (WAT)" value={cluster.grouping.lastAssignedAt ? date(cluster.grouping.lastAssignedAt) : 'Unavailable'} />
     </dl><div className="cluster-summary-row"><div><h3>Supporting report lifecycle</h3><Lifecycle cluster={cluster} /></div><div><h3>Current priority</h3><Priority cluster={cluster} enabled={data.priorityEnabled} /></div></div>
       <p className="cluster-scope-note">The summary keeps cluster status separate from the statuses of its supporting citizen reports.</p>
+      <CompiledIssueReport api={api} id={id} revision={changes} />
       <ClusterEvidence api={api} id={id} revision={changes} reviewer={canAct ? { cluster: { id, publicId: cluster.publicId, categorySlug: cluster.category.slug }, clusters,
         onChanged: () => { setChanges(value => value + 1); setRevision(value => value + 1); onChanged(); } } : undefined} />
       <ReviewHistory api={api} id={id} revision={changes} /></>}
@@ -135,6 +136,44 @@ function ClusterDetails({ api, id, close, canAct, clusters, onChanged }: { api: 
 }
 
 function Fact({ title, value }: { title: string; value: string }) { return <div><dt>{title}</dt><dd>{value}</dd></div>; }
+
+function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: string; revision: number }) {
+  const [data, setData] = useState<IssueCompilationSnapshot | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setBusy(true); setError('');
+    api.clusterCompilation(id).then(result => { if (active) setData(result); })
+      .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Unable to compile this issue report.'); })
+      .finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, [api, id, refresh, revision]);
+  return <section className="issue-compilation" aria-label="Compiled issue report" aria-busy={busy}>
+    <div className="cluster-evidence-heading"><div><p className="eyebrow">COMPILED ISSUE REPORT</p><h3>Current issue brief</h3>
+      <p className="muted">A live compilation of current cluster membership. It is not an approved or versioned official report.</p></div>
+      <button className="refresh" disabled={busy} onClick={() => setRefresh(value => value + 1)}>Recompile</button></div>
+    {error && <p className="error" role="alert">{error} {data && 'Showing the previously compiled brief.'}</p>}
+    {busy && <p className="muted" role="status">Compiling issue report...</p>}
+    {data && <><div className="compilation-meta"><strong>{data.cluster.publicId} / {data.cluster.category.label}</strong><span>Compiled {date(data.generatedAt)} WAT from {data.cluster.reportCount.toLocaleString('en-NG')} current sources</span></div>
+      <dl className="compilation-coverage">
+        <Fact title="Observation window" value={data.coverage.firstObservedAt && data.coverage.lastObservedAt ? `${date(data.coverage.firstObservedAt)} - ${date(data.coverage.lastObservedAt)}` : 'Unavailable'} />
+        <Fact title="Location coverage" value={`${data.coverage.withLocation} saved GPS / ${data.coverage.withoutLocation} missing`} />
+        <Fact title="Description coverage" value={`${data.coverage.withDescription} supplied / ${data.coverage.withoutDescription} missing`} />
+      </dl>
+      <div className="compiled-findings"><h4>Compiled findings</h4>{data.findings.map(finding => <article key={finding.kind}><p>{finding.text}</p><SourceReferences ids={finding.sourceReportIds} /></article>)}</div>
+      <div className="compiled-observations"><h4>Reported observations</h4>
+        {data.observations.length ? <ol>{data.observations.map((observation, index) => <li key={`${observation.sourceReportIds[0]}-${index}`}><p>{observation.text}</p><SourceReferences ids={observation.sourceReportIds} /></li>)}</ol> : <p className="muted">No source report includes a description.</p>}
+      </div>
+      <details className="compiled-sources"><summary>Current source register ({data.sources.length})</summary><ul>{data.sources.map(source => <li key={source.id}><strong>{source.publicId}</strong><span>{label(source.status)} / {date(source.submittedAt)} WAT / {source.location?.address || (source.location ? `${source.location.latitude.toFixed(6)}, ${source.location.longitude.toFixed(6)}` : 'No saved GPS')}</span></li>)}</ul></details>
+    </>}
+  </section>;
+}
+
+function SourceReferences({ ids }: { ids: string[] }) {
+  return <p className="source-references" aria-label="Supporting source reports">{ids.length ? ids.map(id => <span key={id}>{id}</span>) : <em>No geolocated source reports</em>}</p>;
+}
 
 function ClusterEvidence({ api, id, revision: external, reviewer }: { api: GovernmentApi; id: string; revision: number;
   reviewer?: { cluster: { id: string; publicId: string; categorySlug: string }; clusters: IssueCluster[]; onChanged: () => void } }) {

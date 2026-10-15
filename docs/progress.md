@@ -170,8 +170,11 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Review queue shows approve/dismiss with a reason; the cluster evidence view has move/remove/split/merge controls and a review history; operators see history read-only
   - [x] API (152) and web (18) tests and builds pass; the real SQL was validated against the dev PostgreSQL/PostGIS in a rolled-back transaction (`npx tsx scripts/validate-cluster-actions.ts` from `services/api`)
 
-### Phase 5: Government Reporting (Pending)
-- [ ] Issue report compilation
+### Phase 5: Government Reporting (In Progress)
+- [x] Issue report compilation
+  - [x] Protected live compilation API and dashboard brief combine current cluster metadata, observation window, lifecycle/location/description coverage, source-linked findings, original described observations, and a current source register without citizen identity
+  - [x] Compilation is explicitly labelled a live, unapproved, non-versioned draft; immutable versions, approvals, PDF and print remain separate milestones below
+  - Contract and validation commands: [government reporting API](government-reporting-api.md). API build and all 156 tests; government production build and all 19 web tests pass (2026-10-15).
 - [ ] Reviewable cluster report: combined findings linked to source reports, evidence appendix, unresolved disagreements, and review status
 - [ ] PDF generation
 - [ ] Print optimizations

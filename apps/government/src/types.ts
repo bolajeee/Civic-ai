@@ -83,6 +83,18 @@ export interface ClusterEvidenceSnapshot {
   cluster: { id: string; publicId: string }; reports: ClusterEvidenceReport[];
   photosExpireInSeconds: number;
 }
+export interface IssueCompilationSnapshot {
+  generatedAt: string; liveDraft: true;
+  cluster: { id: string; publicId: string; category: { slug: string; label: string }; status: string;
+    reportCount: number; centroid: { latitude: number; longitude: number } | null };
+  coverage: { firstObservedAt: string | null; lastObservedAt: string | null; withLocation: number;
+    withoutLocation: number; withDescription: number; withoutDescription: number;
+    statuses: { pending: number; inProgress: number; resolved: number; rejected: number } };
+  findings: Array<{ kind: 'OVERVIEW' | 'LIFECYCLE' | 'LOCATION'; text: string; sourceReportIds: string[] }>;
+  observations: Array<{ text: string; sourceReportIds: string[] }>;
+  sources: Array<{ id: string; publicId: string; status: string; submittedAt: string;
+    location: { address: string | null; latitude: number; longitude: number } | null }>;
+}
 export interface ReviewQueueFilters {
   page?: number; limit?: number; q?: string; category?: string;
   status?: 'PENDING' | 'ACCEPTED' | 'DISMISSED' | 'all'; reason?: 'all' | 'LOW_SCORE' | 'AMBIGUOUS_MATCH';
