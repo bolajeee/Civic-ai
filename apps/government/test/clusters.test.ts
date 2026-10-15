@@ -69,6 +69,26 @@ test('cluster PDF download returns a blob from the authenticated escaped route',
   assert.equal(await pdf.text(), '%PDF-1.4');
 });
 
+test('report versions list, create and download use authenticated escaped routes', async () => {
+  const calls: Array<{ url: string; method: string }> = [];
+  const api = new GovernmentApi(() => {}, async (url, init) => {
+    if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
+    calls.push({ url: String(url), method: init?.method || 'GET' });
+    if (String(url).endsWith('/report.pdf')) return new Response(new Blob(['version pdf'], { type: 'application/pdf' }));
+    if (init?.method === 'POST') return new Response(JSON.stringify({ version: { id: 'v1', number: 1 } }), { status: 201 });
+    return new Response(JSON.stringify({ cluster: { id: 'c', publicId: 'IC-1' }, versions: [] }));
+  });
+  await api.login('operator@example.gov', 'password');
+  await api.clusterReportVersions('a/b');
+  assert.equal((await api.createClusterReportVersion('a/b')).version.number, 1);
+  assert.equal(await (await api.clusterReportVersionPdf('a/b', 7)).text(), 'version pdf');
+  assert.deepEqual(calls, [
+    { url: '/api/gov/issue-clusters/a%2Fb/report-versions', method: 'GET' },
+    { url: '/api/gov/issue-clusters/a%2Fb/report-versions', method: 'POST' },
+    { url: '/api/gov/issue-clusters/a%2Fb/report-versions/7/report.pdf', method: 'GET' },
+  ]);
+});
+
 test('review queue client sends bounded filters on the authenticated route', async () => {
   const api = new GovernmentApi(() => {}, async (url, init) => {
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));

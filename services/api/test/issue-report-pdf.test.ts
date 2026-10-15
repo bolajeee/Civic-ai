@@ -37,3 +37,14 @@ test('paginates long evidence appendices and numbers every page', () => {
   assert.ok(count > 1);
   for (let page = 1; page <= count; page += 1) assert.match(content, new RegExp(`Page ${page} of ${count}`));
 });
+
+test('labels immutable versions and repeats their identity in page furniture', () => {
+  const compiled = compileIssueReport(report('Snapshot evidence'));
+  const pdf = renderIssueReportPdf({ ...compiled, liveDraft: false,
+    version: { id: 'version-id', number: 3, createdAt: '2026-10-15T13:00:00.000Z', createdBy: 'GV-12' } });
+  const content = pdf.toString('latin1');
+  assert.match(content, /IMMUTABLE VERSION 3 - NOT FORMALLY APPROVED/);
+  assert.match(content, /CivicAI \/ IC-1000 \/ Version 3/);
+  assert.match(content, /immutable evidence snapshot/);
+  assert.doesNotMatch(content, /generated from live cluster membership/);
+});

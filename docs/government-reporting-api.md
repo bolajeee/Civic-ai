@@ -37,13 +37,38 @@ findings, disagreements, uncertainties, evidence appendix and page numbers.
 
 The PDF contains evidence metadata and source references but does not embed the
 original image bytes. Original photos remain available in the authenticated
-supporting-evidence view. The PDF is generated on demand and is not yet an
-immutable stored version.
+supporting-evidence view. The live PDF is generated on demand and does not by
+itself create a stored version.
 
-This endpoint does not create an official record. `liveDraft: true` means that a
-membership or source-report change will affect the next compilation. Review
-formal approval, immutable evidence snapshots, report versions, PDF export and
-print layout remain later reporting milestones.
+## Printing
+
+The dashboard's **Print** action uses a focused A4 layout containing only the
+compiled brief. Dashboard controls and version history are omitted, report and
+evidence cards avoid page breaks where possible, and the source register is
+expanded. Generated PDFs repeat the cluster (and version, when applicable) in a
+page header and include the cluster reference with `Page n of total` in the
+footer.
+
+## Immutable versions
+
+`GET /api/gov/issue-clusters/:id/report-versions` lists version metadata newest
+first without returning stored snapshots. `POST` to the same path compiles the
+current live report and stores it as the next numbered immutable snapshot. Both
+active `ADMIN` and `OPERATOR` government accounts may create versions.
+
+`GET /api/gov/issue-clusters/:id/report-versions/:version/report.pdf` reproduces
+a PDF from the stored snapshot even if cluster membership or source reports have
+subsequently changed. The database serializes per-cluster number allocation and
+rejects updates or deletions of version rows.
+
+Version creation records who created the snapshot and when, but does not record
+formal approval. Approval details and preservation of a specifically reviewed
+and approved snapshot remain a separate milestone.
+
+The live endpoints do not create an official record. `liveDraft: true` means that
+a membership or source-report change will affect the next compilation. A saved
+version freezes that compilation and remains explicitly unapproved until the
+separate formal-approval workflow is implemented.
 
 Validation:
 

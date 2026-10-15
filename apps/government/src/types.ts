@@ -105,6 +105,11 @@ export interface IssueCompilationSnapshot {
     photoCount: number; assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM';
     classification: ReportClassificationReview | null; severity: ReportSeverityReview | null }>;
 }
+export interface IssueReportVersionsSnapshot {
+  cluster: { id: string; publicId: string };
+  versions: Array<{ id: string; number: number; createdAt: string; createdBy: string;
+    reviewStatus: 'BLOCKED' | 'NEEDS_REVIEW' | 'READY_FOR_REVIEW'; sourceCount: number }>;
+}
 export interface ReviewIssue { kind: string; summary: string; sourceReportIds: string[] }
 export interface ReportClassificationReview { status: string; suggestedCategory: string | null;
   acceptedCategory: string | null; confidence: number | null; evidence: string | null }

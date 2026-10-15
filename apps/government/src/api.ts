@@ -1,4 +1,4 @@
-import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, IssueCompilationSnapshot, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, IssueCompilationSnapshot, IssueReportVersionsSnapshot, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -136,6 +136,14 @@ export class GovernmentApi {
   cluster(id: string) { return this.authorized<ClusterDetailSnapshot>(`/issue-clusters/${encodeURIComponent(id)}`); }
   clusterCompilation(id: string) { return this.authorized<IssueCompilationSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/compilation`); }
   clusterReportPdf(id: string) { return this.authorizedBlob(`/issue-clusters/${encodeURIComponent(id)}/report.pdf`); }
+  clusterReportVersions(id: string) { return this.authorized<IssueReportVersionsSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/report-versions`); }
+  createClusterReportVersion(id: string) {
+    return this.authorized<{ version: { id: string; number: number; createdAt: string } }>(
+      `/issue-clusters/${encodeURIComponent(id)}/report-versions`, { method: 'POST' });
+  }
+  clusterReportVersionPdf(id: string, version: number) {
+    return this.authorizedBlob(`/issue-clusters/${encodeURIComponent(id)}/report-versions/${version}/report.pdf`);
+  }
   clusterEvidence(id: string, page = 1, limit = 20) {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     return this.authorized<ClusterEvidenceSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/evidence?${params}`);

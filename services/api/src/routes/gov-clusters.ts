@@ -27,6 +27,10 @@ const reviewFilters = z.object({
 }).strict();
 
 const params = z.object({ id: z.uuid() });
+const versionParams = z.object({
+  id: z.uuid(),
+  version: z.coerce.number().int().min(1).max(1000000),
+});
 const evidenceFilters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -444,6 +448,87 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
         .header('Content-Type', 'application/pdf')
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .send(renderIssueReportPdf(compilation));
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/report-versions', { preHandler: access }, async (request, reply) => {
+    const parsed = params.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
+    try {
+      const result = await query<{ versions: unknown }>(`
+        SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'cluster', jsonb_build_object('id', cluster.id, 'publicId', cluster.public_id),
+          'versions', coalesce((SELECT jsonb_agg(jsonb_build_object(
+            'id', version.id, 'number', version.version_number,
+            'createdAt', version.created_at, 'createdBy', creator.public_id,
+            'reviewStatus', version.snapshot->'review'->>'status',
+            'sourceCount', version.snapshot->'cluster'->'reportCount')
+            ORDER BY version.version_number DESC)
+            FROM issue_report_versions version
+            JOIN users creator ON creator.id = version.created_by
+            WHERE version.issue_cluster_id = cluster.id), '[]'::jsonb)) END AS versions
+        FROM issue_clusters cluster WHERE cluster.id = $1`, [parsed.data.id]);
+      if (!result.rows[0]?.versions) return reply.status(404).send({ error: 'Cluster not found' });
+      return result.rows[0].versions;
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.post('/:id/report-versions', { preHandler: access }, async (request, reply) => {
+    const parsed = params.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
+    try {
+      const compilation = await loadCompilation(parsed.data.id);
+      if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
+      const actorId = (request.user as { id: string }).id;
+      const result = await query<{ version: { id: string; number: number; createdAt: string } }>(`
+        WITH allocated AS (
+          UPDATE issue_clusters SET next_report_version = next_report_version + 1
+          WHERE id = $1
+          RETURNING id, next_report_version - 1 AS version_number
+        ), inserted AS (
+          INSERT INTO issue_report_versions
+            (issue_cluster_id, version_number, snapshot, created_by)
+          SELECT allocated.id, allocated.version_number, $2::jsonb, $3
+          FROM allocated
+          RETURNING id, version_number, created_at
+        )
+        SELECT jsonb_build_object('id', id, 'number', version_number,
+          'createdAt', created_at) AS version FROM inserted`,
+      [parsed.data.id, JSON.stringify(compilation), actorId]);
+      return reply.status(201).send({ version: result.rows[0].version });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/report-versions/:version/report.pdf', { preHandler: access }, async (request, reply) => {
+    const parsed = versionParams.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid report version' });
+    try {
+      const result = await query<{ report: null | { snapshot: ReturnType<typeof compileIssueReport>;
+        id: string; number: number; createdAt: string; createdBy: string; publicId: string } }>(`
+        SELECT jsonb_build_object('snapshot', version.snapshot, 'id', version.id,
+          'number', version.version_number, 'createdAt', version.created_at,
+          'createdBy', creator.public_id, 'publicId', cluster.public_id) AS report
+        FROM issue_report_versions version
+        JOIN issue_clusters cluster ON cluster.id = version.issue_cluster_id
+        JOIN users creator ON creator.id = version.created_by
+        WHERE version.issue_cluster_id = $1 AND version.version_number = $2`,
+      [parsed.data.id, parsed.data.version]);
+      const stored = result.rows[0]?.report;
+      if (!stored) return reply.status(404).send({ error: 'Report version not found' });
+      const versioned = { ...stored.snapshot, liveDraft: false as const,
+        version: { id: stored.id, number: stored.number, createdAt: stored.createdAt, createdBy: stored.createdBy } };
+      return reply.header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${stored.publicId}-issue-report-v${stored.number}.pdf"`)
+        .send(renderIssueReportPdf(versioned));
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

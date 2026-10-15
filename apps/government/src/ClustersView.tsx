@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ReviewerActions, ReviewHistory } from './ClusterActions';
 import type { GovernmentApi } from './api';
-import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster, IssueCompilationSnapshot } from './types';
+import type { ClusterDetailSnapshot, ClusterEvidenceReport, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, IssueCluster, IssueCompilationSnapshot, IssueReportVersionsSnapshot } from './types';
 import './clusters.css';
 
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -143,6 +143,9 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [versioning, setVersioning] = useState(false);
+  const [versions, setVersions] = useState<IssueReportVersionsSnapshot | null>(null);
+  const [versionsRevision, setVersionsRevision] = useState(0);
   useEffect(() => {
     let active = true;
     setBusy(true); setError('');
@@ -151,24 +154,49 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [api, id, refresh, revision]);
+  useEffect(() => {
+    let active = true;
+    api.clusterReportVersions(id).then(result => { if (active) setVersions(result); })
+      .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Unable to load report versions.'); });
+    return () => { active = false; };
+  }, [api, id, versionsRevision]);
+  function saveBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
   async function downloadPdf() {
     if (!data) return;
     setExporting(true); setError('');
     try {
       const blob = await api.clusterReportPdf(id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url; link.download = `${data.cluster.publicId}-issue-report.pdf`;
-      document.body.appendChild(link); link.click(); link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      saveBlob(blob, `${data.cluster.publicId}-issue-report.pdf`);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to generate the PDF report.');
     } finally { setExporting(false); }
   }
+  async function createVersion() {
+    if (!data || !window.confirm('Create an immutable version from the current evidence snapshot?')) return;
+    setVersioning(true); setError('');
+    try { await api.createClusterReportVersion(id); setVersionsRevision(value => value + 1); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Unable to create a report version.'); }
+    finally { setVersioning(false); }
+  }
+  async function downloadVersion(number: number) {
+    if (!data) return;
+    setExporting(true); setError('');
+    try { saveBlob(await api.clusterReportVersionPdf(id, number), `${data.cluster.publicId}-issue-report-v${number}.pdf`); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Unable to download the report version.'); }
+    finally { setExporting(false); }
+  }
   return <section className="issue-compilation" aria-label="Compiled issue report" aria-busy={busy}>
     <div className="cluster-evidence-heading"><div><p className="eyebrow">COMPILED ISSUE REPORT</p><h3>Current issue brief</h3>
-      <p className="muted">A live compilation of current cluster membership. It is not an approved or versioned official report.</p></div>
+      <p className="muted">A live compilation of current cluster membership. Saved versions are immutable; formal approval is recorded separately.</p></div>
       <div className="cluster-detail-actions"><button className="refresh" disabled={busy || exporting} onClick={() => setRefresh(value => value + 1)}>Recompile</button>
+        <button className="refresh" disabled={!data || busy} onClick={() => window.print()}>Print</button>
+        <button className="refresh" disabled={!data || busy || versioning} onClick={createVersion}>{versioning ? 'Saving version...' : 'Save version'}</button>
         <button className="primary report-download" disabled={!data || busy || exporting} onClick={downloadPdf}>{exporting ? 'Generating PDF...' : 'Download PDF'}</button></div></div>
     {error && <p className="error" role="alert">{error} {data && 'Showing the previously compiled brief.'}</p>}
     {busy && <p className="muted" role="status">Compiling issue report...</p>}
@@ -201,6 +229,10 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
         </article>)}</div>
       </div>
       <details className="compiled-sources"><summary>Current source register ({data.sources.length})</summary><ul>{data.sources.map(source => <li key={source.id}><strong>{source.publicId}</strong><span>{label(source.status)} / {date(source.submittedAt)} WAT / {source.location?.address || (source.location ? `${source.location.latitude.toFixed(6)}, ${source.location.longitude.toFixed(6)}` : 'No saved GPS')}</span></li>)}</ul></details>
+      <section className="report-versions"><h4>Immutable versions ({versions?.versions.length ?? 0})</h4>
+        {versions?.versions.length ? <ol>{versions.versions.map(version => <li key={version.id}><div><strong>Version {version.number}</strong><span>{date(version.createdAt)} WAT / {version.sourceCount} sources / {label(version.reviewStatus)} / created by {version.createdBy}</span></div><button className="refresh" disabled={exporting} onClick={() => downloadVersion(version.number)}>Download</button></li>)}</ol>
+          : <p className="muted">No immutable report version has been saved.</p>}
+      </section>
     </>}
   </section>;
 }

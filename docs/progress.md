@@ -182,8 +182,12 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] PDF generation
   - [x] Authenticated PDF download is generated from the same live compilation and includes draft status, review readiness, cited findings, unresolved disagreements, uncertainties, and the evidence appendix
   - [x] Multi-page A4 output, safe text escaping, page numbering, attachment headers, loading/error UI, and deterministic renderer tests included; immutable PDF versions remain separately scoped below
-- [ ] Print optimizations
-- [ ] Report versioning
+- [x] Print optimizations
+  - [x] Focused A4 browser print view hides dashboard chrome and avoids splitting report cards; generated PDFs repeat the cluster/version identity, reserve print-safe margins, keep section headings with their content, and include ruled page footers
+- [x] Report versioning
+  - [x] Active government users can save the current compilation as a numbered immutable JSONB snapshot, browse version metadata, and download a PDF reproduced from that exact snapshot
+  - [x] Version numbers are allocated atomically per cluster and stored versions are protected by a database append-only trigger; creating a version does not imply formal approval
+  - [x] API build and all 163 API tests; government production build and all 21 web tests pass (2026-10-15)
 - [ ] Preserve the reviewed evidence snapshot and approval details for each generated report version
 - [ ] Audit trail
 

@@ -1,7 +1,10 @@
 import type { compileIssueReport } from './issue-report-compilation';
 
-type CompiledReport = ReturnType<typeof compileIssueReport>;
-interface PdfLine { text: string; size?: number; bold?: boolean; gap?: number }
+type CompiledReport = Omit<ReturnType<typeof compileIssueReport>, 'liveDraft'> & {
+  liveDraft: boolean;
+  version?: { id: string; number: number; createdAt: string; createdBy: string };
+};
+interface PdfLine { text: string; size?: number; bold?: boolean; gap?: number; keepWithNext?: boolean }
 
 const ascii = (value: unknown) => String(value ?? '').replace(/[^\x20-\xFF]/g, '?');
 const escapePdf = (value: string) => ascii(value).replace(/([\\()])/g, '\\$1');
@@ -31,27 +34,31 @@ function add(lines: PdfLine[], text: string, options: Omit<PdfLine, 'text'> = {}
 export function renderIssueReportPdf(report: CompiledReport): Buffer {
   const lines: PdfLine[] = [];
   add(lines, 'CivicAI Issue Report', { size: 18, bold: true, gap: 8 });
-  add(lines, 'LIVE DRAFT - NOT FORMALLY APPROVED', { size: 11, bold: true, gap: 8 });
+  add(lines, report.liveDraft
+    ? 'LIVE DRAFT - NOT FORMALLY APPROVED'
+    : `IMMUTABLE VERSION ${report.version?.number ?? '?'} - NOT FORMALLY APPROVED`,
+  { size: 11, bold: true, gap: 8 });
   add(lines, `${report.cluster.publicId} / ${report.cluster.category.label}`, { size: 15, bold: true, gap: 5 });
   add(lines, `Cluster status: ${report.cluster.status} | Review status: ${report.review.status}`);
   add(lines, `Compiled: ${displayDate(report.generatedAt)} | Current sources: ${report.cluster.reportCount}`, { gap: 9 });
   add(lines, `Observation window: ${displayDate(report.coverage.firstObservedAt)} - ${displayDate(report.coverage.lastObservedAt)}`);
   add(lines, `Coverage: ${report.coverage.withLocation} with GPS, ${report.coverage.withoutLocation} without GPS; ${report.coverage.withDescription} with descriptions, ${report.coverage.withoutDescription} without descriptions.`, { gap: 10 });
 
-  add(lines, 'Combined findings', { size: 13, bold: true, gap: 4 });
+  if (report.version) add(lines, `Version created: ${displayDate(report.version.createdAt)} | Created by: ${report.version.createdBy}`, { gap: 9 });
+  add(lines, 'Combined findings', { size: 13, bold: true, gap: 4, keepWithNext: true });
   for (const finding of report.findings) {
     add(lines, `${finding.text} [Sources: ${finding.sourceReportIds.join(', ') || 'none'}]`, { gap: 3 });
   }
 
-  add(lines, 'Unresolved disagreements', { size: 13, bold: true, gap: 4 });
+  add(lines, 'Unresolved disagreements', { size: 13, bold: true, gap: 4, keepWithNext: true });
   if (!report.disagreements.length) add(lines, 'None detected by the compilation checks.');
   for (const item of report.disagreements) add(lines, `${item.summary} [Sources: ${item.sourceReportIds.join(', ')}]`, { gap: 3 });
 
-  add(lines, 'Outstanding uncertainty', { size: 13, bold: true, gap: 4 });
+  add(lines, 'Outstanding uncertainty', { size: 13, bold: true, gap: 4, keepWithNext: true });
   if (!report.uncertainties.length) add(lines, 'None detected by the compilation checks.');
   for (const item of report.uncertainties) add(lines, `${item.summary} [Sources: ${item.sourceReportIds.join(', ')}]`, { gap: 3 });
 
-  add(lines, 'Evidence appendix', { size: 13, bold: true, gap: 5 });
+  add(lines, 'Evidence appendix', { size: 13, bold: true, gap: 5, keepWithNext: true });
   for (const source of report.evidenceAppendix) {
     add(lines, `${source.sourceReportId} / ${source.status}`, { size: 11, bold: true, gap: 3 });
     add(lines, `Submitted: ${displayDate(source.submittedAt)} | Grouping: ${source.assignmentMethod} | Photos: ${source.photoCount}`);
@@ -63,17 +70,23 @@ export function renderIssueReportPdf(report: CompiledReport): Buffer {
     if (source.severity?.uncertainty) add(lines, `Severity uncertainty: ${source.severity.uncertainty}`);
   }
 
-  add(lines, 'This PDF is generated from live cluster membership. It is not an immutable report version or a record of formal approval.', { size: 9, bold: true, gap: 8 });
-  return buildPdf(lines);
+  add(lines, report.liveDraft
+    ? 'This PDF is generated from live cluster membership. It is not an immutable report version or a record of formal approval.'
+    : 'This PDF reproduces an immutable evidence snapshot. It is not a record of formal approval.',
+  { size: 9, bold: true, gap: 8 });
+  return buildPdf(lines, report.cluster.publicId, report.version?.number);
 }
 
-function buildPdf(lines: PdfLine[]): Buffer {
+function buildPdf(lines: PdfLine[], reference: string, version?: number): Buffer {
   const pages: PdfLine[][] = [];
   let page: PdfLine[] = [];
   let used = 0;
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const height = (line.size ?? 10) + (line.gap ?? 2) + 3;
-    if (page.length && used + height > 700) { pages.push(page); page = []; used = 0; }
+    const next = lines[index + 1];
+    const nextHeight = line.keepWithNext && next ? (next.size ?? 10) + (next.gap ?? 2) + 3 : 0;
+    if (page.length && used + height + nextHeight > 680) { pages.push(page); page = []; used = 0; }
     page.push(line); used += height;
   }
   if (page.length || !pages.length) pages.push(page);
@@ -87,15 +100,18 @@ function buildPdf(lines: PdfLine[]): Buffer {
   pages.forEach((pageLines, index) => {
     const pageId = pageIds[index];
     const contentId = pageId + 1;
-    let y = 790;
+    let y = 775;
     const commands: string[] = [];
+    commands.push(`BT /F2 8 Tf 50 810 Td (${escapePdf(`CivicAI / ${reference}${version ? ` / Version ${version}` : ' / Live draft'}`)}) Tj ET`);
+    commands.push('0.75 w 50 802 m 545 802 l S');
     for (const line of pageLines) {
       y -= line.gap ?? 2;
       const size = line.size ?? 10;
       commands.push(`BT /F${line.bold ? 2 : 1} ${size} Tf 50 ${y} Td (${escapePdf(line.text)}) Tj ET`);
       y -= size + 3;
     }
-    commands.push(`BT /F1 8 Tf 50 28 Td (Page ${index + 1} of ${pages.length}) Tj ET`);
+    commands.push('0.5 w 50 40 m 545 40 l S');
+    commands.push(`BT /F1 8 Tf 50 25 Td (${escapePdf(reference)} - Page ${index + 1} of ${pages.length}) Tj ET`);
     const stream = commands.join('\n');
     objects[pageId - 1] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
     objects[contentId - 1] = `<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`;

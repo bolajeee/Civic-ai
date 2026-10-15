@@ -5,6 +5,7 @@ import jwt from '@fastify/jwt';
 import authenticate from '../src/plugins/authenticate';
 import routes from '../src/routes/gov-clusters';
 import { pool } from '../src/db';
+import { compileIssueReport, type CompilationInput } from '../src/lib/issue-report-compilation';
 
 const app = Fastify();
 const url = '/api/gov/issue-clusters/';
@@ -221,6 +222,63 @@ test('PDF export returns an authenticated attachment generated from the same com
   assert.equal(response.headers['content-disposition'], 'attachment; filename="IC-1000-issue-report.pdf"');
   assert.equal(response.rawPayload.subarray(0, 8).toString(), '%PDF-1.4');
   assert.match(response.rawPayload.toString('latin1'), /Surface failure/);
+});
+
+test('report versions are listed without snapshot payloads and missing clusters return 404', async () => {
+  const versions = { cluster: { id, publicId: 'IC-1000' }, versions: [
+    { id: 'version-id', number: 2, createdAt: '2026-10-15T12:00:00.000Z', createdBy: 'GV-1',
+      reviewStatus: 'NEEDS_REVIEW', sourceCount: 3 },
+  ] };
+  let found = true;
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    assert.deepEqual(values, [id]);
+    assert.match(sql, /issue_report_versions/);
+    assert.doesNotMatch(sql, /citizen_id|email|nin|storage_key/);
+    return { rows: [{ versions: found ? versions : null }] };
+  });
+  const response = await app.inject({ url: `${url}${id}/report-versions`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), versions);
+  assert.doesNotMatch(response.body, /snapshot/);
+  found = false;
+  assert.equal((await app.inject({ url: `${url}${id}/report-versions`, headers: headers() })).statusCode, 404);
+});
+
+test('creating a report version snapshots the compilation and atomically allocates its number', async () => {
+  const raw: CompilationInput = { generatedAt: '2026-10-15T12:00:00.000Z', cluster: { id, publicId: 'IC-1000',
+    category: { slug: 'POTHOLE', label: 'Pothole' }, status: 'PENDING', centroid: null }, sourceReports: [] };
+  let dataCalls = 0;
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    dataCalls += 1;
+    if (dataCalls === 1) return { rows: [{ compilation: raw }] };
+    assert.deepEqual(values?.[0], id);
+    assert.equal(values?.[2], userId);
+    assert.equal(JSON.parse(String(values?.[1])).cluster.publicId, 'IC-1000');
+    assert.match(sql, /UPDATE issue_clusters SET next_report_version = next_report_version \+ 1/);
+    assert.match(sql, /INSERT INTO issue_report_versions/);
+    return { rows: [{ version: { id: 'version-id', number: 1, createdAt: '2026-10-15T12:01:00.000Z' } }] };
+  });
+  const response = await app.inject({ method: 'POST', url: `${url}${id}/report-versions`, headers: headers() });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().version.number, 1);
+});
+
+test('versioned PDF is rendered from its immutable snapshot', async () => {
+  const input: CompilationInput = { generatedAt: '2026-10-15T12:00:00.000Z', cluster: { id, publicId: 'IC-1000',
+    category: { slug: 'POTHOLE', label: 'Pothole' }, status: 'PENDING', centroid: null }, sourceReports: [] };
+  mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
+    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
+    assert.deepEqual(values, [id, 4]);
+    return { rows: [{ report: { snapshot: compileIssueReport(input), id: 'version-id', number: 4,
+      createdAt: '2026-10-15T12:10:00.000Z', createdBy: 'GV-1', publicId: 'IC-1000' } }] };
+  });
+  assert.equal((await app.inject({ url: `${url}${id}/report-versions/no/report.pdf`, headers: headers() })).statusCode, 400);
+  const response = await app.inject({ url: `${url}${id}/report-versions/4/report.pdf`, headers: headers() });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['content-disposition'], 'attachment; filename="IC-1000-issue-report-v4.pdf"');
+  assert.match(response.rawPayload.toString('latin1'), /IMMUTABLE VERSION 4/);
 });
 
 type EvidenceFixture = { cluster: { id: string; publicId: string } | null; reports: Array<Record<string, unknown>> };
