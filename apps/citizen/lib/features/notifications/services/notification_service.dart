@@ -74,8 +74,9 @@ class NotificationService {
 
   void _emitRoute(RemoteMessage? message) {
     final route = message?.data['route'];
-    if (route is String && route.startsWith('/report-details/'))
+    if (route is String && route.startsWith('/report-details/')) {
       _openedRoutes.add(route);
+    }
   }
 
   Future<bool> registerDevice({bool requestPermission = false}) async {

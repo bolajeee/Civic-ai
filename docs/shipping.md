@@ -24,12 +24,11 @@ following release gates remain open:
 
 ## Verified in the 2026-10-15 audit
 
-- [x] All 21 repository migrations are recorded in the configured development database.
-- [x] API: 171 tests pass and the TypeScript production build succeeds.
+- [x] All 21 pre-notification migrations are recorded in the configured development database; the notification migration remains unapplied.
+- [x] API: 175 tests pass and the TypeScript production build succeeds.
 - [x] Government web: 21 tests pass and the Vite production build succeeds.
 - [x] Live government database validation passes for overview, priority modes, map, reports, authorization, and rolled-back fixtures.
-- [x] Citizen static analysis reports no issues.
-- [ ] Re-run all citizen tests after stopping the active Flutter debug session (the latest recorded result is 43 passing tests).
+- [x] Citizen static analysis reports no issues and all 45 tests pass.
 
 ## 1. Release scope and ownership
 

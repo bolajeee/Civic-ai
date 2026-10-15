@@ -83,13 +83,13 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 - [x] Report Details: ordered photo gallery supports full-screen zoom; direct links fetch report details independently of loaded history
 - [x] Notifications: durable report-status inbox, owner-scoped preferences, FCM device-token registration/rotation, logout cleanup, retrying HTTP v1 delivery worker, deep links, and Android/iOS client wiring are implemented with API/model tests; production Firebase/APNs configuration and physical-device acceptance remain shipping gates ([setup and acceptance test](notifications.md))
 
-Citizen validation (re-run 2026-10-13): `flutter analyze` reports no issues and
-all 39 Flutter tests pass, including receipt generation, detail parsing, settings
-persistence, summary parsing and router redirects.
+Citizen validation (re-run 2026-10-15): `flutter analyze` reports no issues and
+all 45 Flutter tests pass, including notification parsing, receipt generation,
+detail parsing, settings persistence, summary parsing and router redirects.
 - [x] Update the stale router test so the Flutter suite is green
 
 ### Phase 3: AI (In Progress)
-**Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Re-audited 2026-10-15: all 21 repository migrations are recorded in the configured development database, including clustering, severity, priority, report versioning, approvals, and submission idempotency. The live government validation passes with the priority branch enabled. No AI flag is enabled and no OpenAI key is configured, so the model-backed pipeline still has not been validated end to end.
+**Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Re-audited 2026-10-15: all 21 pre-notification migrations are recorded in the configured development database, including clustering, severity, priority, report versioning, approvals, and submission idempotency. The live government validation passes with the priority branch enabled. No AI flag is enabled and no OpenAI key is configured, so the model-backed pipeline still has not been validated end to end.
 
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending; default model name `gpt-6-luna` unverified)
 - [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
@@ -209,9 +209,8 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 Hardening validation (re-audited 2026-10-15): all 175 API tests and the API
 build pass; all 21 government web tests and the production build pass; the live
 government database validation passes in both priority modes; Flutter analyze
-is clean. The most recent full citizen run recorded all 43 tests passing, but
-the tests were not re-run during this audit because an active Flutter debug
-session held the SDK lock. All 21 previously existing repository migrations are
-recorded in the configured development database; the new notification migration
-is implemented but has not yet been applied or live-validated.
+is clean and all 45 citizen tests pass. All 21 previously existing repository
+migrations are recorded in the configured development database; the new
+notification migration is implemented but has not yet been applied or
+live-validated.
 See [Shipping Checklist](shipping.md) for the remaining release gates.

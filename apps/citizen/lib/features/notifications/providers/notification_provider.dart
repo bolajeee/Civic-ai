@@ -49,8 +49,9 @@ class NotificationProvider extends ChangeNotifier {
       _error = null;
       if (_enabled) unawaited(_registerSilently());
     } catch (_) {
-      if (_citizenId == owner)
+      if (_citizenId == owner) {
         _error = 'Could not load notifications. Pull down to retry.';
+      }
     } finally {
       if (_citizenId == owner) {
         _loading = false;
