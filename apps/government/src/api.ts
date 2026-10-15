@@ -81,6 +81,42 @@ export class GovernmentApi {
     }
   }
 
+  private async sendBlob(path: string, token: string): Promise<Blob> {
+    const response = await this.transport(`/api/gov${path}`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new ApiError(response.status,
+        typeof data?.error === 'string' ? data.error : `Request failed (${response.status})`);
+    }
+    return response.blob();
+  }
+
+  private async authorizedBlob(path: string): Promise<Blob> {
+    const previous = this.session;
+    if (!previous) throw new ApiError(401, 'Please sign in.');
+    try { return await this.sendBlob(path, previous.accessToken); }
+    catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        if (this.session === previous) this.setSession(null);
+        throw error;
+      }
+      if (!(error instanceof ApiError) || error.status !== 401 || !this.session) throw error;
+      if (this.session === previous) {
+        if (!this.refresh) this.refresh = this.rotate(previous).finally(() => { this.refresh = null; });
+        await this.refresh;
+      }
+      const current = this.session;
+      if (!current) throw new ApiError(401, 'Please sign in again.');
+      try { return await this.sendBlob(path, current.accessToken); }
+      catch (retryError) {
+        if (retryError instanceof ApiError && [401, 403].includes(retryError.status) && this.session === current) this.setSession(null);
+        throw retryError;
+      }
+    }
+  }
+
   overview() { return this.authorized<Overview>('/dashboard/overview'); }
   reports(filters: ReportFilters = {}) {
     const params = new URLSearchParams();
@@ -99,6 +135,7 @@ export class GovernmentApi {
   }
   cluster(id: string) { return this.authorized<ClusterDetailSnapshot>(`/issue-clusters/${encodeURIComponent(id)}`); }
   clusterCompilation(id: string) { return this.authorized<IssueCompilationSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/compilation`); }
+  clusterReportPdf(id: string) { return this.authorizedBlob(`/issue-clusters/${encodeURIComponent(id)}/report.pdf`); }
   clusterEvidence(id: string, page = 1, limit = 20) {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     return this.authorized<ClusterEvidenceSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/evidence?${params}`);

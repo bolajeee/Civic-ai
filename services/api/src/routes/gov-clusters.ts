@@ -4,6 +4,7 @@ import { isPriorityEnabled } from '../ai/priority';
 import { query } from '../db';
 import { governmentAccess } from './gov-access';
 import { compileIssueReport, type CompilationInput } from '../lib/issue-report-compilation';
+import { renderIssueReportPdf } from '../lib/issue-report-pdf';
 
 const filters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
@@ -84,6 +85,66 @@ const summaryColumns = (priority: string) => `ic.id, ic.public_id AS "publicId",
     FROM issue_cluster_reports membership JOIN reports r ON r.id = membership.report_id
     WHERE membership.issue_cluster_id = ic.id) AS "reportStatuses",
   ${priority} AS priority`;
+
+async function loadCompilation(id: string) {
+  const result = await query<{ compilation: CompilationInput | null }>(`
+    WITH selected_cluster AS (
+      SELECT ic.id, ic.public_id, ic.status, c.slug, c.label,
+        CASE WHEN ic.centroid IS NULL THEN NULL ELSE jsonb_build_object(
+          'latitude', ST_Y(ic.centroid), 'longitude', ST_X(ic.centroid)) END AS centroid
+      FROM issue_clusters ic
+      JOIN report_categories c ON c.id = ic.category_id
+      WHERE ic.id = $1 AND ic.report_count > 0
+    ), source_reports AS (
+      SELECT r.id, r.public_id AS "publicId", r.description, r.status,
+        r.submitted_at AS "submittedAt",
+        CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
+          'address', location.address, 'latitude', location.latitude,
+          'longitude', location.longitude) END AS location,
+        (SELECT count(*)::int FROM report_media media WHERE media.report_id = r.id) AS "photoCount",
+        membership.assignment_method AS "assignmentMethod",
+        (SELECT count(*)::int FROM issue_cluster_review_candidates review
+          WHERE review.report_id = r.id AND review.status = 'PENDING') AS "pendingReviewCount",
+        (SELECT jsonb_build_object(
+            'status', classification.status,
+            'suggestedCategory', classification.prediction->>'categorySlug',
+            'acceptedCategory', accepted_category.slug,
+            'confidence', classification.confidence,
+            'evidence', classification.prediction->>'evidence')
+          FROM report_ai_analyses classification
+          LEFT JOIN report_categories accepted_category
+            ON accepted_category.id = classification.predicted_category_id
+          WHERE classification.report_id = r.id
+            AND classification.analysis_type = 'IMAGE_CLASSIFICATION') AS classification,
+        (SELECT jsonb_build_object(
+            'status', severity.status,
+            'suggestedLevel', severity.prediction->>'suggestedLevel',
+            'acceptedLevel', severity.prediction->>'level',
+            'confidence', severity.confidence,
+            'reviewRequired', CASE WHEN jsonb_typeof(severity.prediction->'reviewRequired') = 'boolean'
+              THEN (severity.prediction->>'reviewRequired')::boolean ELSE NULL END,
+            'uncertainty', severity.prediction->>'uncertainty')
+          FROM report_ai_analyses severity
+          WHERE severity.report_id = r.id
+            AND severity.analysis_type = 'SEVERITY_ESTIMATION') AS severity
+      FROM selected_cluster cluster
+      JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
+      JOIN reports r ON r.id = membership.report_id
+      LEFT JOIN locations location ON location.id = r.location_id
+    )
+    SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
+      'generatedAt', NOW(),
+      'cluster', jsonb_build_object(
+        'id', cluster.id, 'publicId', cluster.public_id, 'status', cluster.status,
+        'category', jsonb_build_object('slug', cluster.slug, 'label', cluster.label),
+        'centroid', cluster.centroid),
+      'sourceReports', (SELECT coalesce(jsonb_agg(to_jsonb(source_reports)
+        ORDER BY "submittedAt", id), '[]'::jsonb) FROM source_reports)
+    ) END AS compilation
+    FROM selected_cluster cluster`, [id]);
+  const input = result.rows[0]?.compilation;
+  return input ? compileIssueReport(input) : null;
+}
 
 export default async function govClustersRoutes(app: FastifyInstance, options: Options) {
   const access = [app.authenticate, governmentAccess(app)];
@@ -363,64 +424,26 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = params.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     try {
-      const result = await query<{ compilation: CompilationInput | null }>(`
-        WITH selected_cluster AS (
-          SELECT ic.id, ic.public_id, ic.status, c.slug, c.label,
-            CASE WHEN ic.centroid IS NULL THEN NULL ELSE jsonb_build_object(
-              'latitude', ST_Y(ic.centroid), 'longitude', ST_X(ic.centroid)) END AS centroid
-          FROM issue_clusters ic
-          JOIN report_categories c ON c.id = ic.category_id
-          WHERE ic.id = $1 AND ic.report_count > 0
-        ), source_reports AS (
-          SELECT r.id, r.public_id AS "publicId", r.description, r.status,
-            r.submitted_at AS "submittedAt",
-            CASE WHEN location.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'address', location.address, 'latitude', location.latitude,
-              'longitude', location.longitude) END AS location,
-            (SELECT count(*)::int FROM report_media media WHERE media.report_id = r.id) AS "photoCount",
-            membership.assignment_method AS "assignmentMethod",
-            (SELECT count(*)::int FROM issue_cluster_review_candidates review
-              WHERE review.report_id = r.id AND review.status = 'PENDING') AS "pendingReviewCount",
-            (SELECT jsonb_build_object(
-                'status', classification.status,
-                'suggestedCategory', classification.prediction->>'categorySlug',
-                'acceptedCategory', accepted_category.slug,
-                'confidence', classification.confidence,
-                'evidence', classification.prediction->>'evidence')
-              FROM report_ai_analyses classification
-              LEFT JOIN report_categories accepted_category
-                ON accepted_category.id = classification.predicted_category_id
-              WHERE classification.report_id = r.id
-                AND classification.analysis_type = 'IMAGE_CLASSIFICATION') AS classification,
-            (SELECT jsonb_build_object(
-                'status', severity.status,
-                'suggestedLevel', severity.prediction->>'suggestedLevel',
-                'acceptedLevel', severity.prediction->>'level',
-                'confidence', severity.confidence,
-                'reviewRequired', CASE WHEN jsonb_typeof(severity.prediction->'reviewRequired') = 'boolean'
-                  THEN (severity.prediction->>'reviewRequired')::boolean ELSE NULL END,
-                'uncertainty', severity.prediction->>'uncertainty')
-              FROM report_ai_analyses severity
-              WHERE severity.report_id = r.id
-                AND severity.analysis_type = 'SEVERITY_ESTIMATION') AS severity
-          FROM selected_cluster cluster
-          JOIN issue_cluster_reports membership ON membership.issue_cluster_id = cluster.id
-          JOIN reports r ON r.id = membership.report_id
-          LEFT JOIN locations location ON location.id = r.location_id
-        )
-        SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
-          'generatedAt', NOW(),
-          'cluster', jsonb_build_object(
-            'id', cluster.id, 'publicId', cluster.public_id, 'status', cluster.status,
-            'category', jsonb_build_object('slug', cluster.slug, 'label', cluster.label),
-            'centroid', cluster.centroid),
-          'sourceReports', (SELECT coalesce(jsonb_agg(to_jsonb(source_reports)
-            ORDER BY "submittedAt", id), '[]'::jsonb) FROM source_reports)
-        ) END AS compilation
-        FROM selected_cluster cluster`, [parsed.data.id]);
-      const compilation = result.rows[0]?.compilation;
+      const compilation = await loadCompilation(parsed.data.id);
       if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
-      return compileIssueReport(compilation);
+      return compilation;
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal Server Error' });
+    }
+  });
+
+  app.get('/:id/report.pdf', { preHandler: access }, async (request, reply) => {
+    const parsed = params.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
+    try {
+      const compilation = await loadCompilation(parsed.data.id);
+      if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
+      const filename = `${compilation.cluster.publicId}-issue-report.pdf`;
+      return reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(renderIssueReportPdf(compilation));
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({ error: 'Internal Server Error' });

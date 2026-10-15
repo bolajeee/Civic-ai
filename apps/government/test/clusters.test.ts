@@ -55,6 +55,20 @@ test('cluster compilation uses an authenticated escaped route', async () => {
   assert.equal((await api.clusterCompilation('a/b')).liveDraft, true);
 });
 
+test('cluster PDF download returns a blob from the authenticated escaped route', async () => {
+  const api = new GovernmentApi(() => {}, async (url, init) => {
+    if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
+    assert.equal(String(url), '/api/gov/issue-clusters/a%2Fb/report.pdf');
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer access');
+    return new Response(new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+      { headers: { 'Content-Type': 'application/pdf' } });
+  });
+  await api.login('operator@example.gov', 'password');
+  const pdf = await api.clusterReportPdf('a/b');
+  assert.equal(pdf.type, 'application/pdf');
+  assert.equal(await pdf.text(), '%PDF-1.4');
+});
+
 test('review queue client sends bounded filters on the authenticated route', async () => {
   const api = new GovernmentApi(() => {}, async (url, init) => {
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));

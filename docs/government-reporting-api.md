@@ -27,6 +27,19 @@ is not treated as agreement.
 
 This status is a readiness signal, not an administrator approval.
 
+## PDF export
+
+`GET /api/gov/issue-clusters/:id/report.pdf` applies the same authentication and
+current-account checks, recompiles the live report, and returns
+`application/pdf` with an attachment filename based on the cluster reference.
+The multi-page A4 document contains the draft warning, review status, cited
+findings, disagreements, uncertainties, evidence appendix and page numbers.
+
+The PDF contains evidence metadata and source references but does not embed the
+original image bytes. Original photos remain available in the authenticated
+supporting-evidence view. The PDF is generated on demand and is not yet an
+immutable stored version.
+
 This endpoint does not create an official record. `liveDraft: true` means that a
 membership or source-report change will affect the next compilation. Review
 formal approval, immutable evidence snapshots, report versions, PDF export and

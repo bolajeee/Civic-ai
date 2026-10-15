@@ -142,6 +142,7 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [exporting, setExporting] = useState(false);
   useEffect(() => {
     let active = true;
     setBusy(true); setError('');
@@ -150,10 +151,25 @@ function CompiledIssueReport({ api, id, revision }: { api: GovernmentApi; id: st
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [api, id, refresh, revision]);
+  async function downloadPdf() {
+    if (!data) return;
+    setExporting(true); setError('');
+    try {
+      const blob = await api.clusterReportPdf(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = `${data.cluster.publicId}-issue-report.pdf`;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to generate the PDF report.');
+    } finally { setExporting(false); }
+  }
   return <section className="issue-compilation" aria-label="Compiled issue report" aria-busy={busy}>
     <div className="cluster-evidence-heading"><div><p className="eyebrow">COMPILED ISSUE REPORT</p><h3>Current issue brief</h3>
       <p className="muted">A live compilation of current cluster membership. It is not an approved or versioned official report.</p></div>
-      <button className="refresh" disabled={busy} onClick={() => setRefresh(value => value + 1)}>Recompile</button></div>
+      <div className="cluster-detail-actions"><button className="refresh" disabled={busy || exporting} onClick={() => setRefresh(value => value + 1)}>Recompile</button>
+        <button className="primary report-download" disabled={!data || busy || exporting} onClick={downloadPdf}>{exporting ? 'Generating PDF...' : 'Download PDF'}</button></div></div>
     {error && <p className="error" role="alert">{error} {data && 'Showing the previously compiled brief.'}</p>}
     {busy && <p className="muted" role="status">Compiling issue report...</p>}
     {data && <><div className="compilation-meta"><strong>{data.cluster.publicId} / {data.cluster.category.label}</strong><span>Compiled {date(data.generatedAt)} WAT from {data.cluster.reportCount.toLocaleString('en-NG')} current sources</span></div>
