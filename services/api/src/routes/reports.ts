@@ -12,6 +12,11 @@ import {
 import { embeddingModel, isEmbeddingEnabled } from '../ai/embedding';
 import { severityModel, isSeverityEnabled } from '../ai/severity';
 import { isPriorityEnabled } from '../ai/priority';
+import {
+  isSupportedVisualEmbeddingType,
+  isVisualEmbeddingEnabled,
+  visualEmbeddingModel,
+} from '../ai/visual_embedding';
 
 /** Matches the client-side cap in the Flutter app. */
 const MAX_PHOTOS = 5;
@@ -421,6 +426,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
 
           let classificationMediaId: string | null = null;
           let firstMediaId: string | null = null;
+          const visualEmbeddingsEnabled = isVisualEmbeddingEnabled();
           for (const [index, file] of files.entries()) {
             const media = await client.query(
               `INSERT INTO report_media
@@ -436,6 +442,21 @@ export default async function reportRoutes(fastify: FastifyInstance) {
               ],
             );
             const mediaId = media.rows[0]?.id ?? null;
+            if (visualEmbeddingsEnabled && mediaId) {
+              const supported = isSupportedVisualEmbeddingType(file.mimetype);
+              await client.query(
+                `INSERT INTO report_visual_embeddings
+                   (report_id, media_id, status, model_name, error_code)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [
+                  reportId,
+                  mediaId,
+                  supported ? 'PENDING' : 'SKIPPED',
+                  visualEmbeddingModel(),
+                  supported ? null : 'UNSUPPORTED_IMAGE_TYPE',
+                ],
+              );
+            }
             if (index === 0) firstMediaId = mediaId;
             if (
               classificationMediaId === null &&

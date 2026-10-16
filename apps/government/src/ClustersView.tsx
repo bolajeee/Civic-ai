@@ -346,7 +346,7 @@ function GroupingExplanation({ report }: { report: ClusterEvidenceReport }) {
       <Fact title="Geographic distance" value={signals ? `${Math.round(signals.distanceMeters)} metres` : 'Unavailable'} />
       <Fact title="Semantic similarity" value={score(signals?.semanticSimilarity ?? null)} />
       <Fact title="Category match" value={signals ? (signals.categoryMatch ? 'Yes' : 'No') : 'Unavailable'} />
-      <Fact title="Visual similarity" value="Unavailable · image-vector matching is not implemented" />
+      <Fact title="Visual similarity" value={score(signals?.visualSimilarity ?? grouping.visualSimilarity)} />
       <Fact title="Search radius" value={decision?.radiusMeters == null ? 'Unavailable' : `${decision.radiusMeters} metres`} />
       <Fact title="Ambiguity margin" value={score(decision?.ambiguityMargin ?? null)} />
       <Fact title="Scoring version" value={signals?.scoringVersion || decision?.scoringVersion || grouping.search?.scoringVersion || 'Unavailable'} />
@@ -359,11 +359,12 @@ function GroupingExplanation({ report }: { report: ClusterEvidenceReport }) {
       {grouping.search?.status === 'NO_LOCATION' && <li>Duplicate search could not run without a saved location.</li>}
       {!decision && <li>No original clustering decision is available; this may be a legacy or manually created membership.</li>}
       {decision && !signals && grouping.assignmentMethod === 'AI' && <li>The matched report’s detailed scoring signals are unavailable.</li>}
-      <li>Visual similarity was not calculated; its planned signal is absent from this scoring version.</li>
+      {grouping.visualSignalStatus !== 'available' && <li>Visual similarity is {label(grouping.visualSignalStatus)} for this report.</li>}
+      {grouping.visualSignalStatus === 'available' && signals && signals.visualSimilarity == null && <li>The report has a visual vector, but the matched report had no compatible completed vector; fallback weights were used.</li>}
       {decision?.errorCode && <li>Clustering recorded an error: {decision.errorCode}.</li>}
     </ul></div>
     <div className="competing-candidates"><h4>Competing candidates ({grouping.competingCandidates.length})</h4>
-      {grouping.competingCandidates.length ? <div className="table-scroll"><table><thead><tr><th>Candidate cluster / report</th><th>Score</th><th>Distance</th><th>Semantic</th><th>Category</th><th>Reason</th><th>Review status</th></tr></thead><tbody>{grouping.competingCandidates.map(candidate => <tr key={`${candidate.cluster.id}-${candidate.report?.id || 'missing'}`}><td><strong>{candidate.cluster.publicId}</strong><small>{candidate.report?.publicId || 'Candidate report unavailable'}</small></td><td>{score(candidate.score)}</td><td>{candidate.distanceMeters == null ? 'Unavailable' : `${Math.round(candidate.distanceMeters)} m`}</td><td>{score(candidate.semanticSimilarity)}</td><td>{candidate.categoryMatch == null ? 'Unavailable' : candidate.categoryMatch ? 'Match' : 'Different'}</td><td>{label(candidate.reason)}</td><td><span className="badge">{label(candidate.status)}</span></td></tr>)}</tbody></table></div> : <p className="muted">No competing cluster candidates were retained for review.</p>}
+      {grouping.competingCandidates.length ? <div className="table-scroll"><table><thead><tr><th>Candidate cluster / report</th><th>Score</th><th>Distance</th><th>Semantic</th><th>Visual</th><th>Category</th><th>Reason</th><th>Review status</th></tr></thead><tbody>{grouping.competingCandidates.map(candidate => <tr key={`${candidate.cluster.id}-${candidate.report?.id || 'missing'}`}><td><strong>{candidate.cluster.publicId}</strong><small>{candidate.report?.publicId || 'Candidate report unavailable'}</small></td><td>{score(candidate.score)}</td><td>{candidate.distanceMeters == null ? 'Unavailable' : `${Math.round(candidate.distanceMeters)} m`}</td><td>{score(candidate.semanticSimilarity)}</td><td>{score(candidate.visualSimilarity ?? null)}</td><td>{candidate.categoryMatch == null ? 'Unavailable' : candidate.categoryMatch ? 'Match' : 'Different'}</td><td>{label(candidate.reason)}</td><td><span className="badge">{label(candidate.status)}</span></td></tr>)}</tbody></table></div> : <p className="muted">No competing cluster candidates were retained for review.</p>}
     </div>
   </details>;
 }

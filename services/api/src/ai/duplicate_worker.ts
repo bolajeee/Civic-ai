@@ -6,6 +6,7 @@ import {
   isDuplicateDetectionEnabled,
   rankDuplicateCandidates,
 } from './duplicates';
+import { isVisualEmbeddingEnabled } from './visual_embedding';
 
 const POLL_INTERVAL_MS = 3_000;
 const CANDIDATE_POOL = 50;
@@ -54,8 +55,13 @@ async function nextReportId(): Promise<string | null> {
      WHERE NOT EXISTS (
        SELECT 1 FROM report_duplicate_searches s WHERE s.report_id = r.id
      )
+       AND ($1::boolean = FALSE OR NOT EXISTS (
+         SELECT 1 FROM report_visual_embeddings visual
+         WHERE visual.report_id = r.id AND visual.status IN ('PENDING', 'PROCESSING')
+       ))
      ORDER BY r.submitted_at, r.id
      LIMIT 1`,
+    [isVisualEmbeddingEnabled()],
   );
   return result.rows[0]?.id ?? null;
 }
@@ -118,11 +124,13 @@ async function searchDuplicates(reportId: string): Promise<void> {
       candidate_id: string;
       distance_meters: number;
       semantic_similarity: number;
+      visual_similarity: number | null;
       category_match: boolean;
     }>(
       `SELECT c.id AS candidate_id,
               ST_DistanceSphere(cl.geom, rl.geom) AS distance_meters,
               1 - (ce.embedding <=> re.embedding) AS semantic_similarity,
+              visual.visual_similarity,
               (c.category_id = r.category_id) AS category_match
        FROM reports r
        JOIN locations rl ON rl.id = r.location_id
@@ -141,9 +149,23 @@ async function searchDuplicates(reportId: string): Promise<void> {
          ON ce.report_id = c.id
         AND ce.embedding_type = 'SEMANTIC_TEXT'
         AND ce.status = 'COMPLETED'
+       LEFT JOIN LATERAL (
+         SELECT LEAST(1, GREATEST(-1,
+           MAX(1 - (candidate_visual.embedding <=> report_visual.embedding))))
+           AS visual_similarity
+         FROM report_visual_embeddings report_visual
+         JOIN report_visual_embeddings candidate_visual
+           ON candidate_visual.report_id = c.id
+          AND candidate_visual.status = 'COMPLETED'
+         WHERE report_visual.report_id = r.id
+           AND report_visual.status = 'COMPLETED'
+       ) visual ON TRUE
        WHERE r.id = $1
          AND ST_DistanceSphere(cl.geom, rl.geom) <= $2::double precision
-       ORDER BY ce.embedding <=> re.embedding
+       ORDER BY GREATEST(
+         1 - (ce.embedding <=> re.embedding),
+         COALESCE(visual.visual_similarity, -1)
+       ) DESC
        LIMIT ${CANDIDATE_POOL}`,
       [
         reportId,
@@ -157,6 +179,8 @@ async function searchDuplicates(reportId: string): Promise<void> {
         candidateId: row.candidate_id,
         distanceMeters: Number(row.distance_meters),
         semanticSimilarity: Number(row.semantic_similarity),
+        visualSimilarity: row.visual_similarity === null
+          ? null : Number(row.visual_similarity),
         categoryMatch: row.category_match,
       })),
       config,
@@ -166,14 +190,15 @@ async function searchDuplicates(reportId: string): Promise<void> {
       await client.query(
         `INSERT INTO report_duplicate_candidates
            (report_id, candidate_report_id, distance_meters,
-            semantic_similarity, category_match, score, scoring_version)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+            semantic_similarity, visual_similarity, category_match, score, scoring_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (report_id, candidate_report_id) DO NOTHING`,
         [
           reportId,
           candidate.candidateId,
           candidate.distanceMeters,
           candidate.semanticSimilarity,
+          candidate.visualSimilarity,
           candidate.categoryMatch,
           candidate.score.toFixed(4),
           DUPLICATE_SCORING_VERSION,

@@ -65,18 +65,19 @@ Do not train five sophisticated models from scratch for the MVP. Start with pret
 - One SEMANTIC_TEXT embedding per report (text-embedding-3-small, 1536 dimensions, configurable model), stored in report_embeddings with its input text, model and version.
 - The text is category label, description, address and the visual evidence sentence from image classification. The job waits for classification to settle (pending/processing) so evidence is included, but a skipped, failed or absent classification does not block it.
 - Same durable PostgreSQL queue pattern and retry policy as classification. Disabled unless both AI_EMBEDDINGS_ENABLED=true and OPENAI_API_KEY are set.
-- Image-vector embeddings are not built: OpenAI has no image embedding endpoint, so this needs a separate model (e.g. CLIP) as a new embedding_type.
+- Each JPEG/PNG report photo can receive a durable 1,408-dimensional Vertex AI `multimodalembedding@001` vector in `report_visual_embeddings`. The independently gated worker downloads private media server-side, retries transient failures, records unsupported formats as skipped, and preserves model/version metadata. Configuration is documented below; no image bytes or vectors are exposed to citizens.
 
 ## Operating the AI queues
 
 - **Backfill:** at startup, each enabled flag queues a job for every report that has none (`src/ai/backfill.ts`). Enabling a flag is therefore the consent to bill for the whole back catalogue; it is idempotent and safe across restarts.
+- **Visual embeddings:** apply `20261015210000_add_visual_embeddings.sql`, grant a dedicated service account Vertex AI prediction access, and set `AI_IMAGE_EMBEDDINGS_ENABLED=true`, `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_CLIENT_EMAIL`, and `VERTEX_AI_PRIVATE_KEY`. `VERTEX_AI_LOCATION` defaults to `us-central1`; `VERTEX_AI_IMAGE_EMBEDDING_MODEL` defaults to `multimodalembedding@001`. Keep the private key in the server secret manager.
 - **Crash cap:** a job left PROCESSING for over 10 minutes is re-claimed only while it has attempts left; otherwise it is marked FAILED with `WORKER_CRASHED`.
 - **Citizen app:** the report detail screen shows the AI's suggestion as a second opinion, or a "reviewing" note while pending. Failed and skipped checks are hidden.
 
 ## Phase 3 Third Slice: Duplicate Candidates
 
 - When a report's embedding is COMPLETED, a worker finds earlier open (PENDING / IN_PROGRESS) reports within `AI_DUPLICATE_RADIUS_METERS` (default 200 m, PostGIS `ST_DistanceSphere`) whose embeddings are also complete, and keeps the best five scoring at least `AI_DUPLICATE_MIN_SCORE` (default 0.6).
-- Score = 0.4 x geographic closeness (linear to 0 at the radius) + 0.4 x semantic cosine similarity + 0.2 x same citizen-selected category. Visual similarity is absent until image embeddings exist. The formula is versioned (`geo-semantic-category-v1`) and each candidate stores its distance, similarity and category match.
+- Score version `geo-visual-semantic-category-v2` uses 0.3 geographic closeness + 0.3 maximum cross-photo visual cosine similarity + 0.3 semantic cosine similarity + 0.1 same citizen-selected category. When either side has no completed compatible visual vector, it explicitly falls back to the prior 0.4 geographic + 0.4 semantic + 0.2 category weights. Each candidate stores every available signal.
 - Results go to `report_duplicate_candidates`; `report_duplicate_searches` marks each report as searched (COMPLETED, NO_LOCATION or FAILED). There is no API cost, so it has its own flag, `AI_DUPLICATE_DETECTION_ENABLED`, and needs embeddings enabled.
 - The duplicate worker only writes suggestions. The separate clustering worker below consumes them without deleting or hiding reports.
 - Known limits: only earlier reports are searched, so an older report whose embedding finished later is missed; resolved/rejected reports are excluded on purpose; reports without a location are marked NO_LOCATION.

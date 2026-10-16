@@ -273,6 +273,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
               'id', candidate.id, 'publicId', candidate.public_id, 'description', candidate.description) END AS "candidateReport",
             CASE WHEN signal.report_id IS NULL THEN NULL ELSE jsonb_build_object(
               'distanceMeters', signal.distance_meters, 'semanticSimilarity', signal.semantic_similarity,
+              'visualSimilarity', signal.visual_similarity,
               'categoryMatch', signal.category_match, 'combinedScore', signal.score) END AS signals,
             (SELECT jsonb_build_object('outcome', decision.outcome, 'decidedAt', decision.decided_at,
                 'clusteringVersion', decision.clustering_version,
@@ -337,8 +338,20 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
               'assignmentMethod', membership.assignment_method,
               'confidence', membership.confidence,
               'assignedAt', membership.assigned_at,
-              'visualSimilarity', NULL,
-              'visualSignalStatus', 'not_implemented',
+              'visualSimilarity', (SELECT signal.visual_similarity
+                FROM report_cluster_decisions visual_decision
+                JOIN report_duplicate_candidates signal
+                  ON signal.report_id = visual_decision.report_id
+                 AND signal.candidate_report_id = visual_decision.matched_report_id
+                WHERE visual_decision.report_id = r.id),
+              'visualSignalStatus', CASE
+                WHEN EXISTS (SELECT 1 FROM report_visual_embeddings visual
+                  WHERE visual.report_id = r.id AND visual.status = 'COMPLETED') THEN 'available'
+                WHEN EXISTS (SELECT 1 FROM report_visual_embeddings visual
+                  WHERE visual.report_id = r.id AND visual.status = 'FAILED') THEN 'failed'
+                WHEN EXISTS (SELECT 1 FROM report_visual_embeddings visual
+                  WHERE visual.report_id = r.id AND visual.status IN ('PENDING', 'PROCESSING')) THEN 'pending'
+                ELSE 'unavailable' END,
               'search', (SELECT jsonb_build_object('status', duplicate_search.status,
                 'candidateCount', duplicate_search.candidate_count,
                 'scoringVersion', duplicate_search.scoring_version,
@@ -361,6 +374,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
                   'signals', CASE WHEN matched_signal.report_id IS NULL THEN NULL ELSE jsonb_build_object(
                     'distanceMeters', matched_signal.distance_meters,
                     'semanticSimilarity', matched_signal.semantic_similarity,
+                    'visualSimilarity', matched_signal.visual_similarity,
                     'categoryMatch', matched_signal.category_match,
                     'combinedScore', matched_signal.score,
                     'scoringVersion', matched_signal.scoring_version) END)
@@ -379,6 +393,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
                   'scoringVersion', review.scoring_version,
                   'distanceMeters', candidate_signal.distance_meters,
                   'semanticSimilarity', candidate_signal.semantic_similarity,
+                  'visualSimilarity', candidate_signal.visual_similarity,
                   'categoryMatch', candidate_signal.category_match)
                 ORDER BY review.score DESC, candidate_cluster.id), '[]'::jsonb)
                 FROM issue_cluster_review_candidates review

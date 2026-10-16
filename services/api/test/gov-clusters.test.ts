@@ -141,7 +141,8 @@ test('evidence paginates reports, batch-signs ordered photos and removes storage
     assert.match(sql, /report_cluster_decisions/);
     assert.match(sql, /report_duplicate_candidates/);
     assert.match(sql, /issue_cluster_review_candidates/);
-    assert.match(sql, /'visualSignalStatus', 'not_implemented'/);
+    assert.match(sql, /FROM report_visual_embeddings visual/);
+    assert.match(sql, /'visualSimilarity', matched_signal\.visual_similarity/);
     assert.doesNotMatch(sql, /citizen_id|email|nin|phone/);
     return { rows: [{ evidence }] };
   });

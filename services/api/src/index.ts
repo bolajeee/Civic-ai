@@ -32,6 +32,8 @@ import observabilityRoutes from './routes/observability';
 import notificationRoutes from './routes/notifications';
 import { startPushWorker } from './notifications/push_worker';
 import { isPushDeliveryEnabled } from './lib/firebase-push';
+import { startVisualEmbeddingWorker } from './ai/visual_embedding_worker';
+import { isVisualEmbeddingEnabled } from './ai/visual_embedding';
 import { pool } from './db';
 
 // Set TRUST_PROXY=true behind a reverse proxy so request.ip (used by rate
@@ -52,6 +54,7 @@ const fastify = Fastify({
 });
 let stopAIClassificationWorker = () => {};
 let stopAIEmbeddingWorker = () => {};
+let stopVisualEmbeddingWorker = () => {};
 let stopDuplicateWorker = () => {};
 let stopClusteringWorker = () => {};
 let stopSeverityWorker = () => {};
@@ -61,6 +64,7 @@ let stopPushWorker = () => {};
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
   stopAIEmbeddingWorker();
+  stopVisualEmbeddingWorker();
   stopDuplicateWorker();
   stopClusteringWorker();
   stopSeverityWorker();
@@ -171,6 +175,11 @@ const start = async () => {
     fastify.log.info(
       { enabled: isEmbeddingEnabled() },
       'AI embedding worker configuration',
+    );
+    stopVisualEmbeddingWorker = startVisualEmbeddingWorker(fastify.log);
+    fastify.log.info(
+      { enabled: isVisualEmbeddingEnabled() },
+      'AI visual embedding worker configuration',
     );
     stopDuplicateWorker = startDuplicateWorker(fastify.log);
     stopClusteringWorker = startClusteringWorker(fastify.log);

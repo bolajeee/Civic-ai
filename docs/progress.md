@@ -93,9 +93,9 @@ parsing and router redirects.
 **Status key:** `[x]` in this phase means *implemented with unit tests*, not *validated end to end*. Re-audited 2026-10-15: all 21 pre-notification migrations are recorded in the configured development database, including clustering, severity, priority, report versioning, approvals, and submission idempotency. The live government validation passes with the priority branch enabled. No AI flag is enabled and no OpenAI key is configured, so the model-backed pipeline still has not been validated end to end.
 
 - [x] Focused image classifier, confidence score, and durable PostgreSQL queue (code and migration ready; OpenAI key configuration pending; default model name `gpt-6-luna` unverified)
-- [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending; image-vector embeddings not yet built)
-- [ ] Image-vector embeddings and visual-similarity scoring (the current duplicate score intentionally redistributes that weight across geo, semantic text, and category signals)
-- [x] Duplicate candidates detection (geo + semantic + category scoring; code and migration ready, not yet run against a database)
+- [x] Embeddings generation (semantic text embeddings via pgvector queue; code and migration ready, OpenAI key configuration pending)
+- [x] Image-vector embeddings and visual-similarity scoring (durable per-photo 1,408-dimensional Vertex multimodal jobs, backfill, retries, maximum cross-photo cosine signal, versioned visual weighting with explicit fallback, and government evidence are implemented with client/worker/scoring tests; migration, credentials, billing controls, and live validation remain pending)
+- [x] Duplicate candidates detection (geo + visual + semantic + category scoring with an explicit no-vector fallback; code and migration ready, not yet run against a database)
 - [x] Issue clustering logic (open same-category clusters, fixed geographic anchor, automatic high-score assignment, durable review candidates and audit decisions; code and migration ready, migration recorded, no model-backed clustering run yet)
 - [x] Severity estimation (independent vision + description analysis, confidence gating, auditable input snapshots and durable retries; code and migration ready, migration recorded, OpenAI key configuration and model/database validation pending; default model name `gpt-6-luna` unverified)
 - [x] Priority calculation engine (fixed-weight cluster score with stored input snapshots, durable recalculation queue and operator-supplied population/location context; code and migration ready, migration recorded; scores stay INCOMPLETE until sourced context is entered)
@@ -207,11 +207,11 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
 - [x] Monitoring & Observability (redacted structured logs, request IDs, liveness/readiness, protected Prometheus metrics, graceful shutdown, and endpoint tests)
 - [x] Automated Testing (pull-request/main CI for API and government test/build plus Flutter analyze/test gates; see [hardening operations](hardening.md))
 
-Hardening validation (re-audited 2026-10-15): all 177 API tests and the API
+Hardening validation (re-audited 2026-10-15): all 183 API tests and the API
 build pass; all 21 government web tests and the production build pass; the live
 government database validation passes in both priority modes; Flutter analyze
 is clean and all 48 citizen tests pass. All 21 previously existing repository
-migrations are recorded in the configured development database; the new
-notification migration is implemented but has not yet been applied or
+migrations are recorded in the configured development database; the notification
+and visual-embedding migrations are implemented but have not yet been applied or
 live-validated.
 See [Shipping Checklist](shipping.md) for the remaining release gates.

@@ -1,14 +1,15 @@
 /** Bump when weights or inputs change, so stored scores stay explainable. */
-export const DUPLICATE_SCORING_VERSION = 'geo-semantic-category-v1';
+export const DUPLICATE_SCORING_VERSION = 'geo-visual-semantic-category-v2';
 
-// Visual similarity is part of the target formula (docs/ai_strategy.md) but has
-// no image embeddings yet, so its weight is spread over the other terms.
-const WEIGHTS = { geo: 0.4, semantic: 0.4, category: 0.2 };
+const VISUAL_WEIGHTS = { geo: 0.3, visual: 0.3, semantic: 0.3, category: 0.1 };
+// Preserve the established score when either report has no usable image vector.
+const FALLBACK_WEIGHTS = { geo: 0.4, semantic: 0.4, category: 0.2 };
 const MAX_CANDIDATES = 5;
 
 export interface DuplicateSignals {
   distanceMeters: number;
   semanticSimilarity: number;
+  visualSimilarity: number | null;
   categoryMatch: boolean;
 }
 
@@ -52,9 +53,13 @@ export function duplicateScore(
   const geo = clamp01(1 - signals.distanceMeters / radiusMeters);
   const semantic = clamp01(signals.semanticSimilarity);
   const category = signals.categoryMatch ? 1 : 0;
-  return (
-    WEIGHTS.geo * geo + WEIGHTS.semantic * semantic + WEIGHTS.category * category
-  );
+  if (signals.visualSimilarity === null) {
+    return FALLBACK_WEIGHTS.geo * geo +
+      FALLBACK_WEIGHTS.semantic * semantic + FALLBACK_WEIGHTS.category * category;
+  }
+  const visual = clamp01(signals.visualSimilarity);
+  return VISUAL_WEIGHTS.geo * geo + VISUAL_WEIGHTS.visual * visual +
+    VISUAL_WEIGHTS.semantic * semantic + VISUAL_WEIGHTS.category * category;
 }
 
 /** Scores, thresholds and ranks candidates; the best MAX_CANDIDATES remain. */

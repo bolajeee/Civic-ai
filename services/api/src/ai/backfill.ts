@@ -7,6 +7,11 @@ import {
 } from './classification';
 import { embeddingModel, isEmbeddingEnabled } from './embedding';
 import { severityModel, isSeverityEnabled } from './severity';
+import {
+  isVisualEmbeddingEnabled,
+  supportedVisualEmbeddingTypes,
+  visualEmbeddingModel,
+} from './visual_embedding';
 
 /**
  * Queues AI work for reports that predate the feature flags.
@@ -27,6 +32,10 @@ export async function backfillAiJobs(logger: FastifyBaseLogger): Promise<void> {
       const queued = await enqueueMissingEmbeddings();
       if (queued > 0) logger.info({ queued }, 'Backfilled embedding jobs');
     }
+    if (isVisualEmbeddingEnabled()) {
+      const queued = await enqueueMissingVisualEmbeddings();
+      if (queued > 0) logger.info({ queued }, 'Backfilled visual embedding jobs');
+    }
     if (isSeverityEnabled()) {
       const queued = await enqueueMissingSeverities();
       if (queued > 0) logger.info({ queued }, 'Backfilled severity jobs');
@@ -35,6 +44,24 @@ export async function backfillAiJobs(logger: FastifyBaseLogger): Promise<void> {
     // The server must still start; the next boot retries the backfill.
     logger.error({ err: error }, 'AI job backfill failed');
   }
+}
+
+export async function enqueueMissingVisualEmbeddings(): Promise<number> {
+  const result = await query(
+    `INSERT INTO report_visual_embeddings
+       (report_id, media_id, status, model_name, error_code)
+     SELECT m.report_id, m.id,
+       CASE WHEN m.media_type = ANY($2::text[]) THEN 'PENDING' ELSE 'SKIPPED' END,
+       $1,
+       CASE WHEN m.media_type = ANY($2::text[]) THEN NULL ELSE 'UNSUPPORTED_IMAGE_TYPE' END
+     FROM report_media m
+     WHERE NOT EXISTS (
+       SELECT 1 FROM report_visual_embeddings e WHERE e.media_id = m.id
+     )
+     ON CONFLICT (media_id) DO NOTHING`,
+    [visualEmbeddingModel(), supportedVisualEmbeddingTypes()],
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function enqueueMissingSeverities(): Promise<number> {

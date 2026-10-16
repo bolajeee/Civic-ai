@@ -83,6 +83,7 @@ function ReviewItem({ api, item, canAct, onResolved }: { api: GovernmentApi; ite
       <div><dt>Matched report</dt><dd>{candidateReport?.publicId || 'Unavailable'}</dd></div>
       <div><dt>Geographic distance</dt><dd>{signals ? `${Math.round(signals.distanceMeters)} metres` : 'Unavailable'}</dd></div>
       <div><dt>Semantic similarity</dt><dd>{score(signals?.semanticSimilarity)}</dd></div>
+      <div><dt>Visual similarity</dt><dd>{score(signals?.visualSimilarity)}</dd></div>
       <div><dt>Category match</dt><dd>{signals ? (signals.categoryMatch ? 'Yes' : 'No') : 'Unavailable'}</dd></div>
       <div><dt>Proposed (WAT)</dt><dd>{date(item.createdAt)}</dd></div>
       <div><dt>Scoring version</dt><dd>{item.scoringVersion}</dd></div>
@@ -98,7 +99,7 @@ function ReviewItem({ api, item, canAct, onResolved }: { api: GovernmentApi; ite
       {!report.location && <li>No GPS was supplied for this report.</li>}
       {!signals && <li>Detailed scoring signals for this match are unavailable.</li>}
       {!decision && <li>The original clustering decision is unavailable.</li>}
-      <li>Visual similarity was not calculated.</li>
+      {signals?.visualSimilarity == null && <li>Visual similarity was unavailable, so fallback weights were used.</li>}
     </ul></div>
     {item.status === 'PENDING' ? canAct && <ProposalActions api={api} item={item} onResolved={onResolved} />
       : <p className="review-outcome">{label(item.status)}{item.reviewedAt ? ` on ${date(item.reviewedAt)} WAT` : ''}{item.reviewedBy ? ` by ${item.reviewedBy}` : ' automatically or before reviewer records were kept'}.{item.reviewReason ? ` Reason: ${item.reviewReason}` : ''}</p>}

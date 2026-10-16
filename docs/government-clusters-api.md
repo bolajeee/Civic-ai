@@ -92,17 +92,17 @@ membership from the original automated decision. It contains:
 - Duplicate-search status and candidate count when a search record exists.
 - Original decision outcome/time, automatic threshold, ambiguity margin, search
   radius, matched report, and clustering/scoring versions when retained.
-- Matched geographic distance, semantic similarity, category match and combined
-  score when the scored pair still exists.
+- Matched geographic distance, semantic similarity, visual similarity, category
+  match and combined score when the scored pair still exists.
 - Retained review candidates with proposed cluster/report references, score,
   signals, reason, and review status.
 
 Missing records and signals stay null. The UI distinguishes system singletons,
 automatic assignments, human assignments, failed/no-location searches and legacy
 memberships. Scores are similarity heuristics, not calibrated probabilities.
-Visual similarity is explicitly unavailable because image-vector matching is not
-implemented; the `geo-semantic-category-v1` scorer redistributed that planned
-weight across geographic, semantic and category signals.
+Visual similarity is returned when both reports have compatible completed image
+vectors. Its status distinguishes available, pending, failed, and unavailable
+media; candidate-level `null` means the documented fallback weights were used.
 
 Photo URLs are signed in one batch and expire after 15 minutes. A signing or
 individual object failure leaves the report available with a null URL. Internal

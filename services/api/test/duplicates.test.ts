@@ -12,28 +12,42 @@ afterEach(() => {
   process.env = { ...savedEnv };
 });
 
-const near = { distanceMeters: 0, semanticSimilarity: 1, categoryMatch: true };
+const near = {
+  distanceMeters: 0,
+  semanticSimilarity: 1,
+  visualSimilarity: 1,
+  categoryMatch: true,
+};
 
 test('an identical report at the same spot scores 1', () => {
-  assert.equal(duplicateScore(near, 200), 1);
+  assert.ok(Math.abs(duplicateScore(near, 200) - 1) < 1e-9);
 });
 
 test('distance falls to zero at the radius and never goes negative', () => {
   const atEdge = { ...near, distanceMeters: 200 };
-  assert.ok(Math.abs(duplicateScore(atEdge, 200) - 0.6) < 1e-9);
-  assert.ok(Math.abs(duplicateScore({ ...atEdge, distanceMeters: 900 }, 200) - 0.6) < 1e-9);
+  assert.ok(Math.abs(duplicateScore(atEdge, 200) - 0.7) < 1e-9);
+  assert.ok(Math.abs(duplicateScore({ ...atEdge, distanceMeters: 900 }, 200) - 0.7) < 1e-9);
 });
 
 test('a different category loses its weight', () => {
   const score = duplicateScore({ ...near, categoryMatch: false }, 200);
-  assert.ok(Math.abs(score - 0.8) < 1e-9);
+  assert.ok(Math.abs(score - 0.9) < 1e-9);
 });
 
 test('out-of-range similarity is clamped', () => {
-  assert.equal(duplicateScore({ ...near, semanticSimilarity: 1.4 }, 200), 1);
-  assert.ok(
-    Math.abs(duplicateScore({ ...near, semanticSimilarity: -1 }, 200) - 0.6) < 1e-9,
-  );
+  assert.ok(Math.abs(
+    duplicateScore({ ...near, semanticSimilarity: 1.4 }, 200) - 1,
+  ) < 1e-9);
+  assert.ok(Math.abs(
+    duplicateScore({ ...near, semanticSimilarity: -1 }, 200) - 0.7,
+  ) < 1e-9);
+});
+
+test('visual similarity contributes independently and missing vectors use v1 weights', () => {
+  const lowVisual = duplicateScore({ ...near, visualSimilarity: 0 }, 200);
+  assert.ok(Math.abs(lowVisual - 0.7) < 1e-9);
+  const fallback = duplicateScore({ ...near, visualSimilarity: null }, 200);
+  assert.equal(fallback, 1);
 });
 
 test('ranking drops weak candidates, sorts best first and keeps five', () => {
@@ -42,6 +56,7 @@ test('ranking drops weak candidates, sorts best first and keeps five', () => {
     id,
     distanceMeters: 20,
     semanticSimilarity: similarity,
+    visualSimilarity: 0.5,
     categoryMatch: true,
   });
   const ranked = rankDuplicateCandidates(

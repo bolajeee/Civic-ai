@@ -13,7 +13,7 @@ following release gates remain open:
 
 - [ ] Complete the broader security and least-privilege audit.
 - [ ] Fix the two documented AI pipeline ordering/failure gaps and add regression tests.
-- [ ] Decide whether image-vector embeddings/visual similarity are a release requirement or an explicitly deferred capability.
+- [ ] Configure and live-validate the implemented Vertex image-vector embedding and visual-similarity path, or explicitly disable its feature flag for release.
 - [ ] Configure a production-approved model and key, then validate the complete AI pipeline end to end.
 - [ ] Validate government password sign-in and the remaining cluster/review browser flows against a provisioned environment.
 - [ ] Configure and live-validate the implemented push notification path.
@@ -24,8 +24,8 @@ following release gates remain open:
 
 ## Verified in the 2026-10-15 audit
 
-- [x] All 21 pre-notification migrations are recorded in the configured development database; the notification migration remains unapplied.
-- [x] API: 177 tests pass and the TypeScript production build succeeds.
+- [x] All 21 pre-notification migrations are recorded in the configured development database; the notification and visual-embedding migrations remain unapplied.
+- [x] API: 183 tests pass and the TypeScript production build succeeds.
 - [x] Government web: 21 tests pass and the Vite production build succeeds.
 - [x] Live government database validation passes for overview, priority modes, map, reports, authorization, and rolled-back fixtures.
 - [x] Citizen static analysis reports no issues and all 48 tests pass.
@@ -56,7 +56,7 @@ following release gates remain open:
 - [ ] Back up the production database and verify restore into an isolated environment.
 - [ ] Record the production migration level before deployment.
 - [ ] Review every unapplied migration for locks, runtime, data backfills, extension requirements, and rollback behavior.
-- [ ] Apply all migrations in order and verify all 22 expected versions are recorded.
+- [ ] Apply all migrations in order and verify all 23 expected versions are recorded.
 - [ ] Verify PostgreSQL extensions required by the schema, including PostGIS and pgvector.
 - [ ] Verify uniqueness and foreign-key constraints for users, refresh tokens, reports, client submission IDs, clusters, memberships, report versions, and approvals.
 - [ ] Confirm the reports object-storage bucket exists, is private, and has the intended retention/CORS policy.
@@ -89,6 +89,7 @@ following release gates remain open:
 - [ ] Add regression tests for all three reviewed pipeline gaps.
 - [ ] Confirm approved model names and availability; do not ship an unverified default model identifier.
 - [ ] Configure `OPENAI_API_KEY` only on the API server and set each `AI_*_ENABLED` flag deliberately.
+- [ ] Grant a least-privilege service account Vertex prediction access; store `VERTEX_AI_CLIENT_EMAIL` and `VERTEX_AI_PRIVATE_KEY` in the secret manager and validate `multimodalembedding@001` in the selected region before enabling `AI_IMAGE_EMBEDDINGS_ENABLED`.
 - [ ] Establish model spend limits, request timeouts, retry limits, concurrency, and alert thresholds.
 - [ ] Submit controlled reports and verify classification -> embedding -> duplicate search -> clustering -> severity -> priority.
 - [ ] Verify low-confidence, refusal, malformed output, unsupported media, timeout, rate-limit, and permanent-failure behavior.

@@ -65,16 +65,18 @@ export interface ClusterEvidenceReport {
   photos: Array<{ id: string; mediaType: string; displayOrder: number; url: string | null }>;
   grouping: {
     assignmentMethod: 'AI' | 'HUMAN' | 'SYSTEM'; confidence: number | null; assignedAt: string;
-    visualSimilarity: null; visualSignalStatus: 'not_implemented';
+    visualSimilarity: number | null;
+    visualSignalStatus: 'available' | 'pending' | 'failed' | 'unavailable';
     search: null | { status: string; candidateCount: number; scoringVersion: string; errorCode: string | null };
     decision: null | { outcome: string; decidedAt: string; clusteringVersion: string; scoringVersion: string | null;
       errorCode: string | null; autoMinScore: number | null; ambiguityMargin: number | null; radiusMeters: number | null;
       matchedReport: { id: string; publicId: string } | null;
-      signals: null | { distanceMeters: number; semanticSimilarity: number; categoryMatch: boolean;
+      signals: null | { distanceMeters: number; semanticSimilarity: number; visualSimilarity?: number | null; categoryMatch: boolean;
         combinedScore: number; scoringVersion: string } };
     competingCandidates: Array<{ cluster: { id: string; publicId: string };
       report: { id: string; publicId: string } | null; score: number; reason: string; status: string;
       scoringVersion: string; distanceMeters: number | null; semanticSimilarity: number | null;
+      visualSimilarity?: number | null;
       categoryMatch: boolean | null }>;
   };
 }
@@ -139,7 +141,8 @@ export interface ReviewQueueItem {
   proposedCluster: { id: string; publicId: string; status: string; reportCount: number;
     category: { slug: string; label: string } };
   candidateReport: { id: string; publicId: string; description: string | null } | null;
-  signals: null | { distanceMeters: number; semanticSimilarity: number; categoryMatch: boolean; combinedScore: number };
+  signals: null | { distanceMeters: number; semanticSimilarity: number; visualSimilarity?: number | null;
+    categoryMatch: boolean; combinedScore: number };
   decision: null | { outcome: string; decidedAt: string; clusteringVersion: string;
     autoMinScore: number | null; ambiguityMargin: number | null };
 }

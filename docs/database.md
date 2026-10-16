@@ -47,7 +47,7 @@
 - The MVP stores image classification work and results in report_ai_analyses, which is also the durable PostgreSQL-backed job queue.
 - `id`, `report_id`, `model_name`, `model_version`, `analysis_type`, `prediction`, `confidence`, `metadata`
 - Severity (`SEVERITY_ESTIMATION`, migration `20261005130000`) shares the table and queue; its `input_snapshot` JSONB preserves the exact inputs, threshold and rubric version.
-- Embeddings live in `report_embeddings` (pgvector `vector(1536)`, HNSW cosine index), which is likewise its own durable queue. It keeps `input_text`, model and version for auditability.
+- Semantic embeddings live in `report_embeddings` (pgvector `vector(1536)`, HNSW cosine index). Per-photo visual embeddings live in `report_visual_embeddings` (`vector(1408)`, HNSW cosine index). Both are durable queues with model/version, retry, terminal failure, and audit metadata.
 
 ### 7a. Cluster Priority (`20261005140000_create_cluster_priorities.sql`)
 - `issue_cluster_priority_context`: operator-sourced population / location-importance scores (0-1) with mandatory source, updater and reason; every write is copied to `issue_cluster_priority_context_history`.
