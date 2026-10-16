@@ -4,10 +4,6 @@
     {
       "source": "/api/:path*",
       "destination": "https://civic-ai-fq8e.onrender.com/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }

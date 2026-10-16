@@ -108,6 +108,22 @@ test('invite registration establishes the returned government session', async ()
   assert.equal((current as Session | null)?.user.role, 'ADMIN');
 });
 
+test('successful non-JSON responses are rejected before views dereference them', async () => {
+  const api = new GovernmentApi(() => {}, async url => String(url).endsWith('/login')
+    ? response(original)
+    : new Response('<!doctype html>', { status: 200, headers: { 'Content-Type': 'text/html' } }));
+  await api.login(original.user.email, 'password');
+  await assert.rejects(api.reports(), /empty or non-JSON response/);
+});
+
+test('structured validation errors surface their useful message', async () => {
+  const api = new GovernmentApi(() => {}, async () => response({
+    error: [{ path: ['nin'], message: 'NIN must be exactly 11 digits' }],
+  }, 400));
+  await assert.rejects(api.register('admin@example.gov', 'password123', '123', 'invite'),
+    /NIN must be exactly 11 digits/);
+});
+
 test('administration client encodes identifiers and sends admin mutations', async () => {
   const admin: Session = { accessToken: 'admin-access', refreshToken: 'admin-refresh',
     user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN' } };

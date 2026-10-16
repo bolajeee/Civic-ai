@@ -4,6 +4,20 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+function responseError(data: unknown, status: number) {
+  if (!data || typeof data !== 'object' || !('error' in data)) return `Request failed (${status})`;
+  const error = data.error;
+  if (typeof error === 'string') return error;
+  if (Array.isArray(error)) {
+    const issue = error.find(value => value && typeof value === 'object' && 'message' in value
+      && typeof value.message === 'string');
+    if (issue && typeof issue === 'object' && 'message' in issue && typeof issue.message === 'string') {
+      return issue.message;
+    }
+  }
+  return `Request failed (${status})`;
+}
+
 /** Tokens live in memory. Concurrent expired requests share a single rotation. */
 export class GovernmentApi {
   private session: Session | null = null;
@@ -22,8 +36,10 @@ export class GovernmentApi {
         ...(token ? { Authorization: `Bearer ${token}` } : {}) }, cache: 'no-store',
     });
     const data = await response.json().catch(() => null);
-    if (!response.ok) throw new ApiError(response.status,
-      typeof data?.error === 'string' ? data.error : `Request failed (${response.status})`);
+    if (!response.ok) throw new ApiError(response.status, responseError(data, response.status));
+    if (response.status !== 204 && data === null) {
+      throw new ApiError(502, 'The API returned an empty or non-JSON response. Check the deployment proxy and try again.');
+    }
     return data as T;
   }
 
