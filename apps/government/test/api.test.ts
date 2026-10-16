@@ -136,10 +136,12 @@ test('administration client encodes identifiers and sends admin mutations', asyn
     return response({});
   });
   await api.login(admin.user.email, 'password');
+  await api.administration();
   await api.createInvitation('OPERATOR', 24);
   await api.updateAccountStatus('account/unsafe', 'SUSPENDED');
   await api.revokeInvitation('invite/unsafe');
   assert.deepEqual(calls, [
+    { url: '/api/gov/admin', method: undefined, body: undefined },
     { url: '/api/gov/admin/invitations', method: 'POST', body: { role: 'OPERATOR', expiresInHours: 24 } },
     { url: '/api/gov/admin/accounts/account%2Funsafe/status', method: 'PATCH', body: { status: 'SUSPENDED' } },
     { url: '/api/gov/admin/invitations/invite%2Funsafe', method: 'DELETE', body: undefined },

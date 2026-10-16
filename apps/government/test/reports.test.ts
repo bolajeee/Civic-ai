@@ -7,7 +7,7 @@ test('reports client encodes search, date filters and pagination without droppin
   const api = new GovernmentApi(() => {}, async (url, init) => {
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
     const parsed = new URL(String(url), 'https://civic.example');
-    assert.equal(parsed.pathname, '/api/gov/reports/');
+    assert.equal(parsed.pathname, '/api/gov/reports');
     assert.deepEqual(Object.fromEntries(parsed.searchParams), { page: '2', limit: '20', q: 'pothole & %_',
       category: 'POTHOLE', grouping: 'unassigned', location: 'missing', from: '2026-10-01', to: '2026-10-07' });
     assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer access');

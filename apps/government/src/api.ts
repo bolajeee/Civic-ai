@@ -139,7 +139,7 @@ export class GovernmentApi {
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined && value !== '') params.set(key, String(value));
     }
-    return this.authorized<ReportsSnapshot>(`/reports/?${params}`);
+    return this.authorized<ReportsSnapshot>(`/reports?${params}`);
   }
   report(id: string) { return this.authorized<ReportDetailSnapshot>(`/reports/${encodeURIComponent(id)}`); }
   clusters(filters: ClusterFilters = {}) {
@@ -147,7 +147,7 @@ export class GovernmentApi {
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined && value !== '') params.set(key, String(value));
     }
-    return this.authorized<ClustersSnapshot>(`/issue-clusters/?${params}`);
+    return this.authorized<ClustersSnapshot>(`/issue-clusters?${params}`);
   }
   cluster(id: string) { return this.authorized<ClusterDetailSnapshot>(`/issue-clusters/${encodeURIComponent(id)}`); }
   clusterCompilation(id: string) { return this.authorized<IssueCompilationSnapshot>(`/issue-clusters/${encodeURIComponent(id)}/compilation`); }
@@ -212,7 +212,7 @@ export class GovernmentApi {
     if (filters.limit !== undefined) params.set('limit', String(filters.limit));
     return this.authorized<MapSnapshot>(`/dashboard/map?${params}`);
   }
-  administration() { return this.authorized<AdminSnapshot>('/admin/'); }
+  administration() { return this.authorized<AdminSnapshot>('/admin'); }
   createInvitation(role: GovernmentRole, expiresInHours: number) {
     return this.authorized<{ invitation: { id: string; role: GovernmentRole; expiresAt: string; createdAt: string }; code: string }>(
       '/admin/invitations', { method: 'POST', body: JSON.stringify({ role, expiresInHours }) });

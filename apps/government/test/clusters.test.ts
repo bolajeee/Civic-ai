@@ -8,7 +8,7 @@ test('clusters client encodes filters and keeps zero-free pagination values', as
   const api = new GovernmentApi(() => {}, async (url, init) => {
     if (String(url).endsWith('/login')) return new Response(JSON.stringify(session));
     const parsed = new URL(String(url), 'https://civic.example');
-    assert.equal(parsed.pathname, '/api/gov/issue-clusters/');
+    assert.equal(parsed.pathname, '/api/gov/issue-clusters');
     assert.deepEqual(Object.fromEntries(parsed.searchParams), {
       page: '2', limit: '50', q: 'flood & %_', status: 'IN_PROGRESS', category: 'FLOODING',
       review: 'pending', assignment: 'AI', location: 'missing',
