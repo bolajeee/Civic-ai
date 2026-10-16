@@ -107,6 +107,24 @@ void main() {
         'address': 'Ikeja, Lagos',
       });
     });
+
+    test('a manually adjusted pin does not reuse GPS accuracy', () {
+      final location = const ReportLocation(
+        latitude: 6.5,
+        longitude: 3.3,
+        accuracy: 8,
+        source: ReportLocationSource.deviceGps,
+      ).adjusted(latitude: 6.51, longitude: 3.31);
+
+      expect(location.latitude, 6.51);
+      expect(location.longitude, 3.31);
+      expect(location.accuracy, isNull);
+      expect(location.source, ReportLocationSource.userAdjusted);
+      expect(location.toFormFields(), {
+        'latitude': '6.51',
+        'longitude': '3.31',
+      });
+    });
   });
 
   group('SubmittedReport.fromJson', () {

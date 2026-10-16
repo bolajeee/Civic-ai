@@ -42,6 +42,10 @@ dependencies:
   # geocoder. No API key, no per-request cost.
   geocoding: ^3.0.0
 
+  # Citizen confirmation and correction of the final report pin.
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
   # URL launcher (Terms & Privacy links)
   url_launcher: ^6.3.0
 

@@ -54,11 +54,15 @@ abstract final class AppConstants {
 
   // Location capture
   //
-  // A hard ceiling on the wait for a fix. `LocationAccuracy.high` is requested,
+  // A hard ceiling on the wait for a fix. `LocationAccuracy.best` is requested,
   // but a citizen standing over a pothole should not be made to wait for a
   // perfect one — whatever the device has when this elapses is what gets
   // attached, falling back to the last known position.
   static const Duration reportLocationTimeout = Duration(seconds: 20);
+  static const Duration reportLocationMaxAge = Duration(minutes: 2);
+  static const int reportLocationSampleCount = 4;
+  static const double reportLocationTargetAccuracyMetres = 20.0;
+  static const double reportLocationMaxAccuracyMetres = 500.0;
 
   // Spacing
   static const double spacingXs = 4.0;

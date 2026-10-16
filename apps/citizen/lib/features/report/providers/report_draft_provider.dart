@@ -44,7 +44,9 @@ class ReportDraftProvider extends ChangeNotifier {
   ReportCategory? _category;
   String _description = '';
   ReportLocation? _location;
+  ReportLocation? _locationCandidate;
   bool _isLocating = false;
+  bool _isConfirmingLocation = false;
   LocationFailure? _locationFailure;
 
   // --- Submission -----------------------------------------------------------
@@ -83,7 +85,9 @@ class ReportDraftProvider extends ChangeNotifier {
   /// Null when no fix was captured — either it has not been attempted yet, or
   /// it failed. [locationFailure] says which.
   ReportLocation? get location => _location;
+  ReportLocation? get locationCandidate => _locationCandidate;
   bool get isLocating => _isLocating;
+  bool get isConfirmingLocation => _isConfirmingLocation;
   LocationFailure? get locationFailure => _locationFailure;
 
   bool get isSubmitting => _isSubmitting;
@@ -178,15 +182,42 @@ class ReportDraftProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _location = await _locationService.capture();
+      _locationCandidate = await _locationService.capture();
+      _location = null;
     } on LocationException catch (e) {
       _locationFailure = e.failure;
       _location = null;
+      _locationCandidate = null;
     } catch (_) {
       _locationFailure = LocationFailure.unavailable;
       _location = null;
+      _locationCandidate = null;
     } finally {
       _isLocating = false;
+      notifyListeners();
+    }
+  }
+
+  void adjustLocation(double latitude, double longitude) {
+    final candidate = _locationCandidate;
+    if (candidate == null) return;
+    _locationCandidate = candidate.adjusted(
+      latitude: latitude,
+      longitude: longitude,
+    );
+    notifyListeners();
+  }
+
+  Future<void> confirmLocation() async {
+    final candidate = _locationCandidate;
+    if (candidate == null || _isConfirmingLocation) return;
+    _isConfirmingLocation = true;
+    notifyListeners();
+    try {
+      _location = await _locationService.reverseGeocode(candidate);
+      _locationCandidate = null;
+    } finally {
+      _isConfirmingLocation = false;
       notifyListeners();
     }
   }
@@ -277,6 +308,7 @@ class ReportDraftProvider extends ChangeNotifier {
     _category = null;
     _description = '';
     _location = null;
+    _locationCandidate = null;
     _locationFailure = null;
     _errorMessage = null;
     _photoErrorMessage = null;
@@ -301,6 +333,7 @@ class ReportDraftProvider extends ChangeNotifier {
       _category != null ||
       _description.isNotEmpty ||
       _location != null ||
+      _locationCandidate != null ||
       _locationFailure != null ||
       _errorMessage != null ||
       _photoErrorMessage != null ||

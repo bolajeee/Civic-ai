@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -62,6 +64,25 @@ class LocationException implements Exception {
   String toString() => 'LocationException(${failure.name})';
 }
 
+/// Applies the quality boundary used before any live or cached fix is accepted.
+@visibleForTesting
+bool isUsableReportPosition(Position position, DateTime now) {
+  if (!position.latitude.isFinite ||
+      !position.longitude.isFinite ||
+      !position.accuracy.isFinite ||
+      position.latitude < -90 ||
+      position.latitude > 90 ||
+      position.longitude < -180 ||
+      position.longitude > 180 ||
+      position.accuracy < 0 ||
+      position.accuracy > AppConstants.reportLocationMaxAccuracyMetres) {
+    return false;
+  }
+  final age = now.toUtc().difference(position.timestamp.toUtc());
+  return age <= AppConstants.reportLocationMaxAge &&
+      age >= const Duration(minutes: -1);
+}
+
 /// Resolves the device's current position and, where possible, a street
 /// address for it.
 ///
@@ -78,15 +99,21 @@ class LocationService {
   Future<ReportLocation> capture() async {
     await _ensurePermission();
 
-    final position = await _currentPosition();
+    final sample = await _bestPosition();
 
     return ReportLocation(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      accuracy: position.accuracy,
-      address: await _reverseGeocode(position),
+      latitude: sample.position.latitude,
+      longitude: sample.position.longitude,
+      accuracy: sample.position.accuracy,
+      source: sample.source,
+      capturedAt: sample.position.timestamp,
     );
   }
+
+  Future<ReportLocation> reverseGeocode(ReportLocation location) async =>
+      location.withAddress(
+        await _reverseGeocode(location.latitude, location.longitude),
+      );
 
   /// Opens the OS settings page for this app, so the citizen can undo a
   /// permanent denial without hunting through the Settings app.
@@ -136,41 +163,72 @@ class LocationService {
     }
   }
 
-  /// A single fix, biased towards speed over precision.
-  ///
-  /// No continuous stream: a report is pinned to where the citizen stood when
-  /// they filed it, not to where they walked afterwards.
-  Future<Position> _currentPosition() async {
-    try {
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: AppConstants.reportLocationTimeout,
-        ),
-      );
-    } catch (_) {
-      // `getCurrentPosition` throws on timeout and on a failed fix. Fall back
-      // to the last known position — a fix from a minute ago is still far more
-      // useful on a report than no location at all.
-      //
-      // Skipped on web, where `getLastKnownPosition` is unimplemented and throws
-      // rather than returning null, which would escape this method instead of
-      // becoming the `unavailable` failure the caller knows how to report.
-      if (!kIsWeb) {
-        final lastKnown = await Geolocator.getLastKnownPosition();
-        if (lastKnown != null) return lastKnown;
-      }
+  /// Collects a bounded set of fixes and returns the most accurate valid one.
+  Future<_PositionSample> _bestPosition() async {
+    final positions = <Position>[];
+    StreamSubscription<Position>? subscription;
+    Timer? deadline;
 
-      throw const LocationException(LocationFailure.unavailable);
+    try {
+      final done = Completer<void>();
+      subscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 0,
+        ),
+      ).listen((position) {
+        if (!_isValid(position, DateTime.now())) return;
+        positions.add(position);
+        final enough =
+            positions.length >= AppConstants.reportLocationSampleCount;
+        final accurateEnough = positions.length >= 2 &&
+            positions.any((item) =>
+                item.accuracy <=
+                AppConstants.reportLocationTargetAccuracyMetres);
+        if ((enough || accurateEnough) && !done.isCompleted) done.complete();
+      }, onError: (_) {
+        if (!done.isCompleted) done.complete();
+      });
+      deadline = Timer(AppConstants.reportLocationTimeout, () {
+        if (!done.isCompleted) done.complete();
+      });
+      await done.future;
+    } catch (_) {
+      // The bounded cached fallback below may still provide a valid fix.
+    } finally {
+      deadline?.cancel();
+      await subscription?.cancel();
     }
+
+    if (positions.isNotEmpty) {
+      positions.sort((a, b) => a.accuracy.compareTo(b.accuracy));
+      return _PositionSample(positions.first, ReportLocationSource.deviceGps);
+    }
+
+    if (!kIsWeb) {
+      try {
+        final cached = await Geolocator.getLastKnownPosition();
+        if (cached != null && _isValid(cached, DateTime.now())) {
+          return _PositionSample(cached, ReportLocationSource.cachedGps);
+        }
+      } catch (_) {
+        // An unavailable platform cache is equivalent to an empty cache.
+      }
+    }
+
+    throw const LocationException(LocationFailure.unavailable);
+  }
+
+  bool _isValid(Position position, DateTime now) {
+    return isUsableReportPosition(position, now);
   }
 
   /// Best-effort street address. Returns null on any failure, by design.
-  Future<String?> _reverseGeocode(Position position) async {
+  Future<String?> _reverseGeocode(double latitude, double longitude) async {
     try {
       final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
+        latitude,
+        longitude,
       );
 
       if (placemarks.isEmpty) return null;
@@ -193,8 +251,7 @@ class LocationService {
       if (_hasText(placemark.street)) placemark.street!,
       if (_hasText(placemark.subLocality)) placemark.subLocality!,
       if (_hasText(placemark.locality)) placemark.locality!,
-      if (_hasText(placemark.administrativeArea))
-        placemark.administrativeArea!,
+      if (_hasText(placemark.administrativeArea)) placemark.administrativeArea!,
     ];
 
     final unique = <String>[];
@@ -207,4 +264,10 @@ class LocationService {
   }
 
   bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+}
+
+class _PositionSample {
+  const _PositionSample(this.position, this.source);
+  final Position position;
+  final ReportLocationSource source;
 }
