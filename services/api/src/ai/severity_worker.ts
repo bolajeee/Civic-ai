@@ -18,7 +18,7 @@ export function startSeverityWorker(logger: FastifyBaseLogger): () => void {
   let timer: NodeJS.Timeout | undefined;
   const run = async () => {
     try { await processOneSeverityJob(logger); }
-    catch { logger.error('AI severity queue poll failed'); }
+    catch (error) { logger.error({ err: error }, 'AI severity queue poll failed'); }
     finally { if (!stopped) timer = setTimeout(run, 3_000); }
   };
   void run();
@@ -101,7 +101,7 @@ export async function processOneSeverityJob(logger: FastifyBaseLogger): Promise<
     await query(
       `UPDATE report_ai_analyses SET status = $2, error_code = $3,
        next_attempt_at = NOW() + ($4 * INTERVAL '1 millisecond'), updated_at = NOW(),
-       completed_at = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END
+       completed_at = CASE WHEN $2::varchar = 'FAILED' THEN NOW() ELSE NULL END
        WHERE id = $1 AND status = 'PROCESSING' AND attempt_count = $5`,
       [job.id, canRetry ? 'PENDING' : 'FAILED', code, delay, job.attempt_count]);
     logger.error({ analysisId: job.id, errorCode: code, retryScheduled: canRetry }, 'AI severity job failed');

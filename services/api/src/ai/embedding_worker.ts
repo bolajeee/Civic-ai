@@ -31,8 +31,8 @@ export function startEmbeddingWorker(logger: FastifyBaseLogger): () => void {
   const runOnce = async () => {
     try {
       await processOneJob(logger);
-    } catch {
-      logger.error('AI embedding queue poll failed');
+    } catch (error) {
+      logger.error({ err: error }, 'AI embedding queue poll failed');
     } finally {
       schedule();
     }
@@ -176,7 +176,7 @@ async function processOneJob(logger: FastifyBaseLogger): Promise<void> {
            error_code = $3,
            next_attempt_at = NOW() + ($4 * INTERVAL '1 millisecond'),
            updated_at = NOW(),
-           completed_at = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END
+           completed_at = CASE WHEN $2::varchar = 'FAILED' THEN NOW() ELSE NULL END
        WHERE id = $1`,
       [job.id, canRetry ? 'PENDING' : 'FAILED', code, delay],
     );

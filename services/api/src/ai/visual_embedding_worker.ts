@@ -103,7 +103,7 @@ export async function processOneVisualEmbeddingJob(logger: FastifyBaseLogger): P
     await query(
       `UPDATE report_visual_embeddings SET status = $2, error_code = $3,
          next_attempt_at = NOW() + ($4 * INTERVAL '1 millisecond'), updated_at = NOW(),
-         completed_at = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END
+         completed_at = CASE WHEN $2::varchar = 'FAILED' THEN NOW() ELSE NULL END
        WHERE id = $1`,
       [job.id, retry ? 'PENDING' : 'FAILED', failure.code, delay],
     );
