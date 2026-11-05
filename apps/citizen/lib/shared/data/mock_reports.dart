@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../features/report/models/submitted_report.dart';
 import '../widgets/report_card.dart';
 
 /// Centralised mock report data used by Home and History screens.
@@ -29,7 +30,7 @@ const List<ReportCardData> kMockReports = [
     id: 'CR-2831',
     title: 'Severe Street Flooding after Downtown',
     location: 'Wuse II, Abuja',
-    status: ReportStatus.inReview,
+    status: ReportStatus.inProgress,
     timeAgo: 'Yesterday',
     categoryIcon: Icons.umbrella_outlined,
     category: 'Flooding',
@@ -48,7 +49,7 @@ const List<ReportCardData> kMockReports = [
     id: 'CR-2819',
     title: 'Broken Streetlight Pillar',
     location: 'Garki, Abuja',
-    status: ReportStatus.assigned,
+    status: ReportStatus.inProgress,
     timeAgo: '3 days ago',
     categoryIcon: Icons.wb_sunny_outlined,
     category: 'Streetlight',
