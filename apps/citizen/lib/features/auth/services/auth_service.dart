@@ -28,6 +28,7 @@ class AuthService {
     final response = await _dio.post(
       '/api/auth/register',
       data: {
+        'fullName': fullName,
         'email': email,
         'password': password,
         'nin': nin,
@@ -76,6 +77,52 @@ class AuthService {
     return auth;
   }
 
+  Future<AuthResponseModel> socialLogin({
+    required String provider,
+    required String idToken,
+    String? nonce,
+  }) async {
+    final response = await _dio.post(
+      '/api/auth/social',
+      data: {
+        'provider': provider,
+        'idToken': idToken,
+        if (nonce != null) 'nonce': nonce,
+      },
+    );
+
+    final auth = AuthResponseModel.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+    await _storage.saveTokens(
+      accessToken: auth.accessToken,
+      refreshToken: auth.refreshToken,
+      userId: auth.user.id,
+    );
+    return auth;
+  }
+
+  /// Requests a six-digit recovery code. [debugCode] is present only when the
+  /// API is not running in production and email delivery is being developed.
+  Future<String?> requestPasswordReset({required String email}) async {
+    final response = await _dio.post(
+      '/api/auth/forgot-password',
+      data: {'email': email},
+    );
+    return (response.data as Map<String, dynamic>)['debugCode'] as String?;
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    await _dio.post(
+      '/api/auth/reset-password',
+      data: {'email': email, 'code': code, 'password': password},
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Me
   // ---------------------------------------------------------------------------
@@ -83,6 +130,19 @@ class AuthService {
   /// Fetches the authenticated user's profile from the server.
   Future<UserModel> getMe() async {
     final response = await _dio.get('/api/auth/me');
+    return UserModel.fromJson(
+      (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<UserModel> updateProfile({
+    required String fullName,
+    String? phone,
+  }) async {
+    final response = await _dio.patch(
+      '/api/auth/me',
+      data: {'fullName': fullName, 'phone': phone},
+    );
     return UserModel.fromJson(
       (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>,
     );

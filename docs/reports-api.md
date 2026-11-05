@@ -1,0 +1,138 @@
+# Citizen reports API
+
+## Citizen report history
+
+`GET /api/reports`
+
+Requires the citizen access token and always scopes results to the JWT user ID.
+It accepts `limit` (1–100, default 20), `offset` (default 0), an optional exact
+`status`, and an optional `q` of at most 100 characters. Search is a
+case-insensitive literal match over the public reference, description, category,
+and saved address; `%` and `_` have no wildcard meaning.
+
+Results use deterministic newest-first ordering and return one pagination object:
+
+```json
+{
+  "pagination": { "limit": 20, "offset": 0, "hasMore": true },
+  "reports": []
+}
+```
+
+The Flutter History screen requests subsequent pages as the citizen approaches
+the end of the list. Status changes restart at offset zero. Home uses the same
+endpoint for a debounced full-dataset search but requests only its first three
+matches. Client-supplied citizen identifiers are ignored.
+
+## Citizen report details
+
+`GET /api/reports/:publicId`
+
+Requires the citizen access token. `publicId` is the citizen-facing `CR-…`
+reference. The query also scopes by the JWT user ID; a valid reference owned by
+someone else returns the same `404` as a missing report.
+
+The response contains the full report, current cluster priority band when a
+completed calculation exists, assigned agency or `null`, the citizen's public
+reference, ordered photos with renewable 15-minute signed URLs, and durable
+status events with timestamps. It uses `Cache-Control: no-store`.
+
+```json
+{
+  "report": {
+    "publicId": "CR-1000",
+    "status": "IN_PROGRESS",
+    "priority": "HIGH",
+    "assignedAgency": "Lagos State Public Works",
+    "citizenReference": "USR-42",
+    "photos": [
+      { "id": "…", "mediaType": "image/jpeg", "displayOrder": 0, "url": "https://…" }
+    ],
+    "events": [
+      { "id": "…", "status": "PENDING", "occurredAt": "2026-10-13T08:00:00.000Z" },
+      { "id": "…", "status": "IN_PROGRESS", "occurredAt": "2026-10-13T09:00:00.000Z" }
+    ]
+  }
+}
+```
+
+The citizen app always refreshes this endpoint on opening details. This allows
+direct links to older reports, refreshes expiring photo URLs, and avoids
+inventing timeline steps from the current status.
+
+## Citizen report summary
+
+`GET /api/reports/summary`
+
+Requires `Authorization: Bearer <accessToken>` using the existing citizen login
+access token. No request body or query parameters are required.
+
+Successful response (`200 OK`):
+
+```json
+{
+  "total": 42,
+  "pending": 10,
+  "inProgress": 15,
+  "resolved": 17,
+  "rejected": 0
+}
+```
+
+All fields are non-negative integer JSON numbers and are always present. A citizen
+with no reports receives zero for every field. `total` includes every status,
+including `REJECTED`, and equals the sum of the four status counts.
+
+Counts come directly from all reports whose `citizen_id` matches the verified
+JWT's `id`. They are independent of report-history pagination. Query parameters
+(including `limit`, `offset`, status filters, or a supplied citizen ID) do not
+change the summary or its owner.
+
+Errors follow the existing report API conventions:
+
+- Missing, expired, or invalid access token: `401 { "error": "Unauthorized" }`.
+- Database/server failure: `500 { "error": "Internal Server Error" }`.
+
+Home/Profile statistics should consume this endpoint separately from the paginated
+`GET /api/reports` history. Flutter uses `ReportSummaryProvider` for both screens,
+refreshes after submission and on pull-to-refresh, and clears counts on account changes.
+
+## Severity analysis on citizen reports
+
+`POST /api/reports` adds `report.aiSeverityStatus`: `disabled`, `pending`, or
+`skipped`. Analysis is asynchronous; a successful submission does not wait for a
+model call. `GET /api/reports` adds `aiSeverity` on each owner-scoped report:
+
+```json
+{
+  "aiSeverity": {
+    "status": "completed",
+    "model": "gpt-6-luna",
+    "modelVersion": "returned-model-version",
+    "estimate": {
+      "level": "HIGH",
+      "suggestedLevel": "HIGH",
+      "score": 0.75,
+      "confidence": 0.9,
+      "visualEvidence": "A large section of the road is damaged.",
+      "descriptionEvidence": "The citizen reports partial blockage; this is unverified.",
+      "geographicContext": "No location was supplied.",
+      "uncertainty": "Depth and scale cannot be measured from this photo.",
+      "reviewRequired": false,
+      "threshold": 0.65,
+      "rubricVersion": "civic-severity-v1",
+      "modelVersion": "returned-model-version"
+    }
+  }
+}
+```
+
+`aiSeverity` is null when disabled or no job exists. Job status is one of
+`pending`, `processing`, `completed`, `failed`, `skipped`. `estimate` is null
+unless completed. Accepted `level` is LOW, MODERATE, HIGH, CRITICAL or null;
+`suggestedLevel` additionally allows UNSURE. UNSURE or low confidence preserves
+evidence but sets accepted level/score to null and `reviewRequired` to true.
+CRITICAL also requires review. The score is an ordinal severity input, not
+priority, and confidence is an uncalibrated model assessment. Citizen report
+status and category remain unchanged. Failed/skipped analyses must never be
+displayed as low severity. Flutter currently ignores these additive fields.

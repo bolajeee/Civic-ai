@@ -1,0 +1,314 @@
+import 'package:civic_report/features/report/models/ai_classification.dart';
+import 'package:civic_report/features/report/models/report_category.dart';
+import 'package:civic_report/features/report/models/report_location.dart';
+import 'package:civic_report/features/report/models/submitted_report.dart';
+import 'package:civic_report/features/report/screens/report_details_screen.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Tests for the report models.
+///
+/// `SubmittedReport.fromJson` is the one that matters most here: it pins the
+/// camelCase field names the API returns. The create endpoint once replied in
+/// raw snake_case (`public_id`) while the list endpoint replied in camelCase,
+/// which is exactly the kind of drift a test should catch rather than a
+/// `TypeError` in the citizen's hands.
+void main() {
+  group('ReportStatus', () {
+    test('maps every status the database enum can hold', () {
+      expect(ReportStatus.fromApi('PENDING'), ReportStatus.pending);
+      expect(ReportStatus.fromApi('IN_PROGRESS'), ReportStatus.inProgress);
+      expect(ReportStatus.fromApi('RESOLVED'), ReportStatus.resolved);
+      expect(ReportStatus.fromApi('REJECTED'), ReportStatus.rejected);
+    });
+
+    test('an unrecognised status is unknown, not pending', () {
+      // A status added server-side must not be mislabelled as Pending — that
+      // would tell the citizen nothing has happened when something has.
+      expect(ReportStatus.fromApi('ESCALATED'), ReportStatus.unknown);
+    });
+
+    test('a missing status is unknown', () {
+      expect(ReportStatus.fromApi(null), ReportStatus.unknown);
+    });
+
+    test('labels match the reference design', () {
+      expect(ReportStatus.pending.label, 'Pending');
+      expect(ReportStatus.inProgress.label, 'In Progress');
+      expect(ReportStatus.resolved.label, 'Resolved');
+    });
+  });
+
+  group('ReportLocation', () {
+    test('shows the address when there is one', () {
+      const location = ReportLocation(
+        latitude: 6.5244,
+        longitude: 3.3792,
+        address: 'Ikeja, Lagos',
+      );
+
+      expect(location.displayLabel, 'Ikeja, Lagos');
+    });
+
+    test('falls back to coordinates when geocoding found nothing', () {
+      const location = ReportLocation(latitude: 6.5244, longitude: 3.3792);
+
+      expect(location.displayLabel, '6.52440, 3.37920');
+    });
+
+    test('treats a blank address as no address', () {
+      const location = ReportLocation(
+        latitude: 6.5244,
+        longitude: 3.3792,
+        address: '',
+      );
+
+      expect(location.displayLabel, '6.52440, 3.37920');
+    });
+
+    test('renders accuracy as a rounded radius', () {
+      const location = ReportLocation(
+        latitude: 6.5244,
+        longitude: 3.3792,
+        accuracy: 12.4,
+      );
+
+      expect(location.accuracyLabel, '±12 m');
+    });
+
+    test('has no accuracy label when the device did not report one', () {
+      const location = ReportLocation(latitude: 6.5, longitude: 3.3);
+
+      expect(location.accuracyLabel, isNull);
+    });
+
+    test('form fields carry the coordinates as strings', () {
+      const location = ReportLocation(latitude: 6.5, longitude: 3.3);
+
+      // Numbers, not strings: every multipart part is text, and the API
+      // coerces. Sending them as anything else would arrive mangled.
+      expect(location.toFormFields(), {
+        'latitude': '6.5',
+        'longitude': '3.3',
+      });
+    });
+
+    test('form fields include accuracy and address only when present', () {
+      const location = ReportLocation(
+        latitude: 6.5,
+        longitude: 3.3,
+        accuracy: 8.0,
+        address: 'Ikeja, Lagos',
+      );
+
+      expect(location.toFormFields(), {
+        'latitude': '6.5',
+        'longitude': '3.3',
+        'accuracy': '8.0',
+        'address': 'Ikeja, Lagos',
+      });
+    });
+
+    test('a manually adjusted pin does not reuse GPS accuracy', () {
+      final location = const ReportLocation(
+        latitude: 6.5,
+        longitude: 3.3,
+        accuracy: 8,
+        source: ReportLocationSource.deviceGps,
+      ).adjusted(latitude: 6.51, longitude: 3.31);
+
+      expect(location.latitude, 6.51);
+      expect(location.longitude, 3.31);
+      expect(location.accuracy, isNull);
+      expect(location.source, ReportLocationSource.userAdjusted);
+      expect(location.toFormFields(), {
+        'latitude': '6.51',
+        'longitude': '3.31',
+      });
+    });
+  });
+
+  group('SubmittedReport.fromJson', () {
+    // Exactly the shape GET /api/reports returns.
+    final json = <String, dynamic>{
+      'id': 'a1b2c3d4-0000-0000-0000-000000000000',
+      'publicId': 'CR-1000',
+      'status': 'PENDING',
+      'description': 'Deep pothole outside the market gate',
+      'submittedAt': '2026-09-27T10:30:00.000Z',
+      'category': {
+        'id': 'c0000000-0000-0000-0000-000000000001',
+        'slug': 'POTHOLE',
+        'label': 'Pothole',
+      },
+      'location': {
+        'latitude': 6.5244,
+        'longitude': 3.3792,
+        'accuracy': 12.0,
+        'address': 'Ikeja, Lagos',
+      },
+      'photoCount': 3,
+      'thumbnailUrl': 'https://example.test/signed/one.jpg',
+      'priority': 'HIGH',
+      'assignedAgency': 'Lagos State Public Works',
+      'citizenReference': 'USR-42',
+      'clusterPublicId': 'IC-1000',
+      'photos': [
+        {
+          'id': 'm1',
+          'mediaType': 'image/jpeg',
+          'displayOrder': 0,
+          'url': 'https://example.test/one.jpg'
+        },
+        {
+          'id': 'm2',
+          'mediaType': 'image/png',
+          'displayOrder': 1,
+          'url': 'https://example.test/two.png'
+        },
+      ],
+      'events': [
+        {
+          'id': 'e1',
+          'status': 'PENDING',
+          'occurredAt': '2026-09-27T10:30:00.000Z'
+        },
+        {
+          'id': 'e2',
+          'status': 'IN_PROGRESS',
+          'occurredAt': '2026-09-28T09:00:00.000Z'
+        },
+      ],
+    };
+
+    test('parses a complete row', () {
+      final report = SubmittedReport.fromJson(json);
+
+      expect(report.publicId, 'CR-1000');
+      expect(report.status, ReportStatus.pending);
+      expect(report.category.label, 'Pothole');
+      expect(report.category.slug, 'POTHOLE');
+      expect(report.photoCount, 3);
+      expect(report.description, 'Deep pothole outside the market gate');
+      expect(report.submittedAt, DateTime.utc(2026, 9, 27, 10, 30));
+      expect(report.location?.displayLabel, 'Ikeja, Lagos');
+      expect(report.thumbnailUrl, 'https://example.test/signed/one.jpg');
+      expect(report.priority, 'HIGH');
+      expect(report.assignedAgency, 'Lagos State Public Works');
+      expect(report.citizenReference, 'USR-42');
+      expect(report.photos.map((photo) => photo.id), ['m1', 'm2']);
+      expect(report.events.last.status, ReportStatus.inProgress);
+      expect(report.events.last.occurredAt, DateTime.utc(2026, 9, 28, 9));
+    });
+
+    test('tolerates a report with no location', () {
+      final report = SubmittedReport.fromJson({...json, 'location': null});
+
+      expect(report.location, isNull);
+      expect(report.publicId, 'CR-1000');
+    });
+
+    test('tolerates a report whose thumbnail could not be signed', () {
+      final report = SubmittedReport.fromJson({
+        ...json,
+        'thumbnailUrl': null,
+      });
+
+      expect(report.thumbnailUrl, isNull);
+    });
+
+    test('an unparseable timestamp becomes null rather than throwing', () {
+      final report = SubmittedReport.fromJson({
+        ...json,
+        'submittedAt': 'not-a-date',
+      });
+
+      expect(report.submittedAt, isNull);
+    });
+
+    test('receipt is generated from recorded detail values and events', () {
+      final receipt = buildReportReceipt(SubmittedReport.fromJson(json));
+      expect(receipt, contains('CivicAI Report Receipt'));
+      expect(receipt, contains('Report: CR-1000'));
+      expect(receipt, contains('Priority: High'));
+      expect(receipt, contains('Assigned agency: Lagos State Public Works'));
+      expect(receipt, contains('In Progress:'));
+    });
+  });
+
+  group('AiClassification', () {
+    test('parses a completed check with a suggestion', () {
+      final ai = AiClassification.fromJson({
+        'status': 'completed',
+        'category': {'id': 'c1', 'slug': 'POTHOLE', 'label': 'Pothole'},
+        'confidence': 0.824,
+        'evidence': 'A hole in the tarmac.',
+      });
+
+      expect(ai.status, AiClassificationStatus.completed);
+      expect(ai.category?.slug, 'POTHOLE');
+      expect(ai.confidenceLabel, '82%');
+      expect(ai.isVisible, isTrue);
+    });
+
+    test('an unsure result keeps its score but has no category', () {
+      final ai = AiClassification.fromJson({
+        'status': 'completed',
+        'category': null,
+        'confidence': 0.3,
+        'evidence': 'Unclear.',
+      });
+
+      expect(ai.category, isNull);
+      expect(ai.confidenceLabel, '30%');
+      expect(ai.isVisible, isTrue);
+    });
+
+    test('in-progress checks are visible, failed and skipped are not', () {
+      AiClassification of(String status) =>
+          AiClassification.fromJson({'status': status});
+
+      expect(of('pending').isVisible, isTrue);
+      expect(of('processing').isInProgress, isTrue);
+      expect(of('failed').isVisible, isFalse);
+      expect(of('skipped').isVisible, isFalse);
+      expect(of('disabled').isVisible, isFalse);
+    });
+
+    test('SubmittedReport parses it, and tolerates its absence', () {
+      final base = <String, dynamic>{
+        'id': 'r1',
+        'publicId': 'CR-1',
+        'status': 'PENDING',
+        'category': {'id': 'c1', 'slug': 'POTHOLE', 'label': 'Pothole'},
+      };
+
+      expect(SubmittedReport.fromJson(base).aiClassification, isNull);
+      expect(
+        SubmittedReport.fromJson({
+          ...base,
+          'aiClassification': {'status': 'pending'},
+        }).aiClassification?.isInProgress,
+        isTrue,
+      );
+    });
+  });
+
+  group('ReportCategory', () {
+    test('two categories are equal when their ids match', () {
+      const a = ReportCategory(id: 'x', slug: 'POTHOLE', label: 'Pothole');
+      const b = ReportCategory(id: 'x', slug: 'POTHOLE', label: 'Pothole');
+
+      // Selection is stored by identity, so this equality is what makes the
+      // selected tile stay selected across a rebuild.
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('different ids are different categories', () {
+      const a = ReportCategory(id: 'x', slug: 'POTHOLE', label: 'Pothole');
+      const b = ReportCategory(id: 'y', slug: 'POTHOLE', label: 'Pothole');
+
+      expect(a, isNot(b));
+    });
+  });
+}

@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../providers/auth_provider.dart';
-import '../../../core/router/app_router.dart';
 
 /// Splash screen — dark green background, shield icon, brand name, tagline.
 ///
-/// Listens to [AuthProvider.status]:
-///   - [AuthStatus.initializing] → stays on splash while session is being restored
-///   - [AuthStatus.authenticated] → navigates to home
-///   - [AuthStatus.unauthenticated] → navigates to login
+/// Navigation is handled entirely by [GoRouter]'s redirect callback, which
+/// listens to [AuthProvider] via [refreshListenable]. This screen only owns
+/// its animation — it never calls [context.go] itself.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -30,7 +25,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // Force the status bar to be light-on-dark for the green background
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
@@ -52,7 +46,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     _controller.dispose();
-    // Restore dark status bar icons for white screens
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -62,34 +55,21 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        // Navigate once the provider finishes initializing
-        if (auth.status == AuthStatus.authenticated) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) context.go(AppRoutes.permissions);
-          });
-        } else if (auth.status == AuthStatus.unauthenticated) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) context.go(AppRoutes.login);
-          });
-        }
-
-        return Scaffold(
-          backgroundColor: AppColors.primaryDark,
-          body: SafeArea(
-            child: Center(
-              child: FadeTransition(
-                opacity: _fadeIn,
-                child: ScaleTransition(
-                  scale: _scaleIn,
-                  child: const _SplashContent(),
-                ),
-              ),
+    // No Consumer / navigation logic here — the router redirect handles
+    // moving away from splash once AuthProvider.status changes.
+    return Scaffold(
+      backgroundColor: AppColors.primaryDark,
+      body: SafeArea(
+        child: Center(
+          child: FadeTransition(
+            opacity: _fadeIn,
+            child: ScaleTransition(
+              scale: _scaleIn,
+              child: const _SplashContent(),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -103,17 +83,17 @@ class _SplashContent extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Shield icon circle
-       _ShieldCircle(),
+        _ShieldCircle(),
 
-       SizedBox(height: 24),
+        SizedBox(height: 24),
 
         // Brand name
-       Text('Civic Report', style: AppTextStyles.splashTitle),
+        Text('Civic Report', style: AppTextStyles.splashTitle),
 
-       SizedBox(height: 8),
+        SizedBox(height: 8),
 
         // Tagline
-       Text(
+        Text(
           'Empowering Citizens. Building Nigeria.',
           style: AppTextStyles.splashTagline,
           textAlign: TextAlign.center,

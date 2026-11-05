@@ -2,36 +2,35 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../features/report/models/relative_time.dart';
+import '../../features/report/models/submitted_report.dart';
+import '../data/report_categories.dart';
 
 // ---------------------------------------------------------------------------
-// ReportStatus — drives badge colours throughout the app
+// ReportStatus lives with the model
+// (lib/features/report/models/submitted_report.dart) because it mirrors the
+// `report_status` column and carries `fromApi`. This file used to declare a
+// second, competing enum — pending / inReview / assigned / resolved — whose
+// middle two values have no server-side meaning at all, so a status could not
+// survive the trip from the API to a badge without a lossy translation.
+//
+// Only the presentation of a status belongs here, and only as an extension:
+// the enum's own `label` is the single source for what a status is called.
 // ---------------------------------------------------------------------------
 
-enum ReportStatus { pending, inReview, assigned, resolved }
-
-extension ReportStatusX on ReportStatus {
-  String get label {
-    switch (this) {
-      case ReportStatus.pending:
-        return 'Pending';
-      case ReportStatus.inReview:
-        return 'In Review';
-      case ReportStatus.assigned:
-        return 'Assigned';
-      case ReportStatus.resolved:
-        return 'Resolved';
-    }
-  }
-
+extension ReportStatusVisuals on ReportStatus {
   Color get textColor {
     switch (this) {
       case ReportStatus.pending:
         return AppColors.statusPendingText;
-      case ReportStatus.inReview:
-      case ReportStatus.assigned:
+      case ReportStatus.inProgress:
         return AppColors.statusInProgressText;
       case ReportStatus.resolved:
         return AppColors.statusResolvedText;
+      case ReportStatus.rejected:
+        return AppColors.statusRejectedText;
+      case ReportStatus.unknown:
+        return AppColors.statusUnknownText;
     }
   }
 
@@ -39,11 +38,14 @@ extension ReportStatusX on ReportStatus {
     switch (this) {
       case ReportStatus.pending:
         return AppColors.statusPendingBg;
-      case ReportStatus.inReview:
-      case ReportStatus.assigned:
+      case ReportStatus.inProgress:
         return AppColors.statusInProgressBg;
       case ReportStatus.resolved:
         return AppColors.statusResolvedBg;
+      case ReportStatus.rejected:
+        return AppColors.statusRejectedBg;
+      case ReportStatus.unknown:
+        return AppColors.statusUnknownBg;
     }
   }
 }
@@ -52,16 +54,24 @@ extension ReportStatusX on ReportStatus {
 // ReportCardData — plain immutable value object.
 //
 // Fields:
-//   id           — report reference number, e.g. "CR-2847"
+//   id           — the citizen-facing report id, e.g. "CR-2847". It is what
+//                  routes carry, so it is `SubmittedReport.publicId`.
 //   title        — short description of the issue
 //   location     — human-readable address
 //   status       — current lifecycle status
 //   timeAgo      — human-readable relative time, e.g. "2 hours ago"
 //   categoryIcon — fallback icon when imageUrl is null
-//   imageUrl     — nullable network/asset URL for the evidence photo.
-//                  When provided, the card shows a photo thumbnail instead of
-//                  the icon box. Set to null for mock data; replaced by real
-//                  URLs when the backend is integrated.
+//   imageUrl     — nullable network URL for the evidence photo. When provided,
+//                  the card shows a photo thumbnail instead of the icon box;
+//                  when null, the category icon box. Real signed URLs come
+//                  from `SubmittedReport.thumbnailUrl`.
+//
+// The four fields with no backend source yet — priority, assignedAgency,
+// citizenReference, and description when the citizen wrote none — default to
+// [kNoValue] rather than to a plausible-looking sample. A row that reads "—"
+// tells the truth about what the app knows; the Figma sample values it used to
+// default to ("Medium", "Pending assignment", "CIV-2026-0000") were
+// indistinguishable from real data once on screen.
 // ---------------------------------------------------------------------------
 
 class ReportCardData {
@@ -73,17 +83,64 @@ class ReportCardData {
     required this.timeAgo,
     required this.categoryIcon,
     this.category = 'Other',
-    this.description = 'This report was submitted by a citizen for local review.',
-    this.dateSubmitted = '8 September 2026',
-    this.timeSubmitted = '10:30 AM',
-    this.priority = 'Medium',
-    this.assignedAgency = 'Pending assignment',
-    this.citizenReference = 'CIV-2026-0000',
+    this.description = '',
+    this.dateSubmitted = kNoValue,
+    this.timeSubmitted = kNoValue,
+    this.priority = kNoValue,
+    this.assignedAgency = kNoValue,
+    this.citizenReference = kNoValue,
     this.iconColor = AppColors.primary,
     this.iconBgColor = AppColors.primaryLight,
     this.imageUrl,
     this.highlighted = false,
   });
+
+  /// Adapts an API report to the card.
+  ///
+  /// The API has no title column, so the citizen's first line of description
+  /// stands in — a card with a heading reads far better than one with an empty
+  /// first row, and the first line of a report is almost always its summary.
+  /// With no description at all, the category label is the honest fallback.
+  factory ReportCardData.fromSubmittedReport(SubmittedReport report) {
+    final visual = reportCategoryById(report.category.slug);
+
+    return ReportCardData(
+      id: report.publicId,
+      title: _titleFor(report),
+      location: report.location?.displayLabel ?? 'No location',
+      status: report.status,
+      timeAgo: relativeTime(report.submittedAt),
+      categoryIcon: visual.icon,
+      category: report.category.label,
+      description: report.description?.trim() ?? '',
+      dateSubmitted: formatDate(report.submittedAt),
+      timeSubmitted: formatTime(report.submittedAt),
+      iconColor: visual.accent,
+      iconBgColor: visual.accentLight,
+      imageUrl: report.thumbnailUrl,
+    );
+  }
+
+  /// Long enough to carry a real summary, short enough that the card's single
+  /// line does not become the whole paragraph.
+  static const int _maxTitleLength = 60;
+
+  static String _titleFor(SubmittedReport report) {
+    final description = report.description?.trim() ?? '';
+    if (description.isEmpty) return report.category.label;
+
+    final firstLine = description
+        .split('\n')
+        .map((line) => line.trim())
+        .firstWhere((line) => line.isNotEmpty, orElse: () => '');
+    if (firstLine.isEmpty) return report.category.label;
+
+    // The card ellipsizes anyway; trimming here keeps `title` a heading rather
+    // than a paragraph for anything else that reads it — search, for one.
+    return firstLine.length <= _maxTitleLength
+        ? firstLine
+        : '${firstLine.substring(0, _maxTitleLength).trimRight()}…';
+  }
 
   final String id;
   final String title;
@@ -257,7 +314,7 @@ class ReportCard extends StatelessWidget {
                     // Status badge + time ago
                     Row(
                       children: [
-                        _StatusBadge(status: data.status),
+                        StatusBadge(status: data.status),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
@@ -376,12 +433,14 @@ class _LoadingBox extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// _StatusBadge — inline pill badge driven by ReportStatus
-// ---------------------------------------------------------------------------
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
+/// The status pill from the reference design.
+///
+/// Public because three screens show one: the report card here, the history
+/// list, and the details header. It was private in this file and re-declared
+/// privately in each of the other two, which is how the three drifted into
+/// disagreeing about padding and corner radius.
+class StatusBadge extends StatelessWidget {
+  const StatusBadge({super.key, required this.status});
 
   final ReportStatus status;
 

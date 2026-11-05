@@ -8,6 +8,7 @@
 
 ### Government Dashboard
 - **Framework**: React + TypeScript + Vite
+- **Delivery**: Primarily web-based. Government mobile delivery is deferred to later phases, with Flutter considered for mobile code reuse where applicable.
 - **Libraries**: React Router, TanStack Query, Tailwind CSS, mapping & charting libraries.
 - **Focus**: Operations interface, not a generic SaaS admin template.
 

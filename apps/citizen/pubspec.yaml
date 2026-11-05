@@ -28,8 +28,39 @@ dependencies:
   # Permissions
   permission_handler: ^11.3.1
 
+  # Push notifications
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+
+  # Camera + gallery photo capture for citizen reports
+  image_picker: ^1.1.2
+
+  # GPS fix for a report's location
+  geolocator: ^13.0.1
+
+  # Reverse geocoding — coordinates to a street address, via the platform
+  # geocoder. No API key, no per-request cost.
+  geocoding: ^3.0.0
+
+  # Citizen confirmation and correction of the final report pin.
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # URL launcher (Terms & Privacy links)
+  url_launcher: ^6.3.0
+
+  # Federated identity sign-in. Provider ID tokens are always verified again by
+  # the CivicAI API before a local session is issued.
+  google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.6
+
   # Icons
   cupertino_icons: ^1.0.8
+  package_info_plus: ^9.0.1
+  share_plus: ^12.0.2
+  connectivity_plus: ^7.0.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
@@ -38,5 +69,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/images/

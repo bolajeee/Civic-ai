@@ -1,95 +1,124 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
+import '../../features/auth/screens/reset_password_screen.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/permissions/screens/permissions_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/about_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
+import '../../features/profile/screens/help_support_screen.dart';
+import '../../features/profile/screens/language_screen.dart';
+import '../../features/profile/screens/notifications_screen.dart';
+import '../../features/report/providers/report_history_provider.dart';
 import '../../features/report/screens/history_screen.dart';
 import '../../features/report/screens/report_screen.dart';
 import '../../features/report/screens/report_details_screen.dart';
-import '../../shared/data/mock_reports.dart';
-import '../constants/app_constants.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String register = '/register';
+  static const String resetPassword = '/reset-password';
   static const String permissions = '/permissions';
   static const String home = '/home';
   static const String report = '/report';
   static const String history = '/history';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
+  static const String notifications = '/notifications';
+  static const String language = '/profile/language';
+  static const String helpSupport = '/profile/help';
+  static const String about = '/profile/about';
   static const String reportDetails = '/report-details/:id';
+}
+/// Decides where a navigation to [location] should actually land.
+///
+/// Extracted from [buildRouter] as a pure function so the routing rules — the
+/// exact thing that once left the app stranded on the splash screen — can be
+/// unit-tested without standing up a widget tree. Returns the location to
+/// redirect to, or null to allow [location].
+///
+/// Rules:
+///   initializing     → splash is the only valid destination
+///   unauthenticated  → login/register only; everything else → /login
+///   authenticated    → the onboarding routes are escorted to /permissions or
+///                      /home, and /permissions escorts itself to /home once
+///                      its flag is set; every real app route passes through
+///
+/// Splash (`/`) is deliberately NOT grouped with login/register as an "auth
+/// route". It is the router's `initialLocation`, so treating it as a valid
+/// destination once the status has settled parks the app there forever — the
+/// bug this split exists to prevent. Splash is only reachable while
+/// `initializing`.
+String? resolveRedirect({
+  required AuthStatus status,
+  required String location,
+  required bool permissionsGranted,
+}) {
+  // 1. Still initializing — splash is the only place to be
+  if (status == AuthStatus.initializing) {
+    return location == AppRoutes.splash ? null : AppRoutes.splash;
+  }
+
+  // 2. Not logged in — only login/register are reachable.
+  //    Splash, permissions, home, report → /login
+  if (status == AuthStatus.unauthenticated) {
+    return location == AppRoutes.login ||
+            location == AppRoutes.register ||
+            location == AppRoutes.resetPassword
+        ? null
+        : AppRoutes.login;
+  }
+
+  // 3. Logged in — the onboarding screens hand off once their job is done.
+  //
+  // /permissions is tested separately, before the generic onboarding check,
+  // because it is the one screen that has to move itself: the citizen taps
+  // "Grant" or "Skip" while already standing on it. A rule that merely allowed
+  // it through — which is what both this function and the inline copy it
+  // replaced used to do — declared their current location fine and left them
+  // stranded there, which is the hang.
+  if (location == AppRoutes.permissions) {
+    return permissionsGranted ? AppRoutes.home : null;
+  }
+
+  final isOnboardingRoute = location == AppRoutes.splash ||
+      location == AppRoutes.login ||
+      location == AppRoutes.register ||
+      location == AppRoutes.resetPassword;
+
+  if (isOnboardingRoute) {
+    return permissionsGranted ? AppRoutes.home : AppRoutes.permissions;
+  }
+
+  // Any real app route (home, report, history, …) is allowed through.
+  return null;
 }
 
 /// Builds the [GoRouter] instance.
 ///
-/// Redirect logic (evaluated on every navigation + every [AuthProvider] change):
-///
-///   initializing          → hold on splash
-///   unauthenticated       → any protected route goes to /login
-///   authenticated
-///     └─ permissions not yet granted → /permissions (first launch only)
-///     └─ permissions already granted → /home
-///     └─ on an auth route (login/register/splash) → /permissions or /home
+/// The redirect is fully SYNCHRONOUS — no async I/O inside the callback.
+/// [AuthProvider] owns [permissionsGranted] and loads it from SharedPreferences
+/// during [initialize], so by the time the first notifyListeners() fires the
+/// flag is already available. The decision itself lives in [resolveRedirect].
 GoRouter buildRouter(AuthProvider authProvider) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: authProvider,
-    redirect: (BuildContext context, GoRouterState state) async {
-      final status = authProvider.status;
-      final location = state.matchedLocation;
-
-      // -----------------------------------------------------------------------
-      // 1. Still checking storage — stay on splash
-      // -----------------------------------------------------------------------
-      if (status == AuthStatus.initializing) {
-        return location == AppRoutes.splash ? null : AppRoutes.splash;
-      }
-
-      // -----------------------------------------------------------------------
-      // 2. Not logged in — only auth routes are allowed
-      // -----------------------------------------------------------------------
-      final isAuthRoute = location == AppRoutes.login ||
-          location == AppRoutes.register ||
-          location == AppRoutes.splash;
-
-      if (status == AuthStatus.unauthenticated) {
-        return isAuthRoute ? null : AppRoutes.login;
-      }
-
-      // -----------------------------------------------------------------------
-      // 3. Logged in — decide between /permissions and /home
-      // -----------------------------------------------------------------------
-      final prefs = await SharedPreferences.getInstance();
-      final permissionsGranted =
-          prefs.getBool(AppConstants.keyPermissionsGranted) ?? false;
-
-      // Already on permissions screen — allow it
-      if (location == AppRoutes.permissions) return null;
-
-      // Already on home — allow it
-      if (location == AppRoutes.home) return null;
-
-      // Already on protected app screens — allow them
-      if (location == AppRoutes.report) return null;
-      if (location == AppRoutes.history) return null;
-      if (location == AppRoutes.profile) return null;
-      if (location.startsWith('/report-details/')) return null;
-
-      // Coming from an auth route or splash after login → go to permissions
-      // first if they haven't been asked yet, otherwise straight to home.
-      if (isAuthRoute) {
-        return permissionsGranted ? AppRoutes.home : AppRoutes.permissions;
-      }
-
-      // Any other protected route while logged in — allow through
-      return null;
-    },
+    // Deliberately thin. The rules live in [resolveRedirect] so there is one
+    // copy of them, unit-testable without a widget tree. An earlier version
+    // inlined a second, `async` copy here that re-read SharedPreferences on
+    // every navigation — and the two had already drifted apart.
+    redirect: (BuildContext context, GoRouterState state) => resolveRedirect(
+      status: authProvider.status,
+      location: state.matchedLocation,
+      permissionsGranted: authProvider.permissionsGranted,
+    ),
     routes: [
       GoRoute(
         path: AppRoutes.splash,
@@ -102,6 +131,12 @@ GoRouter buildRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.register,
         builder: (_, __) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.resetPassword,
+        builder: (_, state) => ResetPasswordScreen(
+          initialEmail: state.uri.queryParameters['email'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.permissions,
@@ -124,17 +159,46 @@ GoRouter buildRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: AppRoutes.reportDetails,
-        builder: (_, state) {
+        builder: (context, state) {
+          // Read from the history provider rather than `GET /api/reports/:id`,
+          // which the API does not serve. Every route into this screen is a tap
+          // on a row that came from that list, so the report is already held.
+          // The providers sit above MaterialApp.router in main.dart, which is
+          // what makes them reachable from here.
           final id = state.pathParameters['id'];
-          final report = kMockReports.where((item) => item.id == id).firstOrNull;
-          return report == null
-              ? const Scaffold(body: Center(child: Text('Report not found')))
-              : ReportDetailsScreen(report: report);
+          final report = id == null
+              ? null
+              : context.read<ReportHistoryProvider>().byPublicId(id);
+
+          return ReportDetailsLoaderScreen(
+            publicId: id ?? '',
+            initialReport: report,
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.profile,
         builder: (_, __) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.editProfile,
+        builder: (_, __) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (_, __) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.language,
+        builder: (_, __) => const LanguageScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.helpSupport,
+        builder: (_, __) => const HelpSupportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.about,
+        builder: (_, __) => const AboutScreen(),
       ),
     ],
   );

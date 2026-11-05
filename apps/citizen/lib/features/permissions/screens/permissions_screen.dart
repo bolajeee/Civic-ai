@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
+import '../../../features/auth/providers/auth_provider.dart';
+import '../../../features/notifications/providers/notification_provider.dart';
 import '../../../shared/widgets/primary_button.dart';
 
 /// Shown once after a successful login/register, before navigating to Home.
@@ -74,38 +74,63 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
     setState(() => _isRequesting = true);
 
-    final results = await [
-      Permission.camera,
-      Permission.locationWhenInUse,
-      Permission.notification,
-    ].request();
+    // Derived from the list the screen renders, rather than repeated here: the
+    // two had already drifted, with this hardcoded copy still naming
+    // `locationWhenInUse` on web. One source means a permission can never be
+    // requested without a card explaining it, or shown without being asked for.
+    final Map<Permission, PermissionStatus> results;
+    try {
+      results = await _permItems
+          .map((item) => item.permission)
+          .toList(growable: false)
+          .request();
+    } catch (_) {
+      // A platform that cannot answer for one of these throws instead of
+      // reporting a status — the web delegate does exactly that for anything
+      // outside its switch. Nothing was learned, so this is treated the same as
+      // "Skip for now": the feature asks again at the point of use. Without it
+      // the button spins forever behind an unhandled error.
+      if (!mounted) return;
+      setState(() => _isRequesting = false);
+      await _proceed();
+      return;
+    }
 
     if (!mounted) return;
 
     setState(() {
       _statuses = {
-        for (final item in _permItems) item: results[item.permission]!,
+        for (final item in _permItems)
+          // `?? denied` rather than `!`: a permission missing from the result
+          // map is one the platform declined to answer for, and an exception
+          // thrown from inside setState would blank the screen.
+          item: results[item.permission] ?? PermissionStatus.denied,
       };
       _isRequesting = false;
     });
 
     // Any permanently denied permission → guide to Settings
-    final permanentlyDenied = results.values
-        .any((s) => s == PermissionStatus.permanentlyDenied);
+    final permanentlyDenied =
+        results.values.any((s) => s == PermissionStatus.permanentlyDenied);
 
     if (permanentlyDenied && mounted) {
       _showSettingsDialog();
       return;
     }
 
-    _proceed();
+    final notificationStatus = results[Permission.notification];
+    if (notificationStatus == PermissionStatus.granted ||
+        notificationStatus == PermissionStatus.provisional) {
+      await context.read<NotificationProvider>().registerAfterPermissionGrant();
+    }
+
+    await _proceed();
   }
 
-  void _proceed() async {
-    // Mark permissions flow as complete so it's skipped on future launches
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(AppConstants.keyPermissionsGranted, true);
-    if (mounted) context.go(AppRoutes.home);
+  Future<void> _proceed() async {
+    // markPermissionsGranted() writes to SharedPreferences AND calls
+    // notifyListeners() — the router redirect fires and navigates to /home.
+    await context.read<AuthProvider>().markPermissionsGranted();
   }
 
   void _showSettingsDialog() {
@@ -123,7 +148,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // A permanently denied permission should not trap the citizen on
+              // onboarding. The feature can request access again when used.
+              _proceed();
+            },
             child: const Text('Skip'),
           ),
           TextButton(
@@ -192,7 +222,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               // Skip — some permissions can be granted later
               Center(
                 child: TextButton(
-                  onPressed: _isRequesting ? null : _proceed,
+                  onPressed: _isRequesting ? null : () => _proceed(),
                   child: const Text(
                     'Skip for now',
                     style: AppTextStyles.bodyMedium,
@@ -227,8 +257,19 @@ class _PermItem {
   final String description;
 }
 
-const List<_PermItem> _permItems = [
-  _PermItem(
+/// Which location permission this platform can actually be asked for.
+///
+/// `permission_handler_html` implements `Permission.location` but not
+/// `Permission.locationWhenInUse` — the latter falls through its switch and
+/// throws, which is what crashed this screen on web. Mobile is the other way
+/// round: `locationWhenInUse` is the right granularity there, because plain
+/// `Permission.location` asks for background ("always") access, which iOS
+/// refuses unless the app declares the background location capability.
+Permission get _locationPermission =>
+    kIsWeb ? Permission.location : Permission.locationWhenInUse;
+
+final List<_PermItem> _permItems = [
+  const _PermItem(
     permission: Permission.camera,
     icon: Icons.camera_alt_outlined,
     title: 'Camera',
@@ -236,18 +277,17 @@ const List<_PermItem> _permItems = [
         'Take photos of infrastructure issues when submitting a report.',
   ),
   _PermItem(
-    permission: Permission.locationWhenInUse,
+    permission: _locationPermission,
     icon: Icons.location_on_outlined,
     title: 'Location',
     description:
         'Attach your precise GPS coordinates so officers can find the issue.',
   ),
-  _PermItem(
+  const _PermItem(
     permission: Permission.notification,
     icon: Icons.notifications_outlined,
     title: 'Notifications',
-    description:
-        'Get updates when your report is reviewed or resolved.',
+    description: 'Get updates when your report is reviewed or resolved.',
   ),
 ];
 
@@ -378,8 +418,8 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (status == null) return const SizedBox.shrink();
 
-    final isGranted =
-        status == PermissionStatus.granted || status == PermissionStatus.limited;
+    final isGranted = status == PermissionStatus.granted ||
+        status == PermissionStatus.limited;
     final isDenied = status == PermissionStatus.permanentlyDenied;
 
     if (isGranted) {

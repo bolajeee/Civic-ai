@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/data/mock_reports.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../report/models/submitted_report.dart';
+import '../../report/providers/report_history_provider.dart';
+import '../../report/providers/report_summary_provider.dart';
+import '../../report/providers/report_sync_provider.dart';
+import '../../report/widgets/report_summary_status.dart';
+import '../../report/models/relative_time.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/report_card.dart';
 
@@ -24,16 +30,30 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _searchController;
+  Timer? _searchDebounce;
   String _query = '';
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+
+    // Deferred to after the first frame: `load()` notifies its listeners, and
+    // the provider sits above this route.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final history = context.read<ReportHistoryProvider>();
+      // Home shows the newest three, so it needs the list whether or not the
+      // citizen has opened History yet. Skipped when it is already in hand —
+      // returning from the Report tab must not re-fetch what we just refreshed.
+      if (!history.hasRecentLoaded) history.load();
+      context.read<ReportSummaryProvider>().refresh();
+    });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -41,73 +61,129 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
-    final String initials = _initials(user?.email ?? '');
-    final String firstName = _firstName(user?.email ?? '');
+    final history = context.watch<ReportHistoryProvider>();
+    final summary = context.watch<ReportSummaryProvider>().summary;
+    final displayName = _displayName(user?.fullName, user?.email ?? '');
+    final String initials = _initials(displayName);
+    final nameParts = displayName.split(RegExp(r'\s+'));
+    final String firstName = nameParts.isEmpty ? 'there' : nameParts.first;
+    String? locationLabel;
+    for (final report in history.recentReports) {
+      if (report.location != null) {
+        locationLabel = report.location!.displayLabel;
+        break;
+      }
+    }
+
+    // Mapped through the same adapter History and Details use, so a report
+    // cannot read one way here and another way there.
     final query = _query.trim().toLowerCase();
-    final reports = kMockReports.where((report) {
-      return query.isEmpty ||
-          report.title.toLowerCase().contains(query) ||
-          report.category.toLowerCase().contains(query) ||
-          report.location.toLowerCase().contains(query);
-    }).take(3).toList();
+    final reports =
+        (query.isEmpty ? history.recentReports : history.searchResults)
+            .map(ReportCardData.fromSubmittedReport)
+            .take(3)
+            .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
             // ----------------------------------------------------------------
             // Scrollable content
             // ----------------------------------------------------------------
-            CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: 100, // clears FAB + bottom nav
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _Header(initials: initials, firstName: firstName),
-                      const SizedBox(height: 20),
-                      _SearchBar(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _query = value),
-                      ),
-                      const SizedBox(height: 20),
-                      const _StatsRow(),
-                      const SizedBox(height: 24),
-                      _SectionHeader(
-                        title: 'Recent Reports',
-                        actionLabel: 'View All',
-                        onAction: () => context.go(AppRoutes.history),
-                      ),
-                      const SizedBox(height: 12),
-                      // Show only the 3 most recent reports on Home
-                      ...reports.map(
-                        (report) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: ReportCard(
-                            data: report,
-                            onTap: () => context.push(
-                              AppRoutes.reportDetails.replaceFirst(':id', report.id),
+            RefreshIndicator(
+              onRefresh: () async {
+                await Future.wait([
+                  context.read<ReportHistoryProvider>().refreshRecent(),
+                  context.read<ReportSummaryProvider>().refresh(),
+                  context.read<ReportSyncProvider>().refreshAndSync(),
+                ]);
+              },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                      bottom: 100, // clears FAB + bottom nav
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _Header(
+                          initials: initials,
+                          firstName: firstName,
+                          location: locationLabel ?? 'No report location yet',
+                          onNotifications: () =>
+                              context.push(AppRoutes.notifications),
+                        ),
+                        const SizedBox(height: 20),
+                        _SearchBar(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                        ),
+                        const SizedBox(height: 20),
+                        _StatsRow(
+                          total: summary?.total,
+                          resolved: summary?.resolved,
+                          pending: summary?.pending,
+                        ),
+                        const ReportSummaryStatus(),
+                        const _PendingSyncStatus(),
+                        const SizedBox(height: 24),
+                        _SectionHeader(
+                          title: 'Recent Reports',
+                          actionLabel: 'View All',
+                          onAction: () => context.go(AppRoutes.history),
+                        ),
+                        const SizedBox(height: 12),
+                        // The three most recent, narrowed by the search box.
+                        if (!history.hasRecentLoaded ||
+                            (query.isNotEmpty && history.isSearching))
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          )
+                        else if (reports.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Text(
+                                _query.isEmpty
+                                    ? 'No reports yet. Tap “Report Issue” to '
+                                        'file your first one.'
+                                    : history.searchError ??
+                                        'No reports match your search.',
+                              ),
+                            ),
+                          )
+                        else
+                          ...reports.map(
+                            (report) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: ReportCard(
+                                data: report,
+                                onTap: () => context.push(
+                                  AppRoutes.reportDetails.replaceFirst(
+                                    ':id',
+                                    report.id,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      if (reports.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(child: Text('No reports match your search.')),
-                        ),
-                    ]),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-
             // ----------------------------------------------------------------
             // Floating "+ Report Issue" pill button — bottom-right
             // ----------------------------------------------------------------
@@ -139,49 +215,78 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static String _initials(String email) {
-    final local = email.split('@').first;
-    final parts = local.split(RegExp(r'[.\-_]'));
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    _searchDebounce?.cancel();
+    final history = context.read<ReportHistoryProvider>()..clearSearch();
+    if (value.trim().isEmpty) return;
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => history.search(value),
+    );
+  }
+
+  static String _initials(String name) {
+    final parts = name
+        .split(RegExp(r'[\s.\-_]+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    if (local.length >= 2) {
-      return (local[0] + local[local.length - 1]).toUpperCase();
+    if (name.length >= 2) {
+      return name.substring(0, 2).toUpperCase();
     }
-    return local.toUpperCase();
+    return name.toUpperCase();
   }
 
-  static String _firstName(String email) {
+  static String _displayName(String? fullName, String email) {
+    if (fullName != null && fullName.trim().isNotEmpty) return fullName.trim();
     if (email.isEmpty) return 'there';
     final local = email.split('@').first;
     final parts = local.split(RegExp(r'[.\-_]'));
-    final name = parts.first;
-    if (name.isEmpty) return 'there';
-    return name[0].toUpperCase() + name.substring(1).toLowerCase();
+    return parts
+        .where((part) => part.isNotEmpty)
+        .map((part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
   }
 }
 
-// ---------------------------------------------------------------------------
-// _Header — avatar + greeting + notification bell
-// ---------------------------------------------------------------------------
-
-class _Header extends StatelessWidget {
-  const _Header({required this.initials, required this.firstName});
-
-  final String initials;
-  final String firstName;
+class _PendingSyncStatus extends StatelessWidget {
+  const _PendingSyncStatus();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
+    final sync = context.watch<ReportSyncProvider>();
+    if (sync.pendingCount == 0) return const SizedBox.shrink();
+    final count = sync.pendingCount;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.statusPendingBg,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+      ),
+      child: Row(
+        children: [
+          if (sync.isSyncing)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            const Icon(Icons.cloud_upload_outlined, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$count report${count == 1 ? '' : 's'} waiting to sync',
+            ),
+          ),
+          TextButton(
+            onPressed: sync.isSyncing ? null : sync.refreshAndSync,
+            child: const Text('Retry'),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -260,16 +365,139 @@ class _SearchBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
         border: Border.all(color: AppColors.inputBorder),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _Header — avatar + greeting + notification bell
+// ---------------------------------------------------------------------------
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.initials,
+    required this.firstName,
+    required this.location,
+    required this.onNotifications,
+  });
+
+  final String initials;
+  final String firstName;
+  final String location;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: const BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            initials,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.surface,
+              height: 1.0,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Hello, $firstName 👋',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                location,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          shape: const CircleBorder(
+            side: BorderSide(color: AppColors.inputBorder),
+          ),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onNotifications,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.notifications_outlined,
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _SearchBar
+// ---------------------------------------------------------------------------
+
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+        border: Border.all(color: AppColors.inputBorder),
+      ),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-        decoration: const InputDecoration(
+        style: TextStyle(
+          fontSize: 14,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+        decoration: InputDecoration(
           hintText: 'Search reports by title, category or location...',
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textSecondary),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
@@ -281,7 +509,15 @@ class _SearchBar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+  const _StatsRow({
+    required this.total,
+    required this.resolved,
+    required this.pending,
+  });
+
+  final int? total;
+  final int? resolved;
+  final int? pending;
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +528,7 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.description_outlined,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '12',
+            value: total?.toString() ?? kNoValue,
             label: 'Submitted',
             // All reports
             onTap: () => context.go(AppRoutes.history),
@@ -304,11 +540,11 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.check_circle_outline_rounded,
             iconColor: AppColors.primary,
             iconBgColor: AppColors.primaryLight,
-            value: '8',
+            value: resolved?.toString() ?? kNoValue,
             label: 'Resolved',
             // Pre-filtered to Resolved
             onTap: () => context.go(
-              '${AppRoutes.history}?filter=resolved',
+              '${AppRoutes.history}?filter=${ReportStatus.resolved.name}',
             ),
           ),
         ),
@@ -318,11 +554,11 @@ class _StatsRow extends StatelessWidget {
             iconData: Icons.access_time_rounded,
             iconColor: AppColors.statusPendingIcon,
             iconBgColor: AppColors.statusPendingBg,
-            value: '4',
+            value: pending?.toString() ?? kNoValue,
             label: 'Pending',
             // Pre-filtered to Pending
             onTap: () => context.go(
-              '${AppRoutes.history}?filter=pending',
+              '${AppRoutes.history}?filter=${ReportStatus.pending.name}',
             ),
           ),
         ),
@@ -351,7 +587,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       child: InkWell(
         onTap: onTap,
@@ -379,18 +615,22 @@ class _StatCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   height: 1.1,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: AppTextStyles.bodySmall,
-                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.2,
+                ),
               ),
             ],
           ),

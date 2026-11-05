@@ -52,6 +52,18 @@ abstract final class AppColors {
   static const Color statusResolvedText = Color(0xFF15803D);   // green-700
   static const Color statusResolvedBg   = Color(0xFFDCFCE7);   // green-100
 
+  // Rejected — red. Not rendered by the reference design yet; it exists for the
+  // Phase 4 review queue, and so the API's fourth status has a colour rather
+  // than falling through to a crash.
+  static const Color statusRejectedText = Color(0xFFB91C1C);   // red-700
+  static const Color statusRejectedBg   = Color(0xFFFEE2E2);   // red-100
+
+  // Unknown — grey, for a status this build of the app does not recognise
+  // (a newer server enum value, say). Deliberately neutral: it must not read
+  // as good news or bad news.
+  static const Color statusUnknownText = Color(0xFF4B5563);    // gray-600
+  static const Color statusUnknownBg   = Color(0xFFF3F4F6);    // gray-100
+
   // Checkbox accent
   static const Color checkboxActive = Color(0xFF1A7A3C);
 

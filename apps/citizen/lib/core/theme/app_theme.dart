@@ -15,7 +15,6 @@ abstract final class AppTheme {
         error: AppColors.error,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Inter',
 
       // AppBar
       appBarTheme: const AppBarTheme(
@@ -95,7 +94,9 @@ abstract final class AppTheme {
       // Checkbox
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.checkboxActive;
+          if (states.contains(WidgetState.selected)) {
+            return AppColors.checkboxActive;
+          }
           return Colors.transparent;
         }),
         checkColor: WidgetStateProperty.all(AppColors.surface),
@@ -108,6 +109,64 @@ abstract final class AppTheme {
         color: AppColors.divider,
         thickness: 1,
         space: 1,
+      ),
+    );
+  }
+
+  static ThemeData get dark {
+    const background = Color(0xFF0F1712);
+    const surface = Color(0xFF18231C);
+    const text = Color(0xFFF1F5F2);
+    const secondary = Color(0xFFAAB8AE);
+    const border = Color(0xFF34443A);
+
+    return ThemeData(
+      brightness: Brightness.dark,
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.primary,
+        brightness: Brightness.dark,
+        primary: const Color(0xFF61D48A),
+        surface: surface,
+        error: const Color(0xFFFF6B6B),
+      ),
+      scaffoldBackgroundColor: background,
+      cardColor: surface,
+      dividerColor: border,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: surface,
+        foregroundColor: text,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface,
+        hintStyle: const TextStyle(color: secondary),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          borderSide: const BorderSide(color: border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          borderSide: const BorderSide(color: Color(0xFF61D48A), width: 1.5),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF0F1712)
+              : secondary,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF61D48A)
+              : border,
+        ),
       ),
     );
   }

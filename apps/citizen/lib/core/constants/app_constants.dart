@@ -21,6 +21,17 @@ abstract final class AppConstants {
     return 'http://127.0.0.1:3000';
   }();
 
+  // OAuth values are public client identifiers, supplied per build flavor.
+  // The Google value must also appear in API GOOGLE_CLIENT_IDS.
+  static const String googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const String googleClientId =
+      String.fromEnvironment('GOOGLE_CLIENT_ID');
+  static const String appleServiceId =
+      String.fromEnvironment('APPLE_SERVICE_ID');
+  static const String appleRedirectUri =
+      String.fromEnvironment('APPLE_REDIRECT_URI');
+
   // Token storage keys
   static const String keyAccessToken = 'access_token';
   static const String keyRefreshToken = 'refresh_token';
@@ -28,6 +39,30 @@ abstract final class AppConstants {
 
   // Prefs keys
   static const String keyPermissionsGranted = 'permissions_granted';
+  static const String keyDarkMode = 'dark_mode';
+  static const String keyNotificationsEnabled = 'notifications_enabled';
+  static const String keyLanguage = 'language';
+  static const String keyPendingReports = 'pending_reports_v1';
+
+  // Citizen reports
+  //
+  // Photos are downsampled on pick so a modern phone's capture doesn't stage a
+  // multi-megabyte file per image — upload time matters on mobile data.
+  static const int maxReportPhotos = 5;
+  static const double reportPhotoMaxDimension = 1920.0;
+  static const int reportPhotoQuality = 85;
+
+  // Location capture
+  //
+  // A hard ceiling on the wait for a fix. `LocationAccuracy.best` is requested,
+  // but a citizen standing over a pothole should not be made to wait for a
+  // perfect one — whatever the device has when this elapses is what gets
+  // attached, falling back to the last known position.
+  static const Duration reportLocationTimeout = Duration(seconds: 20);
+  static const Duration reportLocationMaxAge = Duration(minutes: 2);
+  static const int reportLocationSampleCount = 4;
+  static const double reportLocationTargetAccuracyMetres = 20.0;
+  static const double reportLocationMaxAccuracyMetres = 500.0;
 
   // Spacing
   static const double spacingXs = 4.0;

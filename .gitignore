@@ -8,6 +8,7 @@
 
 # Node / JS / TypeScript (React, APIs, Packages)
 node_modules/
+.npm-cache/
 dist/
 build/
 coverage/

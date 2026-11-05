@@ -36,6 +36,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         `SELECT id, role FROM gov_invite_codes
          WHERE code_hash = $1
            AND used_by   IS NULL
+           AND revoked_at IS NULL
            AND expires_at > NOW()`,
         [codeHash],
       );
@@ -89,7 +90,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
       return reply.status(201).send({ accessToken, refreshToken, user });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -141,7 +142,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         },
       });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       fastify.log.error(err);
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
@@ -182,7 +183,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({ accessToken, refreshToken: newRefreshToken });
     } catch (err: any) {
-      if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+      if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
       if (err.message === 'Invalid or expired refresh token') {
         return reply.status(401).send({ error: err.message });
       }
@@ -196,7 +197,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.post(
     '/logout',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { refreshToken: rawToken } = refreshSchema
@@ -206,7 +207,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         await revokeRefreshToken(rawToken);
         return reply.status(200).send({ message: 'Logged out successfully' });
       } catch (err: any) {
-        if (err.name === 'ZodError') return reply.status(400).send({ error: err.errors });
+        if (err.name === 'ZodError') return reply.status(400).send({ error: err.issues });
         fastify.log.error(err);
         return reply.status(500).send({ error: 'Internal Server Error' });
       }
@@ -218,7 +219,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.post(
     '/logout-all',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const payload = request.user as { id: string };
@@ -236,7 +237,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
   // ---------------------------------------------------------------------------
   fastify.get(
     '/me',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.authenticate, requireGovernmentAccount] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const payload = request.user as { id: string };
@@ -254,10 +255,6 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
         const user = result.rows[0];
 
-        if (user.role === 'CITIZEN') {
-          return reply.status(403).send({ error: 'Access denied' });
-        }
-
         return reply.status(200).send({ user });
       } catch (err: any) {
         fastify.log.error(err);
@@ -270,6 +267,24 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/**
+ * Ensures protected government-auth routes remain inaccessible to citizen
+ * accounts. The role is read from the database rather than trusting the JWT
+ * claim, so a role change takes effect immediately for an existing token.
+ */
+async function requireGovernmentAccount(request: FastifyRequest, reply: FastifyReply) {
+  const payload = request.user as { id: string };
+  const result = await query('SELECT role, status FROM users WHERE id = $1', [payload.id]);
+
+  if (result.rows.length === 0 || result.rows[0].role === 'CITIZEN') {
+    return reply.status(403).send({ error: 'Access denied' });
+  }
+
+  if (result.rows[0].status !== 'ACTIVE') {
+    return reply.status(403).send({ error: `Account is ${result.rows[0].status.toLowerCase()}` });
+  }
+}
+
 function hashCode(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
