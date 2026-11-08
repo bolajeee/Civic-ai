@@ -46,7 +46,7 @@ export function ReportsView({ api }: { api: GovernmentApi }) {
   function close() { setSelected(null); opener.current?.focus(); }
   const pages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   return <div className="dashboard reports-page">
-    <div className="page-title"><div><p className="eyebrow">ORIGINAL CITIZEN OBSERVATIONS</p><h1>Reports</h1><p className="muted">Find reports, inspect their evidence, and see their cluster assignment.</p></div>
+    <div className="page-title report-page-heading"><div><p className="eyebrow">ORIGINAL CITIZEN OBSERVATIONS</p><h1>Citizen reports</h1><p className="muted">Inspect original submissions and evidence. Report status is read-only.</p></div>
       <button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>{busy ? 'Loading…' : 'Refresh'}</button></div>
     <form className="panel report-filters" onSubmit={apply}>
       <label className="report-search">Search reports<input aria-label="Search reports" value={draft.q} maxLength={200} placeholder="Reference, description, address or cluster" onChange={event => setDraft(value => ({ ...value, q: event.target.value }))} /></label>
@@ -63,14 +63,21 @@ export function ReportsView({ api }: { api: GovernmentApi }) {
     {error && <p className="error" role="alert">{error} {data ? 'Showing the previous snapshot for these filters and this page.' : 'Try Refresh to load these reports.'}</p>}
     <section className="panel reports-list" aria-label="Citizen reports" aria-busy={busy}>
       {busy && <p role="status" className="muted">Loading citizen reports…</p>}
-      {data && <><div className="report-list-heading"><h2>{data.total.toLocaleString('en-NG')} matching reports</h2><p className="updated">Snapshot: {date(data.generatedAt)} WAT</p></div>
-        {data.reports.length ? <div className="table-scroll"><table><thead><tr><th>Reference</th><th>Category / description</th><th>Report status</th><th>Location</th><th>Cluster</th><th>Photos</th><th>Submitted (WAT)</th></tr></thead><tbody>{data.reports.map(report => <tr key={report.id}>
+      {data && <><div className="report-list-heading"><div><h2>All citizen reports</h2><p className="muted">{data.total.toLocaleString('en-NG')} matching records · Snapshot {date(data.generatedAt)} WAT</p></div></div>
+        {data.reports.length ? <><div className="table-scroll report-desktop-table"><table><thead><tr><th>Reference</th><th>Category / description</th><th>Location</th><th>Report status</th><th>Cluster</th><th>Submitted (WAT)</th></tr></thead><tbody>{data.reports.map(report => <tr key={report.id}>
           <td><button className="report-reference" onClick={event => { opener.current = event.currentTarget; setSelected(report.id); }} aria-expanded={selected === report.id}>{report.publicId}</button></td>
           <td><strong>{report.category.label}</strong><small className="description-preview">{report.description || 'No description supplied'}</small></td>
-          <td><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></td>
           <td><small>{report.location ? report.location.address || `${report.location.latitude.toFixed(5)}, ${report.location.longitude.toFixed(5)}` : 'No GPS supplied'}</small></td>
-          <td>{report.cluster?.publicId || <span className="muted">Unassigned</span>}</td><td>{report.photoCount}</td><td>{date(report.submittedAt)}</td>
-        </tr>)}</tbody></table></div> : <p className="empty muted">{data.total ? 'This page has no reports. Return to the first page or refresh.' : 'No reports match these filters.'}</p>}
+          <td><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></td>
+          <td>{report.cluster?.publicId || <span className="muted">Unassigned</span>}</td><td>{date(report.submittedAt)}</td>
+        </tr>)}</tbody></table></div></> : <p className="empty muted">{data.total ? 'This page has no reports. Return to the first page or refresh.' : 'No reports match these filters.'}</p>}
+        {data.reports.length > 0 && <div className="report-mobile-cards">{data.reports.map(report => <article className="report-mobile-card" key={`mobile-${report.id}`}>
+          <div className="report-mobile-card-top"><button className="report-reference" onClick={event => { opener.current = event.currentTarget; setSelected(report.id); }} aria-expanded={selected === report.id}>{report.publicId}</button><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></div>
+          <strong>{report.description || report.category.label}</strong>
+          <div className="report-mobile-meta"><span>{report.category.label}</span><span>{date(report.submittedAt)}</span></div>
+          <p>{report.location ? report.location.address || `${report.location.latitude.toFixed(5)}, ${report.location.longitude.toFixed(5)}` : 'No GPS supplied'}</p>
+          <small>Cluster: {report.cluster?.publicId || 'Unassigned'} · {report.photoCount} photos</small>
+        </article>)}</div>}
         <div className="report-pagination"><span>Page {data.page} of {pages}</span><div>
           {data.page > pages && <button className="refresh" disabled={busy} onClick={() => setFilters(value => ({ ...value, page: 1 }))}>First page</button>}
           <button className="refresh" disabled={busy || data.page <= 1} onClick={() => setFilters(value => ({ ...value, page: Math.max(1, (value.page ?? 1) - 1) }))}>Previous</button>
@@ -98,23 +105,21 @@ function ReportDetails({ api, id, close }: { api: GovernmentApi; id: string; clo
   }, [api, id, revision]);
   useEffect(() => { heading.current?.focus(); }, [data]);
   const report = data?.report;
-  return <section className="panel report-detail" aria-label="Report details" aria-busy={busy}>
-    <div className="page-title"><h2 ref={heading} tabIndex={-1}>{report ? report.publicId : 'Report details'}</h2><div className="report-detail-actions"><button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>Refresh details</button><button className="refresh" onClick={close}>Close details</button></div></div>
+  return <section className="report-detail" aria-label="Report details" aria-busy={busy}>
+    <div className="page-title report-detail-heading"><div><p className="eyebrow">CITIZEN REPORT</p><h2 ref={heading} tabIndex={-1}>Report {report?.publicId || 'details'}</h2>{report && <p className="muted">Submitted {date(report.submittedAt)} WAT</p>}</div><div className="report-detail-actions"><button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>Refresh details</button><button className="refresh" onClick={close}>Close details</button></div></div>
     {error && <p className="error" role="alert">{error} {data && 'Showing previously loaded details.'}</p>}
     {busy && <p className="muted" role="status">Loading report details…</p>}
-    {report && <><dl className="report-facts">
-      <div><dt>Citizen-selected category</dt><dd>{report.category.label}</dd></div>
-      <div><dt>Report status</dt><dd><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></dd></div>
-      <div><dt>Submitted (WAT)</dt><dd>{date(report.submittedAt)}</dd></div>
-      <div><dt>Last updated (WAT)</dt><dd>{date(report.updatedAt)}</dd></div>
-      <div><dt>Issue cluster</dt><dd>{report.cluster ? `${report.cluster.publicId} · ${label(report.cluster.status)}` : 'Unassigned'}</dd></div>
-      <div><dt>Location</dt><dd>{report.location ? <>{report.location.address || 'Address unavailable'}<br />{report.location.latitude.toFixed(6)}, {report.location.longitude.toFixed(6)}<br />GPS accuracy: {report.location.accuracy == null ? 'Unknown' : `±${report.location.accuracy} metres`}</> : 'No GPS supplied'}</dd></div>
-    </dl>
-      <h3>Citizen description</h3><p className="report-description">{report.description || 'No description supplied.'}</p>
-      <h3>Original photos ({report.photos.length})</h3><p className="muted">Photo links last 15 minutes. Refresh details to renew expired or unavailable photos.</p>
-      <div className="report-gallery">{report.photos.map((photo, index) => <ReportPhoto key={`${photo.id}-${photo.url}-${revision}`} photo={photo} index={index} />)}</div>
-      {!report.photos.length && <p className="muted">No photos are attached to this report.</p>}
-    </>}
+    {report && <div className="report-detail-layout"><div className="report-detail-main">
+      <section className="panel report-summary-panel"><div className="report-status-row"><span className="badge category-badge">{report.category.label}</span><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></div><h3>Original description</h3><p className="report-description">{report.description || 'No description supplied.'}</p>
+        <dl className="report-source-facts"><div><dt>Source</dt><dd>Citizen submission</dd></div><div><dt>Issue cluster</dt><dd>{report.cluster ? `${report.cluster.publicId} · ${label(report.cluster.status)}` : 'Unassigned'}</dd></div></dl>
+      </section>
+      <section className="panel report-evidence-panel"><div className="evidence-heading"><div><h3>Photo evidence</h3><p className="muted">{report.photos.length} attachment{report.photos.length === 1 ? '' : 's'} · submitted {date(report.submittedAt)} WAT</p></div></div><p className="muted photo-expiry-note">Signed photo links expire after 15 minutes. Refresh details to renew them.</p>
+        <div className="report-gallery">{report.photos.map((photo, index) => <ReportPhoto key={`${photo.id}-${photo.url}-${revision}`} photo={photo} index={index} />)}</div>
+        {!report.photos.length && <p className="empty muted">No photos are attached to this report.</p>}
+      </section>
+    </div><aside className="report-detail-aside"><section className="panel report-location-panel"><h3>Location &amp; GPS</h3>
+      {report.location ? <><div className="location-coordinate-block"><span aria-hidden="true">◎</span><div><small>Submitted coordinates</small><strong>{report.location.latitude.toFixed(6)}, {report.location.longitude.toFixed(6)}</strong></div></div><dl className="report-location-facts"><div><dt>Reported location</dt><dd>{report.location.address || 'Address unavailable'}</dd></div><div><dt>GPS accuracy</dt><dd>{report.location.accuracy == null ? 'Unknown' : `±${report.location.accuracy} metres`}</dd></div></dl><p className="muted">Coordinates are citizen-submitted and have not been independently verified.</p></> : <p className="empty muted">No GPS location was supplied with this report.</p>}
+    </section><div className="notice report-readonly-note">Report status is read-only. Report lifecycle and cluster status are separate.</div><dl className="panel report-metadata"><div><dt>Submitted (WAT)</dt><dd>{date(report.submittedAt)}</dd></div><div><dt>Last updated (WAT)</dt><dd>{date(report.updatedAt)}</dd></div><div><dt>Citizen-selected category</dt><dd>{report.category.label}</dd></div></dl></aside></div>}
   </section>;
 }
 

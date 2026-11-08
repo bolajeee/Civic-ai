@@ -44,19 +44,28 @@ export function App() {
       ? <Register api={api} inviteCode={new URLSearchParams(query).get('invite') || ''} />
       : <Login api={api} notice={notice} />;
   }
+  const navigationItems = [
+    { id: 'overview' as const, label: 'Overview', symbol: '▦' },
+    { id: 'map' as const, label: 'Issue map', symbol: '◎' },
+    { id: 'reports' as const, label: 'Reports', symbol: '▤' },
+    { id: 'clusters' as const, label: 'Issue clusters', symbol: '◉' },
+    { id: 'review' as const, label: 'Review queue', symbol: '◇' },
+    ...(session.user.role === 'ADMIN' ? [{ id: 'admin' as const, label: 'Administration', symbol: '⚙' }] : []),
+  ];
   return <div className="workspace">
     <aside className="sidebar">
       <a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI<span className="brand-dot">●</span></a>
       <p className="workspace-label">GOVERNMENT WORKSPACE</p>
-      {session.user.role === 'ADMIN' && <nav aria-label="Administration"><a className={page === 'admin' ? 'nav-active' : ''} href="#admin" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}><span aria-hidden="true">⚙</span>Administration</a></nav>}
-      <nav aria-label="Workspace">{(['overview', 'map', 'reports', 'clusters', 'review'] as const).map(item => <a key={item} className={page === item ? 'nav-active' : ''} href={`#${item}`} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}><span aria-hidden="true">{item === 'overview' ? '▦' : item === 'map' ? '◎' : item === 'reports' ? '▤' : item === 'clusters' ? '◉' : '◇'}</span>{item === 'overview' ? 'Overview' : item === 'map' ? 'Issue map' : item === 'reports' ? 'Reports' : item === 'clusters' ? 'Issue clusters' : 'Review queue'}</a>)}</nav>
+      <nav className="workspace-nav" aria-label="Government workspace">{navigationItems.map(item => <a key={item.id} className={`${page === item.id ? 'nav-active' : ''} ${item.id === 'admin' ? 'admin-navigation' : ''}`} href={`#${item.id}`} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span aria-hidden="true">{item.symbol}</span><span className="nav-label">{item.label}</span></a>)}</nav>
       <div className="sidebar-note"><span className="live-dot" />Citizen observations.<br />Better public decisions.</div>
       <div className="account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><div><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></div></div>
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
     </aside>
-    <main id={page}><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : page === 'clusters' ? 'Issue clusters' : page === 'review' ? 'Review queue' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
+    <div className="workspace-main">
+      <header className="mobile-header"><a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI</a><div className="mobile-account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><span><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></span></div>{session.user.role === 'ADMIN' && <a className={`mobile-admin-link ${page === 'admin' ? 'nav-active' : ''}`} href="#admin" aria-label="Administration" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}>Admin</a>}<button className="mobile-signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></header>
+    <main id={page} className="workspace-content"><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : page === 'clusters' ? 'Issue clusters' : page === 'review' ? 'Review queue' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
       {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : page === 'clusters' ? <ClustersView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : page === 'review' ? <ReviewQueueView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} />}
-    </main>
+    </main></div>
   </div>;
 }
 
@@ -71,7 +80,7 @@ function Login({ api, notice }: { api: GovernmentApi; notice: string }) {
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to sign in.'); }
     finally { setBusy(false); }
   }
-  return <main className="login-page"><section className="login-story"><a href="/" className="brand"><span className="brand-mark">C</span>CivicAI</a><div><p className="eyebrow">CIVIC INTELLIGENCE</p><h1>A clearer view of<br />what needs attention.</h1><p>Bring citizen observations together.<br />Make informed decisions for your community.</p></div><small>Government operations workspace</small></section>
+  return <main className="login-page"><section className="login-story"><a href="/" className="brand"><span className="brand-mark">C</span>CivicAI</a><div><p className="eyebrow">CIVIC INTELLIGENCE</p><h1>A clearer view of what needs attention.</h1><p>Bring citizen observations together.<br />Make informed decisions for your community.</p></div><small>Government operations workspace</small></section>
     <section className="login-panel"><form onSubmit={submit}><p className="eyebrow">WELCOME BACK</p><h2>Sign in to your workspace</h2><p className="muted">Use your government operator or administrator account.</p>
       {notice && <p role="status" className="notice">{notice}</p>}{error && <p role="alert" className="error">{error}</p>}
       <label>Email address<input name="email" type="email" autoComplete="username" placeholder="you@agency.gov.ng" required disabled={busy} /></label>
@@ -120,35 +129,32 @@ function Dashboard({ api }: { api: GovernmentApi }) {
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [api, revision]);
-  return <div className="dashboard"><div className="page-title"><div><p className="eyebrow">OPERATIONS AT A GLANCE</p><h1>Overview</h1><p className="muted">See the issues your community is reporting.</p></div><button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>{busy ? 'Refreshing…' : '↻ Refresh'}</button></div>
+  return <div className="dashboard overview-page"><div className="page-title"><div><p className="eyebrow">OPERATIONS AT A GLANCE</p><h1>Operational overview</h1><p className="muted">A clear view of citizen evidence, review workload and response readiness.</p></div><button className="refresh" disabled={busy} onClick={() => setRevision(value => value + 1)}>{busy ? 'Refreshing…' : '↻ Refresh'}</button></div>
     {error && <div role="alert" className="error">{error} {data ? 'Showing the previous snapshot.' : 'Check the API connection and try Refresh.'}</div>}
     {!data && busy && <div role="status" className="empty panel">Loading the government overview…</div>}
-    {data && <><p className="updated">Snapshot: {date(data.generatedAt)} WAT · All submitted reports</p>
-      <div className="stats">
-        <Stat title="Citizen reports" value={data.reports.total} detail={`${number(data.reports.pending)} pending review`} symbol="▤" />
-        <Stat title="Open issue clusters" value={data.clusters.open} detail={`${number(data.clusters.total)} non-empty clusters in total`} symbol="◎" />
-        <Stat title="Grouping review" value={data.groupingReview.reports} detail={`${number(data.groupingReview.candidates)} pending candidate matches`} symbol="◇" />
-        <Stat title="Resolved clusters" value={data.clusters.resolved} detail="Cluster and report statuses are separate" symbol="✓" />
+    {data && <><p className="updated overview-snapshot"><span className="snapshot-dot" />Snapshot: {date(data.generatedAt)} WAT · All submitted reports</p>
+      <div className="stats overview-stats">
+        <Stat title="Citizen reports" value={data.reports.total} detail={`${number(data.reports.withoutLocation)} without GPS`} symbol="▤" />
+        <Stat title="Issue clusters" value={data.clusters.total} detail={`${number(data.clusters.open)} currently open`} symbol="◎" />
+        <Stat title="Grouping review" value={data.groupingReview.reports} detail={`${number(data.groupingReview.candidates)} pending proposals`} symbol="◇" />
+        <Stat title="Priority readiness" value={data.priority.enabled ? `${number(Number(data.priority.completed ?? 0))} / ${number(Number(data.priority.completed ?? 0) + Number(data.priority.incomplete ?? 0) + Number(data.priority.unavailable ?? 0) + Number(data.priority.pending ?? 0) + Number(data.priority.failed ?? 0) + Number(data.priority.inactive ?? 0))}` : 'Off'} detail={data.priority.enabled ? `${number(Number(data.priority.incomplete ?? 0))} incomplete · ${number(Number(data.priority.pending ?? 0))} pending` : 'Priority calculation disabled'} symbol="✓" />
       </div>
-      <div className="overview-grid"><section className="panel categories"><PanelTitle title="Reports by category" detail="Open and total observations" />
+      <div className="overview-grid overview-analytics"><section className="panel lifecycle-panel"><PanelTitle title="Report lifecycle" detail={`${number(data.reports.total)} total reports`} />
+        <div className="lifecycle-bar" role="img" aria-label={`Report lifecycle: ${data.reports.pending} pending, ${data.reports.inProgress} in progress, ${data.reports.resolved} resolved, ${data.reports.rejected} rejected`}>{[[data.reports.pending, 'pending'], [data.reports.inProgress, 'in-progress'], [data.reports.resolved, 'resolved'], [data.reports.rejected, 'rejected']].map(([value, name]) => <span key={String(name)} className={String(name)} style={{ width: `${data.reports.total ? Number(value) / data.reports.total * 100 : 0}%` }} />)}</div>
+        <dl className="lifecycle-counts">{[['Pending', data.reports.pending], ['In progress', data.reports.inProgress], ['Resolved', data.reports.resolved], ['Rejected', data.reports.rejected]].map(([title, value]) => <div key={title}><dt>{title}</dt><dd>{number(Number(value))}</dd></div>)}</dl>
+      </section><section className="panel categories"><PanelTitle title="Category distribution" detail="Citizen reports by category" />
         {data.reports.total === 0 && <p className="muted">No reports have been submitted yet.</p>}
-        {data.categories.map(category => <div className="category-row" key={category.slug}><div><strong>{category.label}</strong><span>{number(category.open)} open <b> / {number(category.total)} total</b></span></div><div className="bar" role="img" aria-label={`${category.label}: ${category.total} reports, ${category.open} open`}><span style={{ width: `${data.reports.total ? category.total / data.reports.total * 100 : 0}%` }} /></div></div>)}
-      </section><section className="panel"><PanelTitle title="Report lifecycle" detail="Status of original citizen reports" />
-        <dl className="metrics">{[['Pending', data.reports.pending], ['In progress', data.reports.inProgress], ['Resolved', data.reports.resolved], ['Rejected', data.reports.rejected]].map(([title, value]) => <div key={title}><dt><span className={`status-dot ${String(title).toLowerCase().replaceAll(' ', '-')}`} />{title}</dt><dd>{number(Number(value))}</dd></div>)}</dl>
-        <div className="quality"><strong>Data completeness</strong><p>{number(data.unclusteredReports)} reports awaiting cluster assignment</p><p>{number(data.reports.withoutLocation)} reports without GPS</p></div>
+        {data.categories.map(category => <div className="category-row" key={category.slug} data-total={number(category.total)}><div><strong>{category.label}</strong><span>{number(category.open)} open <b> / {number(category.total)} total</b></span></div><div className="bar" role="img" aria-label={`${category.label}: ${category.total} reports, ${category.open} open`}><span style={{ width: `${data.reports.total ? category.total / data.reports.total * 100 : 0}%` }} /></div></div>)}
       </section></div>
-      <section className="panel priority"><div><p className="eyebrow">PRIORITY READINESS</p><h2>Keep uncertainty visible</h2><p className="muted">Priority scores support triage. Missing evidence and sourced context require review.</p></div>
-        {data.priority.enabled ? <dl className="priority-counts">{[['Scored', data.priority.completed], ['Incomplete', data.priority.incomplete], ['Unavailable', data.priority.unavailable], ['Pending', data.priority.pending], ['Failed', data.priority.failed], ['Inactive', data.priority.inactive]].map(([title, value]) => <div key={title}><dd>{number(Number(value ?? 0))}</dd><dt>{title}</dt></div>)}</dl> : <span className="badge">Priority calculation disabled</span>}
-      </section>
-      <section className="panel activity"><PanelTitle title="Recent citizen reports" detail="Latest 8 observations across the full dataset" />
-        {data.recentReports.length === 0 ? <p className="empty muted">Submitted reports will appear here.</p> : <div className="table-scroll"><table><thead><tr><th>Reference</th><th>Category / location</th><th>Status</th><th>Cluster</th><th>Submitted (WAT)</th></tr></thead><tbody>{data.recentReports.map(report => <tr key={report.id}><td className="reference">{report.publicId}</td><td><strong>{report.category}</strong><small>{report.address || (report.hasLocation ? 'GPS captured · address unavailable' : 'No GPS supplied')}</small></td><td><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></td><td>{report.clusterPublicId || <span className="muted">Unassigned</span>}</td><td>{date(report.submittedAt)}</td></tr>)}</tbody></table></div>}
+      <section className="panel activity"><div className="panel-title"><PanelTitle title="Recent citizen reports" detail={`Latest ${data.recentReports.length} observations`} /><a className="view-all-link" href="#reports">View all reports <span aria-hidden="true">→</span></a></div>
+        {data.recentReports.length === 0 ? <p className="empty muted">Submitted reports will appear here.</p> : <><div className="table-scroll overview-recent-table"><table><thead><tr><th>Reference</th><th>Category</th><th>Location</th><th>Status</th><th>Reported (WAT)</th></tr></thead><tbody>{data.recentReports.map(report => <tr key={report.id}><td className="reference">{report.publicId}</td><td>{report.category}</td><td>{report.address || (report.hasLocation ? 'GPS captured · address unavailable' : 'No GPS supplied')}</td><td><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></td><td>{date(report.submittedAt)}</td></tr>)}</tbody></table></div><div className="overview-mobile-reports">{data.recentReports.map(report => <article key={`mobile-${report.id}`}><div><strong>{report.publicId}</strong><span className={`badge ${report.status.toLowerCase()}`}>{label(report.status)}</span></div><p>{report.category} · {report.address || (report.hasLocation ? 'GPS captured' : 'No GPS supplied')}</p><small>{date(report.submittedAt)} WAT</small></article>)}</div></>}
       </section><footer>Citizen reports are observations. Issue clusters represent the underlying problem.</footer>
     </>}
   </div>;
 }
 
-function Stat({ title, value, detail, symbol }: { title: string; value: number; detail: string; symbol: string }) {
-  return <section className="panel stat"><div><span>{title}</span><span className="stat-icon" aria-hidden="true">{symbol}</span></div><strong>{number(value)}</strong><small>{detail}</small></section>;
+function Stat({ title, value, detail, symbol }: { title: string; value: number | string; detail: string; symbol: string }) {
+  return <section className="panel stat"><div><span>{title}</span><span className="stat-icon" aria-hidden="true">{symbol}</span></div><strong>{typeof value === 'number' ? number(value) : value}</strong><small>{detail}</small></section>;
 }
 function PanelTitle({ title, detail }: { title: string; detail: string }) {
   return <div className="panel-title"><h2>{title}</h2><p className="muted">{detail}</p></div>;
