@@ -8,6 +8,7 @@ import authenticatePlugin from './plugins/authenticate';
 import authRoutes from './routes/auth';
 import govAuthRoutes from './routes/gov-auth';
 import reportRoutes from './routes/reports';
+import geoRoutes from './routes/geo';
 import { startClassificationWorker } from './ai/classification_worker';
 import { isClassificationEnabled } from './ai/classification';
 import { startEmbeddingWorker } from './ai/embedding_worker';
@@ -102,9 +103,14 @@ fastify.register(cors, {
 });
 
 // Credential endpoints get a much tighter budget than the rest of the API.
+// The location search proxy also gets a tighter budget: Geoapify usage is
+// billed per request.
 fastify.register(rateLimit, {
-  max: (request) =>
-    request.url.startsWith('/api/auth') || request.url.startsWith('/api/gov/auth') ? 30 : 300,
+  max: (request) => {
+    if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/gov/auth')) return 30;
+    if (request.url.startsWith('/api/geo/search')) return 20;
+    return 300;
+  },
   timeWindow: '1 minute',
 });
 
@@ -127,6 +133,7 @@ fastify.register(observabilityRoutes);
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 fastify.register(reportRoutes, { prefix: '/api/reports' });
+fastify.register(geoRoutes, { prefix: '/api/geo' });
 fastify.register(notificationRoutes, { prefix: '/api/notifications' });
 fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
