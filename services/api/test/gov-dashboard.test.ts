@@ -50,9 +50,9 @@ test('active operators receive one unpaginated snapshot, without citizen identit
       assert.deepEqual(params, [userId]);
       return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
     }
-    assert.match(sql, /count\(DISTINCT report_id\)/);
+    assert.match(sql, /count\(DISTINCT rc\.report_id\)/);
     assert.match(sql, /NOT EXISTS/);
-    assert.match(sql, /WHERE report_count > 0/);
+    assert.match(sql, /WHERE ic\.report_count > 0/);
     assert.match(sql, /LIMIT 8/);
     assert.match(sql, /evaluated_revision IS DISTINCT FROM j.revision/);
     assert.match(sql, /j.next_run_at <= NOW\(\)/);

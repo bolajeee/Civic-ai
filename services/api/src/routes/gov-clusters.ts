@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isPriorityEnabled } from '../ai/priority';
 import { query } from '../db';
 import { governmentAccess, governmentAdminAccess } from './gov-access';
+import { scopeParams, clusterInScope } from '../lib/gov-scope';
 import { compileIssueReport, type CompilationInput } from '../lib/issue-report-compilation';
 import { renderIssueReportPdf } from '../lib/issue-report-pdf';
 
@@ -165,12 +166,15 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster filters', details: parsed.error.flatten() });
     const { page, limit, status, category, q, review, assignment, location } = parsed.data;
     const priority = prioritySql(isPriorityEnabled());
+    const [govLevel, govStateId] = scopeParams(request.govAccount!);
     try {
       const result = await query<{ listing: unknown }>(`
         WITH matches AS (
           SELECT ic.id, ic.updated_at
           FROM issue_clusters ic JOIN report_categories c ON c.id = ic.category_id
+          LEFT JOIN locations cluster_anchor ON cluster_anchor.id = ic.anchor_location_id
           WHERE ic.report_count > 0
+            AND ($11::text = 'FEDERAL' OR cluster_anchor.state_id = $12::uuid)
             AND ($1::text IS NULL OR ic.status::text = $1)
             AND ($2::text IS NULL OR c.slug = $2)
             AND ($3::text IS NULL OR strpos(lower(concat_ws(' ', ic.public_id, c.label)), lower($3)) > 0
@@ -219,7 +223,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           'clusters', (SELECT coalesce(jsonb_agg(to_jsonb(cluster_page)
             ORDER BY "updatedAt" DESC, id DESC), '[]'::jsonb) FROM cluster_page)) AS listing`,
         [status ?? null, category ?? null, q || null, review, assignment, location,
-          limit, (page - 1) * limit, page, isPriorityEnabled()]);
+          limit, (page - 1) * limit, page, isPriorityEnabled(), govLevel, govStateId]);
       return result.rows[0].listing;
     } catch (error) {
       app.log.error(error);
@@ -231,6 +235,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = reviewFilters.safeParse(request.query);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid review queue filters', details: parsed.error.flatten() });
     const { page, limit, status, reason, category, q } = parsed.data;
+    const [govLevel, govStateId] = scopeParams(request.govAccount!);
     try {
       const result = await query<{ queue: unknown }>(`
         WITH matches AS (
@@ -239,6 +244,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
           JOIN reports source ON source.id = review.report_id
           JOIN report_categories source_category ON source_category.id = source.category_id
           JOIN issue_clusters proposed ON proposed.id = review.issue_cluster_id
+          LEFT JOIN locations source_scope_location ON source_scope_location.id = source.location_id
           LEFT JOIN reports candidate ON candidate.id = review.candidate_report_id
           LEFT JOIN issue_cluster_reports current_membership ON current_membership.report_id = review.report_id
           LEFT JOIN issue_clusters current_cluster ON current_cluster.id = current_membership.issue_cluster_id
@@ -247,6 +253,7 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
             AND ($3::text IS NULL OR source_category.slug = $3)
             AND ($4::text IS NULL OR strpos(lower(concat_ws(' ', source.public_id, source.description,
               candidate.public_id, proposed.public_id, current_cluster.public_id)), lower($4)) > 0)
+            AND ($8::text = 'FEDERAL' OR source_scope_location.state_id = $9::uuid)
         ), page_keys AS (
           SELECT * FROM matches ORDER BY created_at ASC, report_id, issue_cluster_id LIMIT $5 OFFSET $6
         ), queue_page AS (
@@ -308,7 +315,8 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
             ORDER BY display_order, slug), '[]'::jsonb) FROM report_categories),
           'items', (SELECT coalesce(jsonb_agg(to_jsonb(queue_page)
             ORDER BY "createdAt" ASC, "reportId", "proposedClusterId"), '[]'::jsonb) FROM queue_page)) AS queue`,
-        [status, reason, category ?? null, q || null, limit, (page - 1) * limit, page]);
+        [status, reason, category ?? null, q || null, limit, (page - 1) * limit, page,
+          govLevel, govStateId]);
       return result.rows[0].queue;
     } catch (error) {
       app.log.error(error);
@@ -324,6 +332,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     }
     const { page, limit } = parsedQuery.data;
     try {
+      if (!(await clusterInScope(request.govAccount!, parsedParams.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const result = await query<{ evidence: EvidenceResult }>(`
         WITH selected_cluster AS (
           SELECT id, public_id FROM issue_clusters WHERE id = $1 AND report_count > 0
@@ -449,6 +460,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = params.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const compilation = await loadCompilation(parsed.data.id);
       if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
       return compilation;
@@ -462,6 +476,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = params.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const compilation = await loadCompilation(parsed.data.id);
       if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
       const filename = `${compilation.cluster.publicId}-issue-report.pdf`;
@@ -479,6 +496,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = params.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const result = await query<{ versions: unknown }>(`
         SELECT CASE WHEN cluster.id IS NULL THEN NULL ELSE jsonb_build_object(
           'cluster', jsonb_build_object('id', cluster.id, 'publicId', cluster.public_id),
@@ -514,6 +534,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = params.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const compilation = await loadCompilation(parsed.data.id);
       if (!compilation) return reply.status(404).send({ error: 'Cluster not found' });
       const actorId = (request.user as { id: string }).id;
@@ -553,6 +576,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const body = approvalBody.safeParse(request.body);
     if (!parsed.success || !body.success) return reply.status(400).send({ error: 'Invalid report approval' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Report version not found' });
+      }
       const actorId = (request.user as { id: string }).id;
       const result = await query<{ outcome: string; approval: null | {
         id: string; approvedAt: string; approvedBy: string; reason: string } }>(`
@@ -594,6 +620,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     if (!parsed.success || !filters.success) return reply.status(400).send({ error: 'Invalid report audit request' });
     const { page, limit } = filters.data;
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const result = await query<{ audit: unknown }>(`
         WITH selected_cluster AS (
           SELECT id, public_id FROM issue_clusters WHERE id = $1
@@ -635,6 +664,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     const parsed = versionParams.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid report version' });
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Report version not found' });
+      }
       const result = await query<{ report: null | { snapshot: ReturnType<typeof compileIssueReport>;
         id: string; number: number; createdAt: string; createdBy: string; publicId: string;
         approval: null | { approvedAt: string; approvedBy: string; reason: string } } }>(`
@@ -670,6 +702,9 @@ export default async function govClustersRoutes(app: FastifyInstance, options: O
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     const priority = prioritySql(isPriorityEnabled());
     try {
+      if (!(await clusterInScope(request.govAccount!, parsed.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const result = await query<{ cluster: unknown }>(`
         SELECT to_jsonb(detail) AS cluster FROM (
           SELECT ${summaryColumns(priority.projection)},

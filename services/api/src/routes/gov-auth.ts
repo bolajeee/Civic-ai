@@ -33,7 +33,7 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
       // Validate invite code
       const codeHash = hashCode(inviteCode);
       const inviteResult = await query(
-        `SELECT id, role FROM gov_invite_codes
+        `SELECT id, role, government_level, state_id FROM gov_invite_codes
          WHERE code_hash = $1
            AND used_by   IS NULL
            AND revoked_at IS NULL
@@ -47,8 +47,10 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
 
       const invite = inviteResult.rows[0];
 
-      // The role in the invite takes precedence — prevents escalation via payload
+      // The role/level/state in the invite take precedence — prevents escalation via payload
       const assignedRole: string = invite.role;
+      const assignedLevel: string = invite.government_level;
+      const assignedStateId: string | null = invite.state_id;
 
       // Check email uniqueness
       const existing = await query('SELECT id FROM users WHERE email = $1', [email]);
@@ -66,13 +68,20 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
       const publicId = crypto.randomUUID();
 
       const userResult = await query(
-        `INSERT INTO users (public_id, email, password_hash, nin, role)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, public_id, email, role`,
-        [publicId, email, passwordHash, nin, assignedRole],
+        `INSERT INTO users (public_id, email, password_hash, nin, role, government_level, state_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, public_id, email, role, government_level AS "governmentLevel", state_id AS "stateId"`,
+        [publicId, email, passwordHash, nin, assignedRole, assignedLevel, assignedStateId],
       );
 
-      const user = userResult.rows[0];
+      const insertedUser = userResult.rows[0];
+      let state: { id: string; code: string; name: string } | null = null;
+      if (insertedUser.stateId) {
+        const stateResult = await query(
+          'SELECT id, code, name FROM nigeria_states WHERE id = $1', [insertedUser.stateId]);
+        state = stateResult.rows[0] ?? null;
+      }
+      const user = { ...insertedUser, state };
 
       // Mark invite as consumed
       await query(
@@ -104,7 +113,13 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
     try {
       const { email, password } = govLoginSchema.parse(request.body);
 
-      const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+      const result = await query(
+        `SELECT u.id, u.public_id, u.email, u.password_hash, u.role, u.status,
+                u.government_level, u.state_id, ns.code AS state_code, ns.name AS state_name
+         FROM users u LEFT JOIN nigeria_states ns ON ns.id = u.state_id
+         WHERE u.email = $1`,
+        [email],
+      );
       if (result.rows.length === 0) {
         return reply.status(401).send({ error: 'Invalid email or password' });
       }
@@ -139,6 +154,8 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
           public_id: user.public_id,
           email: user.email,
           role: user.role,
+          governmentLevel: user.government_level,
+          state: user.state_id ? { id: user.state_id, code: user.state_code, name: user.state_name } : null,
         },
       });
     } catch (err: any) {
@@ -243,9 +260,11 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
         const payload = request.user as { id: string };
 
         const result = await query(
-          `SELECT id, public_id, email, nin, role, status, created_at
-           FROM users
-           WHERE id = $1`,
+          `SELECT u.id, u.public_id, u.email, u.nin, u.role, u.status, u.created_at,
+                  u.government_level AS "governmentLevel", u.state_id,
+                  ns.code AS state_code, ns.name AS state_name
+           FROM users u LEFT JOIN nigeria_states ns ON ns.id = u.state_id
+           WHERE u.id = $1`,
           [payload.id],
         );
 
@@ -253,7 +272,13 @@ export default async function govAuthRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: 'User not found' });
         }
 
-        const user = result.rows[0];
+        const row = result.rows[0];
+        const user = {
+          id: row.id, public_id: row.public_id, email: row.email, nin: row.nin,
+          role: row.role, status: row.status, created_at: row.created_at,
+          governmentLevel: row.governmentLevel,
+          state: row.state_id ? { id: row.state_id, code: row.state_code, name: row.state_name } : null,
+        };
 
         return reply.status(200).send({ user });
       } catch (err: any) {

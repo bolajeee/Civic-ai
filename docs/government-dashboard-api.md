@@ -8,6 +8,13 @@ It returns `401` for invalid JWTs, `403` for unauthorized accounts, and the stan
 All fields share one PostgreSQL statement snapshot. There are no filters or
 pagination parameters in this first overview slice.
 
+**State scoping**: a STATE-level account's counts, categories and
+`recentReports` only cover reports/clusters whose resolved location falls in
+that account's own Nigerian state; `withoutLocation` always reads `0` for a
+STATE account, since a report with no GPS fix can never be attributed to a
+state. A FEDERAL account sees the unscoped totals, including reports with no
+location. See [government accounts](government-accounts.md#state-vs-federal-accounts).
+
 | Field | Meaning |
 | --- | --- |
 | `generatedAt` | Snapshot timestamp |

@@ -12,6 +12,11 @@
 
 ### 1. Users
 - `id` (UUID), `public_id`, `email`, `phone`, `nin`, `password_hash`, `role` (CITIZEN, OPERATOR, ADMIN), `status`
+- `government_level` (STATE, FEDERAL) and `state_id` (FK to `nigeria_states`) are set only for
+  OPERATOR/ADMIN rows — `role` is the permission tier (what the account can do), `government_level`
+  is an independent visibility scope (what the account can see). A STATE row must have a `state_id`;
+  a FEDERAL row must not. Both are fixed server-side at invite time, the same way `role` already is.
+  See [government accounts](government-accounts.md#state-vs-federal-accounts).
 
 ### 2. Reports (Citizen Submissions)
 - **Note:** A report is an observation, not the issue itself.
@@ -28,8 +33,17 @@
 
 ### 4. Locations
 - Leverages PostGIS.
-- `id`, `report_id`, `latitude`, `longitude`, `accuracy`, `geom` (POINT, SRID 4326)
+- `id`, `report_id`, `latitude`, `longitude`, `accuracy`, `geom` (POINT, SRID 4326), `state_id`
 - **Rule:** GPS accuracy must be preserved.
+- `state_id` (FK to `nigeria_states`) is resolved automatically by a `BEFORE INSERT OR UPDATE OF geom`
+  trigger (`set_location_state()`), via `ST_Contains` against `nigeria_states.geom` — never computed
+  in application code. It stays `NULL` when `geom` is `NULL` (no GPS fix).
+
+### 4a. Nigeria States (`nigeria_states`)
+- `id`, `code` (e.g. `LA`), `name` (e.g. `Lagos`), `geom` (MultiPolygon, SRID 4326)
+- Reference data for the 36 states + FCT (37 rows), seeded once from a vendored
+  [geoBoundaries](https://www.geoboundaries.org/) `NGA-ADM1` dataset — not a live API call. Used to
+  resolve a location's state (point-in-polygon) and to scope STATE-level government accounts.
 
 ### 5. Issue Clusters
 - Represents the underlying civic problem.

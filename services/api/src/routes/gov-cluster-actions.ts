@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { pool, query } from '../db';
 import { governmentAccess, governmentAdminAccess } from './gov-access';
+import { clusterInScope } from '../lib/gov-scope';
 
 const reason = z.string().trim().min(1).max(1000);
 const uuid = z.uuid();
@@ -149,6 +150,9 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { reportId, clusterId } = candidateParams.parse(request.params);
       const { reason: why } = reasonBody.parse(request.body);
       const actorId = actor(request);
+      if (!(await clusterInScope(request.govAccount!, clusterId))) {
+        throw new ActionError(404, 'Review proposal not found');
+      }
       return await transact(async client => {
         const candidate = await client.query<{ status: string; category_id: string; public_id: string }>(
           `SELECT review.status, source.category_id, source.public_id
@@ -182,6 +186,9 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { reportId, clusterId } = candidateParams.parse(request.params);
       const { reason: why } = reasonBody.parse(request.body);
       const actorId = actor(request);
+      if (!(await clusterInScope(request.govAccount!, clusterId))) {
+        throw new ActionError(404, 'Review proposal not found');
+      }
       return await transact(async client => {
         const candidate = await client.query<{ status: string; public_id: string }>(
           `SELECT review.status, source.public_id
@@ -210,6 +217,10 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { targetClusterId, reason: why } = moveBody.parse(request.body);
       if (targetClusterId === id) throw new ActionError(409, 'Choose a different target cluster');
       const actorId = actor(request);
+      const gov = request.govAccount!;
+      if (!(await clusterInScope(gov, id)) || !(await clusterInScope(gov, targetClusterId))) {
+        throw new ActionError(404, 'Cluster not found');
+      }
       return await transact(async client => {
         const clusters = await lockClusters(client, [id, targetClusterId]);
         const [member] = await lockMembers(client, id, [reportId]);
@@ -234,6 +245,7 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { id, reportId } = memberParams.parse(request.params);
       const { reason: why } = reasonBody.parse(request.body);
       const actorId = actor(request);
+      if (!(await clusterInScope(request.govAccount!, id))) throw new ActionError(404, 'Cluster not found');
       return await transact(async client => {
         const clusters = await lockClusters(client, [id]);
         const source = clusters.get(id)!;
@@ -263,6 +275,10 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { sourceClusterId, reason: why } = mergeBody.parse(request.body);
       if (sourceClusterId === id) throw new ActionError(409, 'A cluster cannot be merged into itself');
       const actorId = actor(request);
+      const gov = request.govAccount!;
+      if (!(await clusterInScope(gov, id)) || !(await clusterInScope(gov, sourceClusterId))) {
+        throw new ActionError(404, 'Cluster not found');
+      }
       return await transact(async client => {
         const clusters = await lockClusters(client, [id, sourceClusterId]);
         const target = clusters.get(id)!;
@@ -295,6 +311,7 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
       const { reportIds, reason: why } = splitBody.parse(request.body);
       const wanted = [...new Set(reportIds)];
       const actorId = actor(request);
+      if (!(await clusterInScope(request.govAccount!, id))) throw new ActionError(404, 'Cluster not found');
       return await transact(async client => {
         const clusters = await lockClusters(client, [id]);
         const source = clusters.get(id)!;
@@ -323,6 +340,9 @@ export default async function govClusterActionRoutes(app: FastifyInstance) {
     try {
       const { id } = clusterParams.parse(request.params);
       const { page, limit } = historyFilters.parse(request.query);
+      if (!(await clusterInScope(request.govAccount!, id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const result = await query<{ history: unknown }>(`
         WITH matches AS (
           SELECT a.* FROM issue_cluster_review_actions a

@@ -1,4 +1,4 @@
-import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentRole, IssueCompilationSnapshot, IssueReportAuditSnapshot, IssueReportVersionsSnapshot, MapFilters, MapSnapshot, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
+import type { AdminSnapshot, ClusterDetailSnapshot, ClusterEvidenceSnapshot, ClusterFilters, ClustersSnapshot, GovernmentAccount, GovernmentAccountStatus, GovernmentLevel, GovernmentRole, IssueCompilationSnapshot, IssueReportAuditSnapshot, IssueReportVersionsSnapshot, MapFilters, MapSnapshot, NigeriaState, Overview, ReportDetailSnapshot, ReportFilters, ReportsSnapshot, ReviewActionResult, ReviewHistorySnapshot, ReviewQueueFilters, ReviewQueueSnapshot, Session } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -213,9 +213,11 @@ export class GovernmentApi {
     return this.authorized<MapSnapshot>(`/dashboard/map?${params}`);
   }
   administration() { return this.authorized<AdminSnapshot>('/admin'); }
-  createInvitation(role: GovernmentRole, expiresInHours: number) {
-    return this.authorized<{ invitation: { id: string; role: GovernmentRole; expiresAt: string; createdAt: string }; code: string }>(
-      '/admin/invitations', { method: 'POST', body: JSON.stringify({ role, expiresInHours }) });
+  states() { return this.authorized<{ states: NigeriaState[] }>('/states'); }
+  createInvitation(role: GovernmentRole, governmentLevel: GovernmentLevel, stateId: string | undefined, expiresInHours: number) {
+    return this.authorized<{ invitation: { id: string; role: GovernmentRole; governmentLevel: GovernmentLevel;
+      stateId: string | null; expiresAt: string; createdAt: string }; code: string }>(
+      '/admin/invitations', { method: 'POST', body: JSON.stringify({ role, governmentLevel, stateId, expiresInHours }) });
   }
   revokeInvitation(id: string) {
     return this.authorized<void>(`/admin/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });

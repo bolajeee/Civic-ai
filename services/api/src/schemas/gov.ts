@@ -18,8 +18,14 @@ export const govLoginSchema = z.object({
 
 export const govInviteCreateSchema = z.object({
   role: z.enum(['OPERATOR', 'ADMIN']),
+  governmentLevel: z.enum(['STATE', 'FEDERAL']),
+  stateId: z.string().uuid().optional(),
   expiresInHours: z.number().int().min(1).max(168).default(24),
-});
+}).strict().refine(
+  value => (value.governmentLevel === 'STATE' && !!value.stateId)
+    || (value.governmentLevel === 'FEDERAL' && !value.stateId),
+  { message: 'stateId is required for STATE level and must be omitted for FEDERAL', path: ['stateId'] },
+);
 
 export const govAccountStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED']),

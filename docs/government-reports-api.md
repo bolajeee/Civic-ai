@@ -22,6 +22,14 @@ database failures a sanitized `500`.
 Unknown fields, including citizen identity overrides, are rejected. SQL parameters
 are bound. All filters search the full dataset before pagination.
 
+**State scoping**: "full dataset" means the account's own scope. A
+STATE-level account only ever matches reports whose resolved
+`locations.state_id` equals its own state — including on `GET /:id`, which
+returns `404` rather than leaking another state's report by UUID. A report
+with `location: missing` is therefore never visible to a STATE account. A
+FEDERAL account matches the unscoped national dataset. See
+[government accounts](government-accounts.md#state-vs-federal-accounts).
+
 The response has `generatedAt`, `page`, `limit`, numeric `total`, all selectable
 `categories` (`slug`, `label`), and `reports`. Total is the matching count before
 pagination. Reports are newest first by `submittedAt`, then UUID descending.

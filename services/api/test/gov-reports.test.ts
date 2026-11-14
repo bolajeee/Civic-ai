@@ -54,8 +54,11 @@ test('list rejects invalid pagination, dates, enum filters and identity override
 test('list binds full-dataset literal search, WAT dates and pagination without citizen identifiers', async () => {
   const listing = { page: 2, limit: 20, total: 45, categories: [], reports: [] };
   mock.method(pool, 'query', async (sql: string, params?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
-    assert.deepEqual(params, ['PENDING', 'POTHOLE', '%_test', 'unassigned', 'missing', '2026-10-01', '2026-10-07', 20, 20, 2]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'OPERATOR', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(params, ['PENDING', 'POTHOLE', '%_test', 'unassigned', 'missing', '2026-10-01', '2026-10-07',
+      20, 20, 2, 'FEDERAL', null]);
     assert.match(sql, /strpos\(lower\(concat_ws/);
     assert.match(sql, /AT TIME ZONE 'Africa\/Lagos'/);
     assert.match(sql, /ORDER BY "submittedAt" DESC, id DESC LIMIT \$8 OFFSET \$9/);
@@ -69,8 +72,10 @@ test('list binds full-dataset literal search, WAT dates and pagination without c
 
 test('list defaults to a bounded first page and blank search is absent', async () => {
   mock.method(pool, 'query', async (sql: string, params?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(params, [null, null, null, 'all', 'all', null, null, 20, 0, 1]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(params, [null, null, null, 'all', 'all', null, null, 20, 0, 1, 'FEDERAL', null]);
     return { rows: [{ listing: { total: 0, reports: [] } }] };
   });
   assert.equal((await app.inject({ url: url + '?q=%20', headers: headers() })).statusCode, 200);
@@ -92,8 +97,10 @@ test('details batch-sign only selected report photos with 15 minute expiry and r
     return { 'report/one.jpg': 'https://storage.example/signed-one' };
   };
   mock.method(pool, 'query', async (sql: string, params?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(params, [id]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(params, [id, 'FEDERAL', null]);
     assert.match(sql, /WHERE r.id = \$1/);
     assert.match(sql, /ORDER BY media.display_order, media.id/);
     assert.doesNotMatch(sql, /citizen_id|nin|email|password/);

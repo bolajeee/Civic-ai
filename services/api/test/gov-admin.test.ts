@@ -59,16 +59,37 @@ test('created invitation returns its raw code once and stores only its hash', as
     if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
     assert.match(sql, /INSERT INTO gov_invite_codes/);
     insertParams = params || [];
-    return { rows: [{ id: invitationId, role: 'ADMIN', expires_at: '2026-10-14', created_at: '2026-10-13' }] };
+    return { rows: [{ id: invitationId, role: 'ADMIN', government_level: 'FEDERAL', state_id: null,
+      expires_at: '2026-10-14', created_at: '2026-10-13' }] };
   });
-  const response = await app.inject({ method: 'POST', url: '/api/gov/admin/invitations', headers: auth(), payload: { role: 'ADMIN', expiresInHours: 24 } });
+  const response = await app.inject({ method: 'POST', url: '/api/gov/admin/invitations', headers: auth(),
+    payload: { role: 'ADMIN', governmentLevel: 'FEDERAL', expiresInHours: 24 } });
   assert.equal(response.statusCode, 201);
   const body = response.json();
   assert.match(body.code, /^[a-f0-9]{48}$/);
   assert.equal(insertParams[0], await sha256(body.code));
   assert.equal(insertParams[1], 'ADMIN');
-  assert.equal(insertParams[2], adminId);
+  assert.equal(insertParams[2], 'FEDERAL');
+  assert.equal(insertParams[3], null);
+  assert.equal(insertParams[4], adminId);
   assert.equal(insertParams.includes(body.code), false);
+});
+
+test('a state administrator can only invite accounts scoped to their own state', async () => {
+  const stateId = '44444444-4444-4444-8444-444444444444';
+  mock.method(pool, 'query', async (sql: string) => {
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'STATE', state_id: stateId }] };
+    }
+    throw new Error('Unexpected query');
+  });
+  const other = '55555555-5555-4555-8555-555555555555';
+  const federalAttempt = await app.inject({ method: 'POST', url: '/api/gov/admin/invitations', headers: auth(),
+    payload: { role: 'OPERATOR', governmentLevel: 'FEDERAL', expiresInHours: 24 } });
+  assert.equal(federalAttempt.statusCode, 403);
+  const otherStateAttempt = await app.inject({ method: 'POST', url: '/api/gov/admin/invitations', headers: auth(),
+    payload: { role: 'OPERATOR', governmentLevel: 'STATE', stateId: other, expiresInHours: 24 } });
+  assert.equal(otherStateAttempt.statusCode, 403);
 });
 
 test('administrator cannot suspend their own account', async () => {

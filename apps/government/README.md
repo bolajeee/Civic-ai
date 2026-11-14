@@ -8,8 +8,9 @@ government client does not depend on the citizen Flutter app.
 ## Run locally
 
 Use Node.js 22.12+ or 24. Install and start the API in `services/api` with its
-existing database configuration. Apply all migrations through
-`20261013120000_add_gov_invite_revocation.sql`. Priority processing still requires
+existing database configuration. Apply all migrations, including the
+state-scoping migrations (`20261016120000` through `20261016125000`, which
+seed the `nigeria_states` reference table). Priority processing still requires
 `AI_PRIORITY_ENABLED=true`; applying its schema does not enable the worker.
 
 From this directory:
@@ -72,6 +73,13 @@ and [server options](https://vite.dev/config/server-options.html#server-proxy).
   review candidates, and explicit missing-data/AI uncertainty notices.
 - Cross-cluster search over cluster and source-report fields, plus lifecycle,
   category, grouping-review, assignment-method and member-GPS filters.
+- STATE vs FEDERAL account scoping: a STATE account's overview, map, reports
+  and issue-cluster views are restricted server-side to its own Nigerian
+  state (enforced in every query and direct-ID lookup, not just the UI); a
+  FEDERAL account is unrestricted. The map centers on the account's own state
+  for STATE accounts. The invitation form lets an admin choose level/state,
+  constrained to their own scope if they are themselves STATE-level. See
+  [government accounts](../../docs/government-accounts.md#state-vs-federal-accounts).
 
 Review actions and exported government reports remain subsequent slices. The recent
 observations table is an overview, not a complete searchable reports view.

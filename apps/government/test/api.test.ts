@@ -4,7 +4,8 @@ import { GovernmentApi } from '../src/api';
 import type { Session } from '../src/types';
 
 const original: Session = { accessToken: 'old-access', refreshToken: 'old-refresh',
-  user: { id: 'operator-id', email: 'operator@example.gov', role: 'OPERATOR' } };
+  user: { id: 'operator-id', email: 'operator@example.gov', role: 'OPERATOR',
+    governmentLevel: 'FEDERAL', state: null } };
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 test('default transport invokes native fetch with its browser receiver', async () => {
@@ -96,7 +97,8 @@ test('server revocation failure still clears local credentials', async () => {
 test('invite registration establishes the returned government session', async () => {
   let current: Session | null = null;
   const admin: Session = { accessToken: 'admin-access', refreshToken: 'admin-refresh',
-    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN' } };
+    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN',
+      governmentLevel: 'FEDERAL', state: null } };
   const api = new GovernmentApi(value => { current = value; }, async (url, init) => {
     assert.ok(String(url).endsWith('/auth/register'));
     assert.deepEqual(JSON.parse(String(init?.body)), {
@@ -126,7 +128,8 @@ test('structured validation errors surface their useful message', async () => {
 
 test('administration client encodes identifiers and sends admin mutations', async () => {
   const admin: Session = { accessToken: 'admin-access', refreshToken: 'admin-refresh',
-    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN' } };
+    user: { id: 'admin-id', email: 'admin@example.gov', role: 'ADMIN',
+      governmentLevel: 'FEDERAL', state: null } };
   const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
   const api = new GovernmentApi(() => {}, async (url, init) => {
     if (String(url).endsWith('/login')) return response(admin);
@@ -137,12 +140,13 @@ test('administration client encodes identifiers and sends admin mutations', asyn
   });
   await api.login(admin.user.email, 'password');
   await api.administration();
-  await api.createInvitation('OPERATOR', 24);
+  await api.createInvitation('OPERATOR', 'FEDERAL', undefined, 24);
   await api.updateAccountStatus('account/unsafe', 'SUSPENDED');
   await api.revokeInvitation('invite/unsafe');
   assert.deepEqual(calls, [
     { url: '/api/gov/admin', method: undefined, body: undefined },
-    { url: '/api/gov/admin/invitations', method: 'POST', body: { role: 'OPERATOR', expiresInHours: 24 } },
+    { url: '/api/gov/admin/invitations', method: 'POST',
+      body: { role: 'OPERATOR', governmentLevel: 'FEDERAL', expiresInHours: 24 } },
     { url: '/api/gov/admin/accounts/account%2Funsafe/status', method: 'PATCH', body: { status: 'SUSPENDED' } },
     { url: '/api/gov/admin/invitations/invite%2Funsafe', method: 'DELETE', body: undefined },
   ]);

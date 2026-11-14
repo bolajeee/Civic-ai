@@ -38,6 +38,13 @@ the fixed clustering anchor. Empty clusters retained for audit are excluded.
 This endpoint exposes no citizen identifiers, contact information, photos,
 severity estimates, or priority scores.
 
+**State scoping**: a STATE-level account only ever sees reports/clusters whose
+resolved location falls in its own state (via `locations.state_id`, for
+reports, and the cluster's anchor location, for clusters), regardless of what
+`bbox` is requested. `withoutGeometry` always reads `0` for a STATE account. A
+FEDERAL account sees the unscoped national dataset. See
+[government accounts](government-accounts.md#state-vs-federal-accounts).
+
 One PostgreSQL statement supplies the layers and metadata from the same snapshot.
 Viewport predicates use the existing GiST indexes and
 [PostGIS envelopes](https://postgis.net/docs/ST_MakeEnvelope.html). No migration

@@ -1,24 +1,32 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { GovernmentApi } from './api';
-import type { AdminSnapshot, GovernmentRole } from './types';
+import type { AdminSnapshot, GovernmentRole, GovernmentUser, NigeriaState } from './types';
 import './admin.css';
 
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
 }).format(new Date(value));
 
-export function AdminView({ api, currentUserId }: { api: GovernmentApi; currentUserId: string }) {
+const scopeLabel = (level: string, stateId: string | null, states: NigeriaState[]) =>
+  level === 'FEDERAL' ? 'Federal' : `State · ${states.find(s => s.id === stateId)?.name ?? 'Unknown'}`;
+
+export function AdminView({ api, currentUserId, currentUser }: {
+  api: GovernmentApi; currentUserId: string; currentUser: GovernmentUser;
+}) {
   const [data, setData] = useState<AdminSnapshot | null>(null);
+  const [states, setStates] = useState<NigeriaState[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(true);
   const [revision, setRevision] = useState(0);
   const [invitationUrl, setInvitationUrl] = useState('');
+  const [inviteLevel, setInviteLevel] = useState(currentUser.governmentLevel === 'STATE' ? 'STATE' : 'FEDERAL');
 
   useEffect(() => {
     let active = true;
     setBusy(true); setError('');
-    api.administration().then(result => { if (active) setData(result); })
+    Promise.all([api.administration(), api.states()])
+      .then(([result, statesResult]) => { if (active) { setData(result); setStates(statesResult.states); } })
       .catch(error => { if (active) setError(message(error, 'Unable to load administration.')); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -29,8 +37,12 @@ export function AdminView({ api, currentUserId }: { api: GovernmentApi; currentU
     const form = new FormData(event.currentTarget);
     setBusy(true); setError(''); setNotice(''); setInvitationUrl('');
     try {
+      const level = currentUser.governmentLevel === 'STATE' ? 'STATE' : String(form.get('governmentLevel'));
+      const stateId = level === 'STATE'
+        ? (currentUser.governmentLevel === 'STATE' ? currentUser.state?.id : String(form.get('stateId')))
+        : undefined;
       const result = await api.createInvitation(String(form.get('role')) as GovernmentRole,
-        Number(form.get('expiresInHours')));
+        level as 'STATE' | 'FEDERAL', stateId, Number(form.get('expiresInHours')));
       const url = `${window.location.origin}${window.location.pathname}#register?invite=${encodeURIComponent(result.code)}`;
       setInvitationUrl(url);
       setNotice('Invitation created. Copy the link now; the invite code is shown only once.');
@@ -67,12 +79,12 @@ export function AdminView({ api, currentUserId }: { api: GovernmentApi; currentU
     {error && <div role="alert" className="error">{error}</div>}
     {notice && <p role="status" className="notice admin-notice">{notice}</p>}
     <section className="panel invite-panel"><div><p className="eyebrow">NEW GOVERNMENT ACCOUNT</p><h2>Create a secure invitation</h2><p className="muted">The recipient uses the one-time link to choose their credentials. The assigned role cannot be changed during signup.</p></div>
-      <form className="invite-form" onSubmit={createInvitation}><label>Role<select name="role" defaultValue="OPERATOR" disabled={busy}><option value="OPERATOR">Operator</option><option value="ADMIN">Administrator</option></select></label><label>Expires in<select name="expiresInHours" defaultValue="24" disabled={busy}><option value="8">8 hours</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label><button className="primary" disabled={busy}>Create invitation</button></form>
+      <form className="invite-form" onSubmit={createInvitation}><label>Role<select name="role" defaultValue="OPERATOR" disabled={busy}><option value="OPERATOR">Operator</option><option value="ADMIN">Administrator</option></select></label><label>Level<select name="governmentLevel" value={inviteLevel} disabled={busy || currentUser.governmentLevel === 'STATE'} onChange={event => setInviteLevel(event.target.value)}><option value="FEDERAL">Federal</option><option value="STATE">State</option></select></label><label>State<select name="stateId" disabled={busy || inviteLevel !== 'STATE'} defaultValue={currentUser.governmentLevel === 'STATE' ? currentUser.state?.id : ''}>{inviteLevel !== 'STATE' && <option value="">—</option>}{states.map(state => <option key={state.id} value={state.id}>{state.name}</option>)}</select></label><label>Expires in<select name="expiresInHours" defaultValue="24" disabled={busy}><option value="8">8 hours</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label><button className="primary" disabled={busy}>Create invitation</button></form>
       {invitationUrl && <div className="invitation-result"><label>One-time registration link<input readOnly value={invitationUrl} onFocus={event => event.currentTarget.select()} /></label><button className="refresh" type="button" onClick={copyInvitation}>Copy link</button></div>}
     </section>
     {!data && busy && <div role="status" className="empty panel">Loading government access…</div>}
-    {data && <><section className="panel admin-section"><div className="panel-title"><h2>Government accounts</h2><p className="muted">{data.accounts.length} administrator and operator account{data.accounts.length === 1 ? '' : 's'}</p></div><div className="table-scroll"><table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>{data.accounts.map(account => <tr key={account.id}><td><strong>{account.email}</strong>{account.id === currentUserId && <small>Current account</small>}</td><td>{account.role === 'ADMIN' ? 'Administrator' : 'Operator'}</td><td><span className={`badge ${account.status.toLowerCase()}`}>{account.status.toLowerCase()}</span></td><td>{date(account.createdAt)}</td><td>{account.id === currentUserId ? <span className="muted">—</span> : <button className={`table-action ${account.status === 'ACTIVE' ? 'danger-action' : ''}`} disabled={busy} onClick={() => toggleAccount(account.id, account.status)}>{account.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}</button>}</td></tr>)}</tbody></table></div></section>
-      <section className="panel admin-section"><div className="panel-title"><h2>Recent invitations</h2><p className="muted">Invite codes are never stored in readable form and cannot be displayed again.</p></div>{data.invitations.length === 0 ? <p className="muted">No invitations have been created.</p> : <div className="table-scroll"><table><thead><tr><th>Role</th><th>Created by</th><th>Created</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody>{data.invitations.map(invitation => { const status = invitation.usedAt ? 'Used' : invitation.revokedAt ? 'Revoked' : new Date(invitation.expiresAt).getTime() <= now ? 'Expired' : 'Open'; return <tr key={invitation.id}><td>{invitation.role === 'ADMIN' ? 'Administrator' : 'Operator'}</td><td>{invitation.createdByEmail || 'Bootstrap / system'}</td><td>{date(invitation.createdAt)}</td><td>{date(invitation.expiresAt)}</td><td><span className={`badge ${status.toLowerCase()}`}>{status}</span>{invitation.usedByEmail && <small>{invitation.usedByEmail}</small>}</td><td>{status === 'Open' ? <button className="table-action danger-action" disabled={busy} onClick={() => revoke(invitation.id)}>Revoke</button> : <span className="muted">—</span>}</td></tr>; })}</tbody></table></div>}</section></>}
+    {data && <><section className="panel admin-section"><div className="panel-title"><h2>Government accounts</h2><p className="muted">{data.accounts.length} administrator and operator account{data.accounts.length === 1 ? '' : 's'}</p></div><div className="table-scroll"><table><thead><tr><th>Email</th><th>Role</th><th>Scope</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>{data.accounts.map(account => <tr key={account.id}><td><strong>{account.email}</strong>{account.id === currentUserId && <small>Current account</small>}</td><td>{account.role === 'ADMIN' ? 'Administrator' : 'Operator'}</td><td>{scopeLabel(account.governmentLevel, account.stateId, states)}</td><td><span className={`badge ${account.status.toLowerCase()}`}>{account.status.toLowerCase()}</span></td><td>{date(account.createdAt)}</td><td>{account.id === currentUserId ? <span className="muted">—</span> : <button className={`table-action ${account.status === 'ACTIVE' ? 'danger-action' : ''}`} disabled={busy} onClick={() => toggleAccount(account.id, account.status)}>{account.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}</button>}</td></tr>)}</tbody></table></div></section>
+      <section className="panel admin-section"><div className="panel-title"><h2>Recent invitations</h2><p className="muted">Invite codes are never stored in readable form and cannot be displayed again.</p></div>{data.invitations.length === 0 ? <p className="muted">No invitations have been created.</p> : <div className="table-scroll"><table><thead><tr><th>Role</th><th>Scope</th><th>Created by</th><th>Created</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody>{data.invitations.map(invitation => { const status = invitation.usedAt ? 'Used' : invitation.revokedAt ? 'Revoked' : new Date(invitation.expiresAt).getTime() <= now ? 'Expired' : 'Open'; return <tr key={invitation.id}><td>{invitation.role === 'ADMIN' ? 'Administrator' : 'Operator'}</td><td>{scopeLabel(invitation.governmentLevel, invitation.stateId, states)}</td><td>{invitation.createdByEmail || 'Bootstrap / system'}</td><td>{date(invitation.createdAt)}</td><td>{date(invitation.expiresAt)}</td><td><span className={`badge ${status.toLowerCase()}`}>{status}</span>{invitation.usedByEmail && <small>{invitation.usedByEmail}</small>}</td><td>{status === 'Open' ? <button className="table-action danger-action" disabled={busy} onClick={() => revoke(invitation.id)}>Revoke</button> : <span className="muted">—</span>}</td></tr>; })}</tbody></table></div>}</section></>}
   </div>;
 }
 

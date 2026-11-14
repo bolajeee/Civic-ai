@@ -1,7 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db';
 import { isPriorityEnabled } from '../ai/priority';
+import { governmentAccess } from './gov-access';
+import { clusterInScope } from '../lib/gov-scope';
 
 const paramsSchema = z.object({ id: z.uuid() });
 const contextValue = z.object({ score: z.number().min(0).max(1), source: z.string().trim().min(1).max(1000) }).strict();
@@ -9,19 +11,15 @@ const contextSchema = z.object({ population: contextValue.nullable(), locationIm
   reason: z.string().trim().min(1).max(1000) }).strict();
 
 export default async function govPriorityRoutes(app: FastifyInstance) {
-  async function requireGovernment(request: FastifyRequest, reply: FastifyReply) {
-    const user = await query<{ role: string; status: string }>('SELECT role, status FROM users WHERE id = $1',
-      [(request.user as { id: string }).id]);
-    if (!user.rows[0] || !['OPERATOR', 'ADMIN'].includes(user.rows[0].role) || user.rows[0].status !== 'ACTIVE') {
-      return reply.status(403).send({ error: 'Access denied' });
-    }
-  }
-  const preHandler = [app.authenticate, requireGovernment];
+  const preHandler = [app.authenticate, governmentAccess(app)];
   app.get('/:id/priority', { preHandler }, async (request, reply) => {
     const params = paramsSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'Invalid cluster id' });
     if (!isPriorityEnabled()) return { status: 'disabled', priority: null };
     try {
+      if (!(await clusterInScope(request.govAccount!, params.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const rows = await query<{
         id: string; error_code: string | null; stale: boolean; result: unknown;
         input_snapshot: unknown; calculated_at: Date | null; calculation_id: string | null;
@@ -46,6 +44,9 @@ export default async function govPriorityRoutes(app: FastifyInstance) {
     if (!params.success || !body.success) return reply.status(400).send({ error: 'Invalid priority context' });
     if (!isPriorityEnabled()) return reply.status(503).send({ error: 'Priority calculation is disabled' });
     try {
+      if (!(await clusterInScope(request.govAccount!, params.data.id))) {
+        return reply.status(404).send({ error: 'Cluster not found' });
+      }
       const { population, locationImportance, reason } = body.data;
       // A single statement checks existence and writes context; triggers audit and enqueue atomically.
       const result = await query(

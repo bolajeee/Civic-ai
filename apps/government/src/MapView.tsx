@@ -3,8 +3,17 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './map.css';
 import type { GovernmentApi } from './api';
-import type { MapFeature, MapLayer, MapSnapshot } from './types';
+import type { GovernmentUser, MapFeature, MapLayer, MapSnapshot } from './types';
 import { geographicBounds } from './map-utils';
+
+const NIGERIA_VIEW: [number, number] = [9.08, 8.67];
+const NIGERIA_ZOOM = 6;
+
+/** [west, south, east, north] -> Leaflet bounds, for a STATE account's own state. */
+function stateBounds(bbox: [number, number, number, number]): L.LatLngBoundsExpression {
+  const [west, south, east, north] = bbox;
+  return [[south, west], [north, east]];
+}
 
 const fmt = {
   date: (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -42,8 +51,21 @@ function clusterIcon(publicId: string, reportCount: number) {
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export function MapView({ api }: { api: GovernmentApi }) {
+export function MapView({ api, currentUser }: { api: GovernmentApi; currentUser: GovernmentUser }) {
   const container = useRef<HTMLDivElement>(null);
+  const [stateBbox, setStateBbox] = useState<[number, number, number, number] | null>(null);
+
+  // STATE accounts default/reset to their own state's view; FEDERAL keeps the national view.
+  useEffect(() => {
+    if (currentUser.governmentLevel !== 'STATE' || !currentUser.state) return;
+    let active = true;
+    api.states().then(result => {
+      if (!active) return;
+      const match = result.states.find(s => s.id === currentUser.state?.id);
+      if (match?.bbox) setStateBbox(match.bbox);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [api, currentUser]);
   const map = useRef<L.Map | null>(null);
   const points = useRef<L.LayerGroup | null>(null);
 
@@ -80,7 +102,7 @@ export function MapView({ api }: { api: GovernmentApi }) {
       maxBounds: [[-85, -180], [85, 180]],
       maxBoundsViscosity: 1,
       zoomControl: true,
-    }).setView([9.08, 8.67], 6);
+    }).setView(NIGERIA_VIEW, NIGERIA_ZOOM);
 
     map.current = instance;
     points.current = L.layerGroup().addTo(instance);
@@ -103,6 +125,11 @@ export function MapView({ api }: { api: GovernmentApi }) {
 
     return () => { resize.disconnect(); instance.remove(); map.current = null; points.current = null; };
   }, []);
+
+  // Once a STATE account's own state bbox is known, center the view there instead of the national default.
+  useEffect(() => {
+    if (stateBbox) map.current?.fitBounds(stateBounds(stateBbox));
+  }, [stateBbox]);
 
   // -------------------------------------------------------------------------
   // Fetch map data on viewport / filter change (debounced 250 ms)
@@ -252,8 +279,12 @@ export function MapView({ api }: { api: GovernmentApi }) {
         </div>
 
         {/* Reset viewport */}
-        <button className="refresh map-reset" onClick={() => map.current?.setView([9.08, 8.67], 6)}>
-          Nigeria view
+        <button
+          className="refresh map-reset"
+          onClick={() => stateBbox ? map.current?.fitBounds(stateBounds(stateBbox))
+            : map.current?.setView(NIGERIA_VIEW, NIGERIA_ZOOM)}
+        >
+          {stateBbox ? `${currentUser.state?.name} view` : 'Nigeria view'}
         </button>
 
         {/* Mobile filter toggle */}

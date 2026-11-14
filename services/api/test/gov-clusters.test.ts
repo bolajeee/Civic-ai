@@ -65,8 +65,11 @@ test('disabled-priority list binds literal search and paginates a consistent non
   process.env.AI_PRIORITY_ENABLED = 'false';
   const listing = { page: 2, limit: 20, total: 21, priorityEnabled: false, categories: [], clusters: [] };
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
-    assert.deepEqual(values, ['IN_PROGRESS', 'POTHOLE', '%_literal', 'pending', 'AI', 'missing', 20, 20, 2, false]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'OPERATOR', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(values, ['IN_PROGRESS', 'POTHOLE', '%_literal', 'pending', 'AI', 'missing',
+      20, 20, 2, false, 'FEDERAL', null]);
     assert.match(sql, /ic\.report_count > 0/);
     assert.match(sql, /strpos\(lower\(concat_ws/);
     assert.match(sql, /search_report\.description/);
@@ -85,8 +88,10 @@ test('disabled-priority list binds literal search and paginates a consistent non
 test('enabled list includes current priority state without returning calculation evidence', async () => {
   process.env.AI_PRIORITY_ENABLED = 'true';
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(values, [null, null, null, 'all', 'all', 'all', 20, 0, 1, true]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(values, [null, null, null, 'all', 'all', 'all', 20, 0, 1, true, 'FEDERAL', null]);
     assert.match(sql, /issue_cluster_priority_jobs/);
     assert.match(sql, /evaluated_revision IS DISTINCT FROM/);
     assert.doesNotMatch(sql, /input_snapshot|population_source|location_importance_source/);
@@ -379,8 +384,10 @@ test('review queue rejects unknown, invalid and unbounded filters', async () => 
 test('review queue defaults to pending oldest-first and binds literal filters', async () => {
   const queue = { page: 1, limit: 20, total: 0, counts: { pending: 0, accepted: 0, dismissed: 0 }, categories: [], items: [] };
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
-    assert.deepEqual(values, ['PENDING', 'all', null, null, 20, 0, 1]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'OPERATOR', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(values, ['PENDING', 'all', null, null, 20, 0, 1, 'FEDERAL', null]);
     assert.match(sql, /ORDER BY created_at ASC, report_id, issue_cluster_id LIMIT \$5 OFFSET \$6/);
     assert.match(sql, /strpos\(lower\(concat_ws/);
     assert.doesNotMatch(sql, /citizen_id|email|nin|storage_key/);
@@ -393,8 +400,10 @@ test('review queue defaults to pending oldest-first and binds literal filters', 
 
 test('review queue passes status, reason, category, search and pagination as bound values', async () => {
   mock.method(pool, 'query', async (sql: string, values?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(values, ['all', 'AMBIGUOUS_MATCH', 'POTHOLE', '%_x', 50, 100, 3]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(values, ['all', 'AMBIGUOUS_MATCH', 'POTHOLE', '%_x', 50, 100, 3, 'FEDERAL', null]);
     return { rows: [{ queue: { items: [] } }] };
   });
   const response = await app.inject({ url: `${url}review-queue?status=all&reason=AMBIGUOUS_MATCH&category=POTHOLE&q=%20%25_x%20&limit=50&page=3`, headers: headers() });

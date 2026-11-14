@@ -29,6 +29,7 @@ import govReportsRoutes from './routes/gov-reports';
 import govClustersRoutes from './routes/gov-clusters';
 import govClusterActionRoutes from './routes/gov-cluster-actions';
 import govAdminRoutes from './routes/gov-admin';
+import govStatesRoutes from './routes/gov-states';
 import observabilityRoutes from './routes/observability';
 import notificationRoutes from './routes/notifications';
 import { startPushWorker } from './notifications/push_worker';
@@ -142,6 +143,7 @@ fastify.register(govReportsRoutes, { prefix: '/api/gov/reports' });
 fastify.register(govClustersRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govClusterActionRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govAdminRoutes, { prefix: '/api/gov/admin' });
+fastify.register(govStatesRoutes, { prefix: '/api/gov/states' });
 
 // Return consistent JSON errors and keep internals out of 5xx responses.
 fastify.setErrorHandler((error: any, request, reply) => {

@@ -55,8 +55,10 @@ test('map parameterizes spatial filters and returns bounded GeoJSON without iden
   const snapshot = { reports: { type: 'FeatureCollection', features: [], total: 0, withoutGeometry: 2 },
     clusters: { type: 'FeatureCollection', features: [], total: 0, withoutGeometry: 1 } };
   const db = mock.method(pool, 'query', async (sql: string, params?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'OPERATOR', status: 'ACTIVE' }] };
-    assert.deepEqual(params, [2, 4, 5, 8, 'PENDING', 'POTHOLE', 'reports', 10]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'OPERATOR', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(params, [2, 4, 5, 8, 'PENDING', 'POTHOLE', 'reports', 10, 'FEDERAL', null]);
     assert.match(sql, /ST_MakeEnvelope/);
     assert.match(sql, /l.geom &&/);
     assert.match(sql, /ic.centroid &&/);
@@ -74,8 +76,10 @@ test('map parameterizes spatial filters and returns bounded GeoJSON without iden
 
 test('map defaults both layers to 250 points and sanitizes database failures', async () => {
   mock.method(pool, 'query', async (sql: string, params?: unknown[]) => {
-    if (sql.startsWith('SELECT role, status')) return { rows: [{ role: 'ADMIN', status: 'ACTIVE' }] };
-    assert.deepEqual(params, [-180, -90, 180, 90, null, null, 'all', 250]);
+    if (sql.startsWith('SELECT role, status')) {
+      return { rows: [{ role: 'ADMIN', status: 'ACTIVE', government_level: 'FEDERAL', state_id: null }] };
+    }
+    assert.deepEqual(params, [-180, -90, 180, 90, null, null, 'all', 250, 'FEDERAL', null]);
     throw new Error('private connection details');
   });
   const response = await app.inject({ url: `${url}?bbox=-180,-90,180,90`, headers: headers() });

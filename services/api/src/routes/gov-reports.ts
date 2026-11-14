@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db';
 import { governmentAccess } from './gov-access';
+import { scopeParams } from '../lib/gov-scope';
 
 const filters = z.object({
   page: z.coerce.number().int().min(1).max(1000000).default(1),
@@ -41,6 +42,7 @@ export default async function govReportsRoutes(app: FastifyInstance, options: Op
     const parsed = filters.safeParse(request.query);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid report filters', details: parsed.error.flatten() });
     const { page, limit, status, category, q, grouping, location, from, to } = parsed.data;
+    const [govLevel, govStateId] = scopeParams(request.govAccount!);
     try {
       const result = await query<{ listing: unknown }>(`
         WITH matches AS (
@@ -55,6 +57,7 @@ export default async function govReportsRoutes(app: FastifyInstance, options: Op
               OR ($5 = 'missing' AND l.id IS NULL))
             AND ($6::date IS NULL OR r.submitted_at >= ($6::date::timestamp AT TIME ZONE 'Africa/Lagos'))
             AND ($7::date IS NULL OR r.submitted_at < (($7::date + 1)::timestamp AT TIME ZONE 'Africa/Lagos'))
+            AND ($11::text = 'FEDERAL' OR l.state_id = $12::uuid)
         ), report_page AS (
           SELECT matches.*, (SELECT count(*)::int FROM report_media media WHERE media.report_id = matches.id) AS "photoCount"
           FROM matches ORDER BY "submittedAt" DESC, id DESC LIMIT $8 OFFSET $9
@@ -66,7 +69,7 @@ export default async function govReportsRoutes(app: FastifyInstance, options: Op
           'reports', (SELECT coalesce(jsonb_agg(to_jsonb(report_page) ORDER BY "submittedAt" DESC, id DESC),
             '[]'::jsonb) FROM report_page)) AS listing`,
         [status ?? null, category ?? null, q || null, grouping, location, from ?? null, to ?? null,
-          limit, (page - 1) * limit, page]);
+          limit, (page - 1) * limit, page, govLevel, govStateId]);
       return result.rows[0].listing;
     } catch (error) {
       app.log.error(error);
@@ -77,6 +80,7 @@ export default async function govReportsRoutes(app: FastifyInstance, options: Op
   app.get('/:id', { preHandler: access }, async (request, reply) => {
     const parsed = z.object({ id: z.uuid() }).safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid report id' });
+    const [govLevel, govStateId] = scopeParams(request.govAccount!);
     try {
       const result = await query<{ report: ReportDetail }>(`
         SELECT to_jsonb(detail) AS report FROM (
@@ -86,7 +90,8 @@ export default async function govReportsRoutes(app: FastifyInstance, options: Op
               ORDER BY media.display_order, media.id), '[]'::jsonb)
               FROM report_media media WHERE media.report_id = r.id) AS photos
           ${joins} WHERE r.id = $1
-        ) detail`, [parsed.data.id]);
+            AND ($2::text = 'FEDERAL' OR l.state_id = $3::uuid)
+        ) detail`, [parsed.data.id, govLevel, govStateId]);
       if (!result.rows[0]) return reply.status(404).send({ error: 'Report not found' });
       const { photos, ...report } = result.rows[0].report;
       let urls: Record<string, string> = {};

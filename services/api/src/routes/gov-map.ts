@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { query } from '../db';
 import { governmentAccess } from './gov-access';
+import { scopeParams } from '../lib/gov-scope';
 
 const bbox = z.string().transform(value => value.split(',').map(part => part.trim()))
   .refine(parts => parts.length === 4 && parts.every(part => part !== '' && Number.isFinite(Number(part))))
@@ -22,6 +23,7 @@ export default async function govMapRoutes(app: FastifyInstance) {
     const parsed = filters.safeParse(request.query);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid map filters', details: parsed.error.flatten() });
     const { bbox: bounds, layer, status, category, limit } = parsed.data;
+    const [govLevel, govStateId] = scopeParams(request.govAccount!);
     try {
       // Each layer is capped independently. All metadata shares the same snapshot.
       // Spatial predicates use the existing GiST indexes; coordinates are GeoJSON [longitude, latitude].
@@ -37,14 +39,17 @@ export default async function govMapRoutes(app: FastifyInstance) {
           WHERE $7::text IN ('reports', 'all') AND l.geom && (SELECT geom FROM viewport)
             AND ($5::text IS NULL OR r.status::text = $5)
             AND ($6::text IS NULL OR c.slug = $6)
+            AND ($9::text = 'FEDERAL' OR l.state_id = $10::uuid)
         ), cluster_matches AS (
           SELECT ic.id, ic.public_id, ic.status, ic.report_count, ic.created_at,
             ic.centroid, c.label, c.slug
           FROM issue_clusters ic JOIN report_categories c ON c.id = ic.category_id
+          LEFT JOIN locations anchor ON anchor.id = ic.anchor_location_id
           WHERE $7::text IN ('clusters', 'all') AND ic.report_count > 0
             AND ic.centroid && (SELECT geom FROM viewport)
             AND ($5::text IS NULL OR ic.status::text = $5)
             AND ($6::text IS NULL OR c.slug = $6)
+            AND ($9::text = 'FEDERAL' OR anchor.state_id = $10::uuid)
         ), report_page AS (
           SELECT * FROM report_matches ORDER BY submitted_at DESC, id DESC LIMIT $8
         ), cluster_page AS (
@@ -59,7 +64,8 @@ export default async function govMapRoutes(app: FastifyInstance) {
             'withoutGeometry', (SELECT count(*)::int FROM reports r
               JOIN report_categories c ON c.id = r.category_id LEFT JOIN locations l ON l.id = r.location_id
               WHERE $7::text IN ('reports', 'all') AND l.geom IS NULL
-                AND ($5::text IS NULL OR r.status::text = $5) AND ($6::text IS NULL OR c.slug = $6)),
+                AND ($5::text IS NULL OR r.status::text = $5) AND ($6::text IS NULL OR c.slug = $6)
+                AND $9::text = 'FEDERAL'),
             'features', (SELECT coalesce(jsonb_agg(jsonb_build_object(
               'type', 'Feature', 'id', id, 'geometry', ST_AsGeoJSON(geom)::jsonb,
               'properties', jsonb_build_object('kind', 'report', 'publicId', public_id,
@@ -71,14 +77,15 @@ export default async function govMapRoutes(app: FastifyInstance) {
             'withoutGeometry', (SELECT count(*)::int FROM issue_clusters ic
               JOIN report_categories c ON c.id = ic.category_id WHERE $7::text IN ('clusters', 'all')
                 AND ic.report_count > 0 AND ic.centroid IS NULL
-                AND ($5::text IS NULL OR ic.status::text = $5) AND ($6::text IS NULL OR c.slug = $6)),
+                AND ($5::text IS NULL OR ic.status::text = $5) AND ($6::text IS NULL OR c.slug = $6)
+                AND $9::text = 'FEDERAL'),
             'features', (SELECT coalesce(jsonb_agg(jsonb_build_object(
               'type', 'Feature', 'id', id, 'geometry', ST_AsGeoJSON(centroid)::jsonb,
               'properties', jsonb_build_object('kind', 'cluster', 'publicId', public_id,
                 'status', status, 'category', label, 'categorySlug', slug,
                 'reportCount', report_count, 'createdAt', created_at))
               ORDER BY created_at DESC, id DESC), '[]'::jsonb) FROM cluster_page))
-        ) AS map`, [...bounds, status ?? null, category ?? null, layer, limit]);
+        ) AS map`, [...bounds, status ?? null, category ?? null, layer, limit, govLevel, govStateId]);
       return result.rows[0].map;
     } catch (error) {
       app.log.error(error);

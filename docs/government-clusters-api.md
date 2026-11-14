@@ -5,6 +5,14 @@
 valid bearer JWT and a currently ACTIVE OPERATOR or ADMIN account, checked in
 the database on every request. Responses use `Cache-Control: no-store`.
 
+**State scoping**: a STATE-level account only sees clusters whose anchor
+location resolves to its own state (list, detail, evidence, compilation,
+report export/versions, audit, and review-queue entries); an out-of-scope
+cluster ID returns `404`. Review actions (merge/move/remove/split) also 404
+if any cluster they touch, including a merge's source or a move's target, is
+out of scope. A FEDERAL account is unrestricted. See
+[government accounts](government-accounts.md#state-vs-federal-accounts).
+
 ## Administrator review actions
 
 All `POST` routes below require a currently ACTIVE **ADMIN** (OPERATORs get 403,

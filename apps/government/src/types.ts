@@ -1,13 +1,20 @@
-export interface GovernmentUser { id: string; email: string; role: 'ADMIN' | 'OPERATOR' }
+export type GovernmentLevel = 'STATE' | 'FEDERAL';
+export interface NigeriaState { id: string; code: string; name: string; bbox?: [number, number, number, number] }
+export interface GovernmentUser {
+  id: string; email: string; role: 'ADMIN' | 'OPERATOR';
+  governmentLevel: GovernmentLevel; state: NigeriaState | null;
+}
 export interface Session { accessToken: string; refreshToken: string; user: GovernmentUser }
 export type GovernmentRole = 'ADMIN' | 'OPERATOR';
 export type GovernmentAccountStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
 export interface GovernmentAccount {
   id: string; publicId: string; email: string; role: GovernmentRole; status: GovernmentAccountStatus;
+  governmentLevel: GovernmentLevel; stateId: string | null;
   createdAt: string; updatedAt: string;
 }
 export interface GovernmentInvitation {
-  id: string; role: GovernmentRole; expiresAt: string; createdAt: string;
+  id: string; role: GovernmentRole; governmentLevel: GovernmentLevel; stateId: string | null;
+  expiresAt: string; createdAt: string;
   usedAt: string | null; revokedAt: string | null; createdByEmail: string | null; usedByEmail: string | null;
 }
 export interface AdminSnapshot {
