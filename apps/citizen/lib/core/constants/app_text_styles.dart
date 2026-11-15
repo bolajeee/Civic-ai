@@ -26,7 +26,7 @@ abstract final class AppTextStyles {
   );
 
   static const TextStyle bodySmall = TextStyle(
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
     height: 1.4,

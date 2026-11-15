@@ -148,7 +148,7 @@ class _NavItem extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                 color: color,
                 height: 1.0,

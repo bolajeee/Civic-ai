@@ -254,7 +254,7 @@ class _PhotoThumbnail extends StatelessWidget {
                 child: Text(
                   formattedSize,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 13,
                     color: Colors.white,
                     fontWeight: FontWeight.w500,
                   ),

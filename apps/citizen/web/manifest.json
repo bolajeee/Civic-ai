@@ -1,11 +1,11 @@
 {
-    "name": "civic_report",
-    "short_name": "civic_report",
+    "name": "Civic Report",
+    "short_name": "Civic Report",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#1A7A3C",
+    "description": "Report local issues and track their resolution. Empowering Citizens. Building Nigeria.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

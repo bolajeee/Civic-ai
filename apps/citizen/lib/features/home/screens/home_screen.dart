@@ -551,7 +551,7 @@ class _StatCard extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.2,

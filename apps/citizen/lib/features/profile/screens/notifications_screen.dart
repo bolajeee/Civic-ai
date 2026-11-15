@@ -34,7 +34,7 @@ class NotificationsScreen extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Text(
                   'Push delivery is unavailable in this build. Updates will still appear here.',
-                  style: TextStyle(fontSize: 12),
+                  style: TextStyle(fontSize: 13),
                 ),
               ),
             const Divider(),
