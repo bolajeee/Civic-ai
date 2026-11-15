@@ -6,6 +6,8 @@ import { ReportsView } from './ReportsView';
 import { ClustersView } from './ClustersView';
 import { ReviewQueueView } from './ReviewQueueView';
 import { AdminView } from './AdminView';
+import { LogoMark } from './Logo';
+import { LegalLinks, LegalPage } from './LegalPage';
 
 const number = (value: number) => value.toLocaleString('en-NG');
 const date = (value: string) => new Intl.DateTimeFormat('en-NG', {
@@ -38,6 +40,8 @@ export function App() {
     catch { setNotice('Signed out on this browser. Session revocation could not be confirmed by the server.'); }
     finally { setSigningOut(false); }
   }
+  const legalKind = publicRoute === '#terms' ? 'terms' : publicRoute === '#privacy' ? 'privacy' : null;
+  if (legalKind) return <LegalPage kind={legalKind} signedIn={Boolean(session)} />;
   if (!session) {
     const query = publicRoute.startsWith('#register') ? publicRoute.split('?')[1] || '' : '';
     return publicRoute.startsWith('#register')
@@ -54,15 +58,16 @@ export function App() {
   ];
   return <div className="workspace">
     <aside className="sidebar">
-      <a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI<span className="brand-dot">●</span></a>
+      <a className="brand" href="#overview"><LogoMark />CivicAI</a>
       <p className="workspace-label">GOVERNMENT WORKSPACE</p>
       <nav className="workspace-nav" aria-label="Government workspace">{navigationItems.map(item => <a key={item.id} className={`${page === item.id ? 'nav-active' : ''} ${item.id === 'admin' ? 'admin-navigation' : ''}`} href={`#${item.id}`} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span aria-hidden="true">{item.symbol}</span><span className="nav-label">{item.label}</span></a>)}</nav>
       <div className="sidebar-note"><span className="live-dot" />Citizen observations.<br />Better public decisions.</div>
       <div className="account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><div><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></div></div>
       <button className="signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
+      <LegalLinks />
     </aside>
     <div className="workspace-main">
-      <header className="mobile-header"><a className="brand" href="#overview"><span className="brand-mark">C</span>CivicAI</a><div className="mobile-account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><span><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></span></div>{session.user.role === 'ADMIN' && <a className={`mobile-admin-link ${page === 'admin' ? 'nav-active' : ''}`} href="#admin" aria-label="Administration" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}>Admin</a>}<button className="mobile-signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></header>
+      <header className="mobile-header"><a className="brand" href="#overview"><LogoMark />CivicAI</a><div className="mobile-account"><span className="avatar">{session.user.email[0].toUpperCase()}</span><span><strong>{session.user.role === 'ADMIN' ? 'Administrator' : 'Operator'}</strong><small>{session.user.email}</small></span></div>{session.user.role === 'ADMIN' && <a className={`mobile-admin-link ${page === 'admin' ? 'nav-active' : ''}`} href="#admin" aria-label="Administration" aria-current={page === 'admin' ? 'page' : undefined} onClick={() => setPage('admin')}>Admin</a>}<button className="mobile-signout" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button></header>
     <main id={page} className="workspace-content"><header className="topbar"><span>{page === 'admin' ? 'Workspace' : 'Operations'} / <strong>{page === 'overview' ? 'Overview' : page === 'map' ? 'Issue map' : page === 'reports' ? 'Reports' : page === 'clusters' ? 'Issue clusters' : page === 'review' ? 'Review queue' : 'Administration'}</strong></span><span className="workspace-tag">Government portal</span></header>
       {page === 'overview' ? <Dashboard key={session.user.id} api={api} /> : page === 'map' ? <MapView key={session.user.id} api={api} currentUser={session.user} /> : page === 'reports' ? <ReportsView key={session.user.id} api={api} /> : page === 'clusters' ? <ClustersView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : page === 'review' ? <ReviewQueueView key={session.user.id} api={api} canAct={session.user.role === 'ADMIN'} /> : <AdminView key={session.user.id} api={api} currentUserId={session.user.id} currentUser={session.user} />}
     </main></div>
@@ -80,13 +85,14 @@ function Login({ api, notice }: { api: GovernmentApi; notice: string }) {
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to sign in.'); }
     finally { setBusy(false); }
   }
-  return <main className="login-page"><section className="login-story"><a href="/" className="brand"><span className="brand-mark">C</span>CivicAI</a><div><p className="eyebrow">CIVIC INTELLIGENCE</p><h1>A clearer view of what needs attention.</h1><p>Bring citizen observations together.<br />Make informed decisions for your community.</p></div><small>Government operations workspace</small></section>
+  return <main className="login-page"><section className="login-story"><a href="/" className="brand"><LogoMark />CivicAI</a><div><p className="eyebrow">CIVIC INTELLIGENCE</p><h1>A clearer view of what needs attention.</h1><p>Bring citizen observations together.<br />Make informed decisions for your community.</p></div><small>Government operations workspace</small></section>
     <section className="login-panel"><form onSubmit={submit}><p className="eyebrow">WELCOME BACK</p><h2>Sign in to your workspace</h2><p className="muted">Use your government operator or administrator account.</p>
       {notice && <p role="status" className="notice">{notice}</p>}{error && <p role="alert" className="error">{error}</p>}
       <label>Email address<input name="email" type="email" autoComplete="username" placeholder="you@agency.gov.ng" required disabled={busy} /></label>
       <label>Password<input name="password" type="password" autoComplete="current-password" required disabled={busy} /></label>
       <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
       <p className="login-help">Access is restricted to active government accounts. Contact your administrator if you need an account.<br /><a className="text-link" href="#register">Have an invitation?</a></p>
+      <LegalLinks />
     </form></section></main>;
 }
 
@@ -103,7 +109,7 @@ function Register({ api, inviteCode }: { api: GovernmentApi; inviteCode: string 
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to create account.'); }
     finally { setBusy(false); }
   }
-  return <main className="login-page"><section className="login-story"><a href="#" className="brand"><span className="brand-mark">C</span>CivicAI</a><div><p className="eyebrow">INVITED ACCESS</p><h1>Join your government<br />workspace.</h1><p>Use your one-time invitation to create<br />a protected operations account.</p></div><small>Government operations workspace</small></section>
+  return <main className="login-page"><section className="login-story"><a href="#" className="brand"><LogoMark />CivicAI</a><div><p className="eyebrow">INVITED ACCESS</p><h1>Join your government<br />workspace.</h1><p>Use your one-time invitation to create<br />a protected operations account.</p></div><small>Government operations workspace</small></section>
     <section className="login-panel"><form onSubmit={submit}><p className="eyebrow">CREATE ACCOUNT</p><h2>Accept your invitation</h2><p className="muted">Your administrator selected your access level.</p>
       {error && <p role="alert" className="error">{error}</p>}
       <label>Invitation code<input name="inviteCode" defaultValue={inviteCode} required readOnly={Boolean(inviteCode)} /></label>
@@ -111,6 +117,7 @@ function Register({ api, inviteCode }: { api: GovernmentApi; inviteCode: string 
       <label>NIN<input name="nin" inputMode="numeric" pattern="[0-9]{11}" minLength={11} maxLength={11} required disabled={busy} /></label>
       <label>Password<input name="password" type="password" autoComplete="new-password" minLength={8} required disabled={busy} /></label>
       <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required disabled={busy} /></label>
+      <p className="login-help">By creating an account you agree to the <a className="text-link" href="#terms">Terms of Use</a> and acknowledge the <a className="text-link" href="#privacy">Privacy Notice</a>.</p>
       <button className="primary" disabled={busy}>{busy ? 'Creating account…' : 'Create government account'}</button>
       <p className="login-help"><a className="text-link" href="#">Back to sign in</a></p>
     </form></section></main>;
