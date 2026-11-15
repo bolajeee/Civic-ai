@@ -1,3 +1,4 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/data/report_categories.dart';
 import '../../../shared/widgets/report_card.dart';
@@ -94,11 +94,11 @@ class ReportDetailsScreen extends StatelessWidget {
     final visual = reportCategoryById(report.category.slug);
     final description = report.description?.trim() ?? '';
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: const Text('Report Details', style: AppTextStyles.heading2),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        title: Text('Report Details', style: context.textStyles.heading2),
+        backgroundColor: context.colors.surface,
+        foregroundColor: context.colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -132,7 +132,7 @@ class ReportDetailsScreen extends StatelessWidget {
                         children: [
                           Expanded(
                               child: Text(report.category.label,
-                                  style: AppTextStyles.heading2)),
+                                  style: context.textStyles.heading2)),
                           const SizedBox(width: AppConstants.spacingSm),
                           StatusBadge(status: report.status),
                         ]),
@@ -141,7 +141,7 @@ class ReportDetailsScreen extends StatelessWidget {
                         description.isEmpty
                             ? 'No additional details were provided.'
                             : description,
-                        style: AppTextStyles.bodyMedium),
+                        style: context.textStyles.bodyMedium),
                     const SizedBox(height: AppConstants.spacingLg),
                     _DetailsCard(report: report),
                     if (report.aiClassification?.isVisible ?? false) ...[
@@ -152,7 +152,7 @@ class ReportDetailsScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: AppConstants.spacingLg),
                     Text('Progress timeline',
-                        style: AppTextStyles.heading2.copyWith(fontSize: 18)),
+                        style: context.textStyles.heading2.copyWith(fontSize: 18)),
                     const SizedBox(height: AppConstants.spacingSm),
                     _Timeline(events: report.events),
                     const SizedBox(height: AppConstants.spacingLg),
@@ -299,7 +299,7 @@ class _EvidenceGalleryState extends State<_EvidenceGallery> {
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text('${index + 1} of ${photos.length}',
-            style: AppTextStyles.bodySmall),
+            style: context.textStyles.bodySmall),
       ),
     ]);
   }
@@ -354,9 +354,9 @@ class _DetailsCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(AppConstants.spacingMd),
         decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.colors.surface,
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            border: Border.all(color: AppColors.divider)),
+            border: Border.all(color: context.colors.divider)),
         child: Column(children: [
           _InfoRow(
               icon: Icons.category_outlined,
@@ -420,27 +420,27 @@ class _AiCheckCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppConstants.spacingMd),
       decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          border: Border.all(color: AppColors.divider)),
+          border: Border.all(color: context.colors.divider)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.auto_awesome_outlined,
-            size: 18, color: AppColors.primary),
+        Icon(Icons.auto_awesome_outlined,
+            size: 18, color: context.colors.primary),
         const SizedBox(width: 10),
         Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(headline,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600, color: context.colors.textPrimary)),
           if (!classification.isInProgress && evidence.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(evidence, style: AppTextStyles.bodySmall),
+            Text(evidence, style: context.textStyles.bodySmall),
           ],
           const SizedBox(height: 4),
-          const Text(
+          Text(
               'Automated check — your selected category stays on record.',
-              style: AppTextStyles.bodySmall),
+              style: context.textStyles.bodySmall),
         ])),
       ]),
     );
@@ -457,16 +457,16 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, size: 18, color: AppColors.primary),
+          Icon(icon, size: 18, color: context.colors.primary),
           const SizedBox(width: 10),
-          Expanded(child: Text(label, style: AppTextStyles.bodySmall)),
+          Expanded(child: Text(label, style: context.textStyles.bodySmall)),
           const SizedBox(width: 12),
           Flexible(
               child: Text(value,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary))),
+                      color: context.colors.textPrimary))),
         ]),
       );
 }
@@ -477,8 +477,8 @@ class _Timeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return const Text('No lifecycle events have been recorded yet.',
-          style: AppTextStyles.bodySmall);
+      return Text('No lifecycle events have been recorded yet.',
+          style: context.textStyles.bodySmall);
     }
     return Column(children: [
       for (var i = 0; i < events.length; i++)
@@ -491,9 +491,9 @@ class _Timeline extends StatelessWidget {
                 size: 22,
                 color: events[i].status == ReportStatus.rejected
                     ? AppColors.error
-                    : AppColors.primary),
+                    : context.colors.primary),
             if (i < events.length - 1)
-              Container(width: 2, height: 38, color: AppColors.primary),
+              Container(width: 2, height: 38, color: context.colors.primary),
           ]),
           const SizedBox(width: 12),
           Padding(
@@ -505,7 +505,7 @@ class _Timeline extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                   '${formatDate(events[i].occurredAt)} · ${formatTime(events[i].occurredAt)}',
-                  style: AppTextStyles.bodySmall),
+                  style: context.textStyles.bodySmall),
             ]),
           ),
         ]),

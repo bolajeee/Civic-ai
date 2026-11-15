@@ -1,8 +1,7 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 
 /// Where a photo should come from.
 enum PhotoSource { camera, gallery }
@@ -13,7 +12,7 @@ enum PhotoSource { camera, gallery }
 Future<PhotoSource?> showPhotoSourceSheet(BuildContext context) {
   return showModalBottomSheet<PhotoSource>(
     context: context,
-    backgroundColor: AppColors.surface,
+    backgroundColor: context.colors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(
         top: Radius.circular(AppConstants.radiusLg),
@@ -30,20 +29,20 @@ Future<PhotoSource?> showPhotoSourceSheet(BuildContext context) {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.divider,
+              color: context.colors.divider,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
 
           const SizedBox(height: AppConstants.spacingMd),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(
+          Padding(
+            padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.spacingLg,
             ),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('Add Photo', style: AppTextStyles.label),
+              child: Text('Add Photo', style: context.textStyles.label),
             ),
           ),
 
@@ -93,14 +92,14 @@ class _SourceTile extends StatelessWidget {
       leading: Container(
         width: 44,
         height: 44,
-        decoration: const BoxDecoration(
-          color: AppColors.primaryLight,
+        decoration: BoxDecoration(
+          color: context.colors.primaryLight,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 22, color: AppColors.primary),
+        child: Icon(icon, size: 22, color: context.colors.primary),
       ),
-      title: Text(title, style: AppTextStyles.label),
-      subtitle: Text(subtitle, style: AppTextStyles.bodySmall),
+      title: Text(title, style: context.textStyles.label),
+      subtitle: Text(subtitle, style: context.textStyles.bodySmall),
     );
   }
 }

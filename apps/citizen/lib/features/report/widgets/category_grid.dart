@@ -1,9 +1,9 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/data/report_categories.dart';
 import '../providers/report_draft_provider.dart';
 
@@ -22,13 +22,13 @@ class CategoryGrid extends StatelessWidget {
     final draft = context.watch<ReportDraftProvider>();
 
     if (draft.isLoadingCategories && !draft.hasCategories) {
-      return const _CategoryStatus(
+      return _CategoryStatus(
         child: SizedBox(
           width: 22,
           height: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: AppColors.primary,
+            color: context.colors.primary,
           ),
         ),
       );
@@ -42,7 +42,7 @@ class CategoryGrid extends StatelessWidget {
           children: [
             Text(
               draft.categoriesError ?? 'No categories available.',
-              style: AppTextStyles.bodySmall,
+              style: context.textStyles.bodySmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppConstants.spacingSm),
@@ -56,7 +56,7 @@ class CategoryGrid extends StatelessWidget {
                 ),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('Retry', style: AppTextStyles.link),
+              child: Text('Retry', style: context.textStyles.link),
             ),
           ],
         ),
@@ -108,14 +108,14 @@ class _CategoryTile extends StatelessWidget {
     // Selection is carried by colour, border weight and an icon tint together:
     // a tint alone is easy to miss, and colour alone is not available to every
     // citizen.
-    final foreground = isSelected ? AppColors.primary : AppColors.textSecondary;
+    final foreground = isSelected ? context.colors.primary : context.colors.textSecondary;
 
     return Semantics(
       button: true,
       selected: isSelected,
       label: label,
       child: Material(
-        color: isSelected ? AppColors.primaryLight : AppColors.surface,
+        color: isSelected ? context.colors.primaryLight : context.colors.surface,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
         child: InkWell(
           onTap: onTap,
@@ -124,7 +124,7 @@ class _CategoryTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppConstants.radiusMd),
               border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.inputBorder,
+                color: isSelected ? context.colors.primary : context.colors.inputBorder,
                 width: isSelected ? 1.5 : 1,
               ),
             ),
@@ -137,10 +137,10 @@ class _CategoryTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
                     label,
-                    style: AppTextStyles.bodySmall.copyWith(
+                    style: context.textStyles.bodySmall.copyWith(
                       color: isSelected
                           ? AppColors.primaryDark
-                          : AppColors.textSecondary,
+                          : context.colors.textSecondary,
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.w400,
                     ),

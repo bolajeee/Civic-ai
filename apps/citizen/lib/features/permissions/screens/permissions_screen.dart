@@ -1,10 +1,10 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../features/notifications/providers/notification_provider.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -140,11 +140,11 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusLg),
         ),
-        title: const Text('Permissions Required', style: AppTextStyles.label),
-        content: const Text(
+        title: Text('Permissions Required', style: context.textStyles.label),
+        content: Text(
           'Some permissions were permanently denied. Please enable them in '
           'Settings to use all features of Civic Report.',
-          style: AppTextStyles.bodyMedium,
+          style: context.textStyles.bodyMedium,
         ),
         actions: [
           TextButton(
@@ -161,9 +161,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               Navigator.of(context).pop();
               await openAppSettings();
             },
-            child: const Text(
+            child: Text(
               'Open Settings',
-              style: TextStyle(color: AppColors.primary),
+              style: TextStyle(color: context.colors.primary),
             ),
           ),
         ],
@@ -174,7 +174,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -223,9 +223,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               Center(
                 child: TextButton(
                   onPressed: _isRequesting ? null : () => _proceed(),
-                  child: const Text(
+                  child: Text(
                     'Skip for now',
-                    style: AppTextStyles.bodyMedium,
+                    style: context.textStyles.bodyMedium,
                   ),
                 ),
               ),
@@ -306,23 +306,23 @@ class _PermissionsHeader extends StatelessWidget {
         Container(
           width: 52,
           height: 52,
-          decoration: const BoxDecoration(
-            color: AppColors.primaryLight,
+          decoration: BoxDecoration(
+            color: context.colors.primaryLight,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.shield_outlined,
             size: 26,
-            color: AppColors.primary,
+            color: context.colors.primary,
           ),
         ),
         const SizedBox(height: AppConstants.spacingMd),
-        const Text('Allow Access', style: AppTextStyles.heading1),
+        Text('Allow Access', style: context.textStyles.heading1),
         const SizedBox(height: AppConstants.spacingSm),
-        const Text(
+        Text(
           'Civic Report needs these permissions to let you report issues '
           'accurately. You can change them anytime in Settings.',
-          style: AppTextStyles.bodyMedium,
+          style: context.textStyles.bodyMedium,
         ),
       ],
     );
@@ -346,26 +346,26 @@ class _PermissionCard extends StatelessWidget {
     final isDenied = status == PermissionStatus.permanentlyDenied;
 
     final Color iconBg = isGranted
-        ? AppColors.primaryLight
+        ? context.colors.primaryLight
         : isDenied
             ? const Color(0xFFFEE2E2) // red tint
-            : AppColors.background;
+            : context.colors.background;
 
     final Color iconColor = isGranted
-        ? AppColors.primary
+        ? context.colors.primary
         : isDenied
             ? AppColors.error
-            : AppColors.textSecondary;
+            : context.colors.textSecondary;
 
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacingMd),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
         border: Border.all(
           color: isGranted
-              ? AppColors.primary.withValues(alpha: 0.3)
-              : AppColors.inputBorder,
+              ? context.colors.primary.withValues(alpha: 0.3)
+              : context.colors.inputBorder,
         ),
       ),
       child: Row(
@@ -388,9 +388,9 @@ class _PermissionCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: AppTextStyles.label),
+                Text(item.title, style: context.textStyles.label),
                 const SizedBox(height: 2),
-                Text(item.description, style: AppTextStyles.bodySmall),
+                Text(item.description, style: context.textStyles.bodySmall),
               ],
             ),
           ),

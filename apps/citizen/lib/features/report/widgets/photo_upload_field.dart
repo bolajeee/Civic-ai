@@ -1,12 +1,11 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../providers/report_draft_provider.dart';
 import 'dashed_border.dart';
@@ -86,7 +85,7 @@ class PhotoUploadField extends StatelessWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Open Settings', style: AppTextStyles.link),
+                child: Text('Open Settings', style: context.textStyles.link),
               ),
             ),
         ],
@@ -126,10 +125,10 @@ class _Header extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('Add Photo', style: AppTextStyles.label),
+        Text('Add Photo', style: context.textStyles.label),
         Text(
           '$count of $max',
-          style: AppTextStyles.bodySmall,
+          style: context.textStyles.bodySmall,
         ),
       ],
     );
@@ -151,8 +150,8 @@ class _EmptyDropzone extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: CustomPaint(
-        painter: const DashedRoundedBorderPainter(
-          color: AppColors.inputBorder,
+        painter: DashedRoundedBorderPainter(
+          color: context.colors.inputBorder,
           radius: AppConstants.radiusMd,
         ),
         child: SizedBox(
@@ -162,28 +161,28 @@ class _EmptyDropzone extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isBusy)
-                const SizedBox(
+                SizedBox(
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                 )
               else
-                const Icon(
+                Icon(
                   Icons.add_a_photo_outlined,
                   size: 26,
-                  color: AppColors.inputIcon,
+                  color: context.colors.inputIcon,
                 ),
               const SizedBox(height: AppConstants.spacingSm),
-              const Padding(
-                padding: EdgeInsets.symmetric(
+              Padding(
+                padding: const EdgeInsets.symmetric(
                   horizontal: AppConstants.spacingMd,
                 ),
                 child: Text(
                   'Upload image of the infrastructure issue',
-                  style: AppTextStyles.bodySmall,
+                  style: context.textStyles.bodySmall,
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -229,10 +228,10 @@ class _PhotoThumbnail extends StatelessWidget {
                 fit: BoxFit.cover,
                 // A photo that failed to decode must not blank the whole form.
                 errorBuilder: (_, __, ___) => Container(
-                  color: AppColors.background,
-                  child: const Icon(
+                  color: context.colors.background,
+                  child: Icon(
                     Icons.broken_image_outlined,
-                    color: AppColors.inputIcon,
+                    color: context.colors.inputIcon,
                   ),
                 ),
               ),
@@ -277,14 +276,14 @@ class _PhotoThumbnail extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary,
+                    color: context.colors.textPrimary,
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.surface, width: 2),
+                    border: Border.all(color: context.colors.surface, width: 2),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.close_rounded,
                     size: 13,
-                    color: AppColors.surface,
+                    color: context.colors.surface,
                   ),
                 ),
               ),
@@ -316,8 +315,8 @@ class _AddMoreTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: CustomPaint(
-        painter: const DashedRoundedBorderPainter(
-          color: AppColors.inputBorder,
+        painter: DashedRoundedBorderPainter(
+          color: context.colors.inputBorder,
           radius: AppConstants.radiusMd,
         ),
         child: SizedBox(
@@ -327,26 +326,26 @@ class _AddMoreTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isBusy)
-                const SizedBox(
+                SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                 )
               else
-                const Icon(
+                Icon(
                   Icons.add_rounded,
                   size: 24,
-                  color: AppColors.primary,
+                  color: context.colors.primary,
                 ),
               const SizedBox(height: AppConstants.spacingXs),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Text(
                   'Add more',
-                  style: AppTextStyles.bodySmall,
+                  style: context.textStyles.bodySmall,
                   textAlign: TextAlign.center,
                 ),
               ),

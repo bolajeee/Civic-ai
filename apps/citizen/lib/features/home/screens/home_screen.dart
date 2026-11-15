@@ -1,10 +1,10 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -142,11 +142,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         // The three most recent, narrowed by the search box.
                         if (!history.hasRecentLoaded ||
                             (query.isNotEmpty && history.isSearching))
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
                             child: Center(
                               child: CircularProgressIndicator(
-                                color: AppColors.primary,
+                                color: context.colors.primary,
                               ),
                             ),
                           )
@@ -265,7 +265,7 @@ class _PendingSyncStatus extends StatelessWidget {
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.statusPendingBg,
+        color: context.colors.statusPendingBg,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       ),
       child: Row(
@@ -319,17 +319,17 @@ class _Header extends StatelessWidget {
         Container(
           width: 42,
           height: 42,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
+          decoration: BoxDecoration(
+            color: context.colors.primary,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
           child: Text(
             initials,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.surface,
+              color: context.colors.surface,
               height: 1.0,
             ),
           ),
@@ -366,8 +366,8 @@ class _Header extends StatelessWidget {
         ),
         Material(
           color: Theme.of(context).colorScheme.surface,
-          shape: const CircleBorder(
-            side: BorderSide(color: AppColors.inputBorder),
+          shape: CircleBorder(
+            side: BorderSide(color: context.colors.inputBorder),
           ),
           child: InkWell(
             customBorder: const CircleBorder(),
@@ -405,7 +405,7 @@ class _SearchBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(color: AppColors.inputBorder),
+        border: Border.all(color: context.colors.inputBorder),
       ),
       child: TextField(
         controller: controller,
@@ -451,8 +451,8 @@ class _StatsRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             iconData: Icons.description_outlined,
-            iconColor: AppColors.primary,
-            iconBgColor: AppColors.primaryLight,
+            iconColor: context.colors.primary,
+            iconBgColor: context.colors.primaryLight,
             value: total?.toString() ?? kNoValue,
             label: 'Submitted',
             // All reports
@@ -463,8 +463,8 @@ class _StatsRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             iconData: Icons.check_circle_outline_rounded,
-            iconColor: AppColors.primary,
-            iconBgColor: AppColors.primaryLight,
+            iconColor: context.colors.primary,
+            iconBgColor: context.colors.primaryLight,
             value: resolved?.toString() ?? kNoValue,
             label: 'Resolved',
             // Pre-filtered to Resolved
@@ -477,8 +477,8 @@ class _StatsRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             iconData: Icons.access_time_rounded,
-            iconColor: AppColors.statusPendingIcon,
-            iconBgColor: AppColors.statusPendingBg,
+            iconColor: context.colors.statusPendingIcon,
+            iconBgColor: context.colors.statusPendingBg,
             value: pending?.toString() ?? kNoValue,
             label: 'Pending',
             // Pre-filtered to Pending
@@ -517,13 +517,13 @@ class _StatCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        splashColor: AppColors.primaryLight,
-        highlightColor: AppColors.primaryLight.withValues(alpha: 0.5),
+        splashColor: context.colors.primaryLight,
+        highlightColor: context.colors.primaryLight.withValues(alpha: 0.5),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.colors.divider),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -587,21 +587,21 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: context.colors.textPrimary,
             height: 1.2,
           ),
         ),
         GestureDetector(
           onTap: onAction,
-          child: const Text(
+          child: Text(
             'View All',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.primary,
+              color: context.colors.primary,
               height: 1.2,
             ),
           ),
@@ -670,21 +670,21 @@ class _ReportFabState extends State<_ReportFab> {
         height: 50,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: AppColors.primary,
+          color: context.colors.primary,
           borderRadius: BorderRadius.circular(AppConstants.radiusButton),
           boxShadow: _shadows,
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add_rounded, size: 20, color: AppColors.surface),
-            SizedBox(width: 6),
+            Icon(Icons.add_rounded, size: 20, color: context.colors.surface),
+            const SizedBox(width: 6),
             Text(
               'Report Issue',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppColors.surface,
+                color: context.colors.surface,
                 height: 1.0,
               ),
             ),

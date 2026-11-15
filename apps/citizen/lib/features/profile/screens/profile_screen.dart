@@ -1,10 +1,10 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
@@ -66,11 +66,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     CircleAvatar(
                         radius: 42,
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.colors.primary,
                         child: Text(initials,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 24,
-                                color: AppColors.surface,
+                                color: context.colors.surface,
                                 fontWeight: FontWeight.w700))),
                     const SizedBox(height: 14),
                     Center(
@@ -80,17 +80,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Center(child: Text(email, style: AppTextStyles.bodyMedium)),
+                    Center(
+                        child:
+                            Text(email, style: context.textStyles.bodyMedium)),
                     const SizedBox(height: 8),
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 20, color: AppColors.primary),
+                      Icon(Icons.location_on_outlined,
+                          size: 20, color: context.colors.primary),
                       const SizedBox(width: 4),
                       Flexible(
                           child: Text(location ?? 'No report location yet',
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: AppColors.primary,
+                              style: TextStyle(
+                                  color: context.colors.primary,
                                   fontWeight: FontWeight.w700)))
                     ]),
                     const SizedBox(height: 26),
@@ -101,8 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const ReportSummaryStatus(),
                     const SizedBox(height: 30),
                     _SettingsCard(
-                        darkMode: settings.darkMode,
-                        onDarkModeChanged: settings.setDarkMode),
+                        themeMode: settings.themeMode,
+                        onThemeModeChanged: settings.setThemeMode),
                     const SizedBox(height: 4),
                     FutureBuilder<PackageInfo>(
                       future: PackageInfo.fromPlatform(),
@@ -111,8 +113,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           snapshot.hasData
                               ? 'v${snapshot.data!.version} (${snapshot.data!.buildNumber})'
                               : 'Version…',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
+                          style: TextStyle(
+                              color: context.colors.textSecondary,
+                              fontSize: 13),
                         ),
                       ),
                     ),
@@ -179,15 +182,15 @@ class _StatsCard extends StatelessWidget {
       decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          border: Border.all(color: AppColors.inputBorder)),
+          border: Border.all(color: context.colors.inputBorder)),
       // Impact Score has no scoring model behind it yet. It renders [kNoValue]
       // rather than the placeholder number it used to show — "94" looked
       // exactly like a real score.
       child: Row(children: [
         _stat(context, total?.toString() ?? kNoValue, 'Reports'),
-        _divider(),
+        _divider(context),
         _stat(context, resolved?.toString() ?? kNoValue, 'Resolved'),
-        _divider(),
+        _divider(context),
         _stat(context, impactScore?.toString() ?? kNoValue, 'Impact Score',
             accent: true)
       ]),
@@ -203,20 +206,47 @@ class _StatsCard extends StatelessWidget {
                 fontSize: 21,
                 fontWeight: FontWeight.w700,
                 color: accent
-                    ? AppColors.primary
+                    ? context.colors.primary
                     : Theme.of(context).colorScheme.onSurface)),
         const SizedBox(height: 5),
-        Text(label, style: AppTextStyles.bodyMedium)
+        Text(label, style: context.textStyles.bodyMedium)
       ]));
-  Widget _divider() =>
-      Container(height: 44, width: 1, color: AppColors.inputBorder);
+  Widget _divider(BuildContext context) =>
+      Container(height: 44, width: 1, color: context.colors.inputBorder);
 }
 
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard(
-      {required this.darkMode, required this.onDarkModeChanged});
-  final bool darkMode;
-  final ValueChanged<bool> onDarkModeChanged;
+      {required this.themeMode, required this.onThemeModeChanged});
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  static String _themeLabel(ThemeMode m) => switch (m) {
+        ThemeMode.system => 'System',
+        ThemeMode.light => 'Light',
+        ThemeMode.dark => 'Dark',
+      };
+
+  Future<void> _pickTheme(BuildContext context) async {
+    final picked = await showDialog<ThemeMode>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Appearance'),
+        children: [
+          for (final m in ThemeMode.values)
+            ListTile(
+              title: Text(_themeLabel(m)),
+              subtitle: m == ThemeMode.system
+                  ? const Text('Match device setting')
+                  : null,
+              trailing: m == themeMode ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.pop(ctx, m),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) onThemeModeChanged(picked);
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -239,8 +269,10 @@ class _SettingsCard extends StatelessWidget {
               onTap: () => context.push(AppRoutes.language)),
           _SettingsRow(
               icon: Icons.dark_mode_outlined,
-              label: 'Dark Mode',
-              trailing: Switch(value: darkMode, onChanged: onDarkModeChanged)),
+              label: 'Appearance',
+              trailing: Text(_themeLabel(themeMode),
+                  style: context.textStyles.bodyMedium),
+              onTap: () => _pickTheme(context)),
           _SettingsRow(
               icon: Icons.help_outline_rounded,
               label: 'Help & Support',
@@ -280,8 +312,9 @@ class _SettingsRow extends StatelessWidget {
       child: Container(
         height: 68,
         padding: const EdgeInsets.symmetric(horizontal: 28),
-        decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.inputBorder))),
+        decoration: BoxDecoration(
+            border:
+                Border(bottom: BorderSide(color: context.colors.inputBorder))),
         child: Row(children: [
           Icon(icon, color: color, size: 26),
           const SizedBox(width: 24),
@@ -292,8 +325,8 @@ class _SettingsRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: color))),
           trailing ??
-              const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary, size: 28)
+              Icon(Icons.chevron_right_rounded,
+                  color: context.colors.textSecondary, size: 28)
         ]),
       ),
     );

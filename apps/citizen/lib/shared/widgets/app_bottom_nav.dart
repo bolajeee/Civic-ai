@@ -1,5 +1,5 @@
+import '../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
 
 // ---------------------------------------------------------------------------
 // NavTab — the four tabs used throughout the app
@@ -39,8 +39,8 @@ class AppBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: const Border(
-          top: BorderSide(color: AppColors.divider, width: 1),
+        border: Border(
+          top: BorderSide(color: context.colors.divider, width: 1),
         ),
       ),
       // SafeArea handles the iOS home-indicator bottom inset
@@ -114,7 +114,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = isActive ? AppColors.primary : AppColors.textSecondary;
+    final Color color = isActive ? context.colors.primary : context.colors.textSecondary;
 
     final Widget iconWidget = Icon(
       isActive ? activeIcon : icon,
@@ -135,7 +135,7 @@ class _NavItem extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
+                  color: context.colors.primaryLight,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: iconWidget,

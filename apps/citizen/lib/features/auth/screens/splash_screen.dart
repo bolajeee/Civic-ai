@@ -1,7 +1,7 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 
 /// Splash screen — dark green background, shield icon, brand name, tagline.
 ///
@@ -79,23 +79,23 @@ class _SplashContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Shield icon circle
-        _ShieldCircle(),
+        const _ShieldCircle(),
 
-        SizedBox(height: 24),
+        const SizedBox(height: 24),
 
         // Brand name
-        Text('Civic Report', style: AppTextStyles.splashTitle),
+        Text('Civic Report', style: context.textStyles.splashTitle),
 
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
 
         // Tagline
         Text(
           'Empowering Citizens. Building Nigeria.',
-          style: AppTextStyles.splashTagline,
+          style: context.textStyles.splashTagline,
           textAlign: TextAlign.center,
         ),
       ],

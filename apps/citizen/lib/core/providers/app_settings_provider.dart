@@ -4,20 +4,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 
 class AppSettingsProvider extends ChangeNotifier {
-  bool _darkMode = false;
+  ThemeMode _themeMode = ThemeMode.light;
   bool _notificationsEnabled = true;
   String _languageCode = 'en';
 
-  bool get darkMode => _darkMode;
+  bool get darkMode => _themeMode == ThemeMode.dark;
   bool get notificationsEnabled => _notificationsEnabled;
   String get languageCode => _languageCode;
-  ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
+  ThemeMode get themeMode => _themeMode;
   Locale get locale => Locale(_languageCode);
 
   Future<void> initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _darkMode = prefs.getBool(AppConstants.keyDarkMode) ?? false;
+      final stored = prefs.getString(AppConstants.keyThemeMode);
+      if (stored != null) {
+        _themeMode = ThemeMode.values.firstWhere(
+          (m) => m.name == stored,
+          orElse: () => ThemeMode.light,
+        );
+      } else {
+        // Settings saved before the "follow system" option existed.
+        _themeMode = (prefs.getBool(AppConstants.keyDarkMode) ?? false)
+            ? ThemeMode.dark
+            : ThemeMode.light;
+      }
       _notificationsEnabled =
           prefs.getBool(AppConstants.keyNotificationsEnabled) ?? true;
       _languageCode = prefs.getString(AppConstants.keyLanguage) ?? 'en';
@@ -31,13 +42,18 @@ class AppSettingsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> setDarkMode(bool value) async {
-    if (_darkMode == value) return;
-    _darkMode = value;
+  Future<void> setThemeMode(ThemeMode mode) async {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(AppConstants.keyDarkMode, value);
+    await prefs.setString(AppConstants.keyThemeMode, mode.name);
+    // Keep the legacy flag in step for anything still reading it.
+    await prefs.setBool(AppConstants.keyDarkMode, mode == ThemeMode.dark);
   }
+
+  Future<void> setDarkMode(bool value) =>
+      setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
 
   Future<void> setNotificationsEnabled(bool value) async {
     if (_notificationsEnabled == value) return;

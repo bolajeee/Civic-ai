@@ -65,7 +65,14 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
   flutter_lints: ^4.0.0
+  # Let the on-device tests stand in for the photo picker, GPS and geocoder,
+  # which an integration test cannot drive. Already transitive dependencies.
+  image_picker_platform_interface: ^2.11.1
+  geolocator_platform_interface: ^4.4.0
+  geocoding_platform_interface: ^3.2.0
 
 flutter:
   uses-material-design: true
