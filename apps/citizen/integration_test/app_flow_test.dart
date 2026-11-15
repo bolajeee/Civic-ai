@@ -3,10 +3,12 @@ import 'package:civic_report/core/providers/app_settings_provider.dart';
 import 'package:civic_report/core/services/api_client.dart';
 import 'package:civic_report/core/services/token_storage_service.dart';
 import 'package:civic_report/features/auth/providers/auth_provider.dart';
+import 'package:civic_report/features/report/screens/location_picker_screen.dart';
 import 'package:civic_report/main.dart';
 import 'package:civic_report/shared/widgets/app_bottom_nav.dart';
 import 'package:civic_report/shared/widgets/primary_button.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geocoding_platform_interface/geocoding_platform_interface.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
@@ -394,6 +396,139 @@ void main() {
       final post = api.sent('POST', '/api/reports').single;
       expect(post.field('latitude'), isNull);
       expect(post.field('categoryId'), 'cat-waste');
+    });
+
+    // -------------------------------------------------------------------------
+    // Manual location
+    // -------------------------------------------------------------------------
+
+    final computerVillage = FakeBackend.placeResults.first;
+    final searchField = find.byKey(LocationPickerScreen.searchFieldKey);
+
+    testWidgets('denied GPS: search for a place and submit it', (tester) async {
+      gps.permission = LocationPermission.denied;
+      await bootSignedIn(tester);
+      await openReportForm(tester);
+      await waitFor(tester,
+          find.text('Location access denied. You can still submit without it.'));
+
+      await tapOn(tester, find.text('Choose on map'));
+      await waitFor(tester, find.text('Choose location'));
+      // Nothing chosen yet, so there is nothing to confirm.
+      expect(
+        tester
+            .widget<ButtonStyleButton>(find.ancestor(
+              of: find.text('Use this location'),
+              matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+            ))
+            .onPressed,
+        isNull,
+      );
+
+      await typeInto(tester, searchField, 'Computer Vil');
+      await waitFor(tester, find.text(computerVillage['label'] as String),
+          reason: 'Search results did not appear');
+      final search = api.sent('GET', '/api/geo/search').last;
+      expect(search.options.queryParameters['q'], 'Computer Vil');
+      // No GPS fix to rank results near.
+      expect(search.options.queryParameters.containsKey('lat'), isFalse);
+
+      await tapOn(tester, find.text(computerVillage['label'] as String));
+      await tapOn(tester, find.text('Use this location'));
+      await waitFor(tester, find.text('Report an Issue'));
+      await waitFor(tester, find.text(computerVillage['label'] as String));
+      expect(find.textContaining('Set manually'), findsOneWidget);
+      expect(find.text('Change location'), findsOneWidget);
+
+      await tapOn(tester, find.text('Pothole'));
+      await addGalleryPhoto(tester);
+      await waitFor(tester, find.text('1 of 5'));
+      await submitReport(tester);
+      await waitFor(tester, find.text('Report CR-2001 submitted.'));
+
+      final post = api.sent('POST', '/api/reports').single;
+      expect(post.field('latitude'), computerVillage['latitude'].toString());
+      expect(post.field('longitude'), computerVillage['longitude'].toString());
+      expect(post.field('address'), computerVillage['label']);
+      // A picked place is not a GPS fix, so no accuracy is claimed.
+      expect(post.field('accuracy'), isNull);
+    });
+
+    testWidgets('search outage still allows dropping a pin on the map',
+        (tester) async {
+      gps.permission = LocationPermission.denied;
+      await bootSignedIn(tester);
+      await openReportForm(tester);
+      await waitFor(tester, find.text('Choose on map'));
+      await tapOn(tester, find.text('Choose on map'));
+      await waitFor(tester, find.text('Choose location'));
+
+      api.failNext['GET /api/geo/search'] = (
+        status: 503,
+        body: {'error': 'Location search is temporarily unavailable'},
+      );
+      await typeInto(tester, searchField, 'Allen');
+      await waitFor(
+          tester, find.text('Location search is temporarily unavailable'));
+
+      // Tap the middle of the map to drop a pin there.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await pumpFor(tester, const Duration(milliseconds: 400));
+      await tester.tap(find.byType(FlutterMap));
+      await pumpFor(tester);
+      await waitFor(tester, find.text('Pin dropped on the map'));
+      await tapOn(tester, find.text('Use this location'));
+
+      // A dropped pin has no name, so the form reverse-geocodes it.
+      await waitFor(tester, find.text('Report an Issue'));
+      await waitFor(tester, find.text(FakeGeocoding.address));
+
+      await tapOn(tester, find.text('Waste'));
+      await addGalleryPhoto(tester);
+      await waitFor(tester, find.text('1 of 5'));
+      await submitReport(tester);
+      await waitFor(tester, find.text('Report CR-2001 submitted.'));
+
+      final post = api.sent('POST', '/api/reports').single;
+      // The map opened on the whole of Nigeria, centred near Abuja.
+      expect(double.parse(post.field('latitude')!), closeTo(9.08, 1.5));
+      expect(double.parse(post.field('longitude')!), closeTo(8.68, 1.5));
+      expect(post.field('address'), FakeGeocoding.address);
+      expect(post.field('accuracy'), isNull);
+    });
+
+    testWidgets('a confirmed GPS location can be changed by search',
+        (tester) async {
+      await bootSignedIn(tester);
+      await openReportForm(tester);
+      await waitFor(tester, find.text('Use this location'));
+      await tapOn(tester, find.text('Use this location'));
+      await waitFor(tester, find.text(FakeGeocoding.address));
+
+      await tapOn(tester, find.text('Change location'));
+      await waitFor(tester, find.text('Choose location'));
+      await typeInto(tester, searchField, 'Computer Village');
+      await waitFor(tester, find.text(computerVillage['label'] as String));
+      // Results are ranked near the GPS fix the citizen already had.
+      final search = api.sent('GET', '/api/geo/search').last;
+      expect(search.options.queryParameters['lat'], FakeGeolocator.latitude);
+      expect(search.options.queryParameters['lon'], FakeGeolocator.longitude);
+
+      await tapOn(tester, find.text(computerVillage['label'] as String));
+      await tapOn(tester, find.text('Use this location'));
+      await waitFor(tester, find.text('Report an Issue'));
+      await waitFor(tester, find.text(computerVillage['label'] as String));
+      expect(find.text(FakeGeocoding.address), findsNothing);
+
+      await tapOn(tester, find.text('Streetlight'));
+      await addGalleryPhoto(tester);
+      await waitFor(tester, find.text('1 of 5'));
+      await submitReport(tester);
+      await waitFor(tester, find.text('Report CR-2001 submitted.'));
+
+      final post = api.sent('POST', '/api/reports').single;
+      expect(post.field('address'), computerVillage['label']);
+      expect(post.field('latitude'), computerVillage['latitude'].toString());
     });
 
     testWidgets('cancelled photo pick changes nothing', (tester) async {

@@ -9,6 +9,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../models/report_location.dart';
 import '../providers/report_draft_provider.dart';
+import '../screens/location_picker_screen.dart';
 import '../services/location_service.dart';
 
 /// The Location section of the report form.
@@ -62,6 +63,15 @@ class LocationField extends StatelessWidget {
             isBusy: draft.isConfirmingLocation || draft.isLocating,
           ),
         ],
+        // Manual entry is always one tap away — GPS indoors can take a while,
+        // and a confirmed location can still be wrong.
+        if (candidate == null && draft.locationFailure == null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppConstants.spacingXs),
+            child: _PickManuallyButton(
+              label: location != null ? 'Change location' : 'Choose on map',
+            ),
+          ),
         if (draft.locationFailure != null) ...[
           const SizedBox(height: AppConstants.spacingSm),
           Row(
@@ -81,7 +91,7 @@ class LocationField extends StatelessWidget {
               ),
             ],
           ),
-          Row(
+          Wrap(
             children: [
               TextButton(
                 onPressed: () =>
@@ -89,6 +99,7 @@ class LocationField extends StatelessWidget {
                 style: _compactButtonStyle,
                 child: Text('Try again', style: context.textStyles.link),
               ),
+              const _PickManuallyButton(label: 'Choose on map'),
               if (draft.locationFailure!.requiresSettings)
                 TextButton(
                   onPressed: () => context
@@ -112,6 +123,35 @@ class LocationField extends StatelessWidget {
     ),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
+}
+
+/// Opens the manual picker, seeded with whatever location the draft already
+/// has, and hands the result back to the draft.
+Future<void> _pickManually(BuildContext context) async {
+  final draft = context.read<ReportDraftProvider>();
+  final picked = await LocationPickerScreen.open(
+    context,
+    initial: draft.location ?? draft.locationCandidate,
+  );
+  if (picked != null) await draft.useManualLocation(picked);
+}
+
+class _PickManuallyButton extends StatelessWidget {
+  const _PickManuallyButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = context.select<ReportDraftProvider, bool>(
+        (draft) => draft.isConfirmingLocation);
+    return TextButton.icon(
+      onPressed: busy ? null : () => _pickManually(context),
+      style: LocationField._compactButtonStyle,
+      icon: Icon(Icons.map_outlined, size: 16, color: context.colors.primary),
+      label: Text(label, style: context.textStyles.link),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -153,9 +193,11 @@ class _Readout extends StatelessWidget {
         // the report is actually filed against, and they let the citizen
         // confirm the fix landed where they are standing.
         Text(
-          accuracy == null
-              ? location.coordinateLabel
-              : '${location.coordinateLabel}  ·  $accuracy',
+          accuracy != null
+              ? '${location.coordinateLabel}  ·  $accuracy'
+              : location.source.isManual
+                  ? '${location.coordinateLabel}  ·  Set manually'
+                  : location.coordinateLabel,
           style: context.textStyles.bodySmall,
         ),
         if (draft.locationCandidate != null)
@@ -269,7 +311,9 @@ class _LocationConfirmation extends StatelessWidget {
             style: context.textStyles.bodySmall,
           ),
           const SizedBox(height: AppConstants.spacingSm),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               TextButton(
                 onPressed: isBusy
@@ -278,7 +322,10 @@ class _LocationConfirmation extends StatelessWidget {
                         context.read<ReportDraftProvider>().captureLocation(),
                 child: const Text('Retake GPS'),
               ),
-              const Spacer(),
+              TextButton(
+                onPressed: isBusy ? null : () => _pickManually(context),
+                child: const Text('Search instead'),
+              ),
               FilledButton.icon(
                 onPressed: isBusy
                     ? null

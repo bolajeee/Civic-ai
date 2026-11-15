@@ -239,35 +239,52 @@ class _FilterChipRow extends StatelessWidget {
   final ReportStatus? active;
   final ValueChanged<ReportStatus?> onSelected;
 
+  static const double _gutter = 20;
+
   @override
   Widget build(BuildContext context) {
+    final chips = <Widget>[
+      _chip(label: 'All', value: null),
+      // `unknown` is skipped: it is what the app shows for a status it
+      // does not recognise, not something a citizen can filter by.
+      for (final status in ReportStatus.values)
+        if (status != ReportStatus.unknown)
+          _chip(label: status.label, value: status),
+    ];
+
+    // Full width: the chips spread edge to edge when they fit, and scroll
+    // (with the same gutters) on narrower screens or larger text sizes.
     return Container(
+      width: double.infinity,
       color: context.colors.surface,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            _chip(label: 'All', value: null),
-            // `unknown` is skipped: it is what the app shows for a status it
-            // does not recognise, not something a citizen can filter by.
-            for (final status in ReportStatus.values)
-              if (status != ReportStatus.unknown)
-                _chip(label: status.label, value: status),
-          ],
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: _gutter, vertical: 12),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: constraints.maxWidth - _gutter * 2,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (var i = 0; i < chips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  chips[i],
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _chip({required String label, required ReportStatus? value}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: _FilterChip(
-        label: label,
-        isActive: value == active,
-        onTap: () => onSelected(value),
-      ),
+    return _FilterChip(
+      label: label,
+      isActive: value == active,
+      onTap: () => onSelected(value),
     );
   }
 }

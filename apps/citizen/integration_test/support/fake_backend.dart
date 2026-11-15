@@ -65,6 +65,27 @@ class FakeBackend extends Interceptor {
     {'id': 'cat-other', 'slug': 'OTHER', 'label': 'Other'},
   ];
 
+  /// What `GET /api/geo/search` returns, whatever the query — the shape the
+  /// Geoapify proxy produces.
+  static const placeResults = <Map<String, dynamic>>[
+    {
+      'id': 'place-computer-village',
+      'label': 'Computer Village, Ikeja, Lagos',
+      'address': 'Ikeja, Lagos',
+      'latitude': 6.59650,
+      'longitude': 3.34210,
+      'category': 'commercial',
+    },
+    {
+      'id': 'place-allen-roundabout',
+      'label': 'Allen Avenue Roundabout, Ikeja, Lagos',
+      'address': 'Ikeja, Lagos',
+      'latitude': 6.60120,
+      'longitude': 3.35460,
+      'category': 'highway',
+    },
+  ];
+
   static Map<String, dynamic> category(String id) =>
       categories.firstWhere((c) => c['id'] == id);
 
@@ -248,6 +269,8 @@ class FakeBackend extends Interceptor {
         reportUpdatesEnabled =
             (o.data as Map)['reportUpdatesEnabled'] as bool;
         return ok({'reportUpdatesEnabled': reportUpdatesEnabled});
+      case 'GET /api/geo/search':
+        return ok({'results': placeResults});
       case 'GET /api/notifications/':
         return ok({'notifications': notifications});
     }

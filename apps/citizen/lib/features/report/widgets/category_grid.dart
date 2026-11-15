@@ -138,9 +138,13 @@ class _CategoryTile extends StatelessWidget {
                   child: Text(
                     label,
                     style: context.textStyles.bodySmall.copyWith(
-                      color: isSelected
-                          ? AppColors.primaryDark
-                          : context.colors.textSecondary,
+                      // primaryDark reads well on the light tint but vanishes
+                      // on the dark theme's deep-green selection fill.
+                      color: !isSelected
+                          ? context.colors.textSecondary
+                          : Theme.of(context).brightness == Brightness.dark
+                              ? context.colors.textPrimary
+                              : AppColors.primaryDark,
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.w400,
                     ),
