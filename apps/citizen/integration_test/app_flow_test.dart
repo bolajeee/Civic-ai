@@ -586,28 +586,6 @@ void main() {
       expect(api.reportUpdatesEnabled, isTrue);
     });
 
-    testWidgets('language choice is marked and remembered', (tester) async {
-      await bootSignedIn(tester);
-      await tapNav(tester, 'Profile');
-      await tapOn(tester, find.text('Language'));
-      await waitFor(tester, find.text('Yoruba'));
-
-      Finder checkOn(String label) => find.descendant(
-            of: find.widgetWithText(ListTile, label),
-            matching: find.byIcon(Icons.check_rounded),
-          );
-      expect(checkOn('English'), findsOneWidget);
-
-      await tapOn(tester, find.text('Yoruba'));
-      expect(checkOn('Yoruba'), findsOneWidget);
-      expect(checkOn('English'), findsNothing);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AppConstants.keyLanguage), 'yo');
-
-      await tapOn(tester, find.text('English'));
-      expect(prefs.getString(AppConstants.keyLanguage), 'en');
-    });
-
     testWidgets('help, about and back', (tester) async {
       await bootSignedIn(tester);
       await tapNav(tester, 'Profile');
@@ -714,7 +692,7 @@ void main() {
       await tester.tapAt(const Offset(20, 60));
       await pumpFor(tester);
 
-      for (final row in ['Edit Profile', 'Language', 'Help & Support', 'About']) {
+      for (final row in ['Edit Profile', 'Help & Support', 'About']) {
         await tapOn(tester, find.text(row));
         check(row);
         await pageBack(tester);

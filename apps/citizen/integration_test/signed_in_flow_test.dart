@@ -130,7 +130,6 @@ void main() {
     for (final entry in {
       'Help & Support': find.text('Help & Support'),
       'About': find.text('About'),
-      'Language': find.text('Language'),
     }.entries) {
       await tester.ensureVisible(find.text(entry.key).first);
       await tester.pump(const Duration(milliseconds: 300));

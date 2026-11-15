@@ -6,13 +6,10 @@ import '../constants/app_constants.dart';
 class AppSettingsProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
   bool _notificationsEnabled = true;
-  String _languageCode = 'en';
 
   bool get darkMode => _themeMode == ThemeMode.dark;
   bool get notificationsEnabled => _notificationsEnabled;
-  String get languageCode => _languageCode;
   ThemeMode get themeMode => _themeMode;
-  Locale get locale => Locale(_languageCode);
 
   Future<void> initialize() async {
     try {
@@ -31,7 +28,6 @@ class AppSettingsProvider extends ChangeNotifier {
       }
       _notificationsEnabled =
           prefs.getBool(AppConstants.keyNotificationsEnabled) ?? true;
-      _languageCode = prefs.getString(AppConstants.keyLanguage) ?? 'en';
     } catch (_) {
       // Keep the in-memory defaults if preferences are temporarily
       // unavailable; settings can still be changed normally in this session.
@@ -61,13 +57,5 @@ class AppSettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.keyNotificationsEnabled, value);
-  }
-
-  Future<void> setLanguage(String value) async {
-    if (_languageCode == value) return;
-    _languageCode = value;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.keyLanguage, value);
   }
 }
