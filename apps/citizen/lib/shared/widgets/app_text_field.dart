@@ -1,7 +1,6 @@
+import '../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_text_styles.dart';
 import '../../core/constants/app_constants.dart';
 
 /// Reusable text field that matches the Figma input style across all screens.
@@ -53,7 +52,7 @@ class AppTextField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label != null) ...[
-          Text(label!, style: AppTextStyles.label),
+          Text(label!, style: context.textStyles.label),
           const SizedBox(height: AppConstants.spacingSm),
         ],
         TextFormField(
@@ -71,9 +70,9 @@ class AppTextField extends StatelessWidget {
           enabled: enabled,
           readOnly: readOnly,
           onTap: onTap,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: AppColors.textPrimary,
+            color: context.colors.textPrimary,
           ),
           decoration: InputDecoration(
             hintText: hint,

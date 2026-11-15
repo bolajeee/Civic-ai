@@ -1,7 +1,7 @@
+import '../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/constants/app_text_styles.dart';
 import '../../features/report/models/relative_time.dart';
 import '../../features/report/models/submitted_report.dart';
 import '../data/report_categories.dart';
@@ -19,33 +19,33 @@ import '../data/report_categories.dart';
 // ---------------------------------------------------------------------------
 
 extension ReportStatusVisuals on ReportStatus {
-  Color get textColor {
+  Color textColor(BuildContext context) {
     switch (this) {
       case ReportStatus.pending:
-        return AppColors.statusPendingText;
+        return context.colors.statusPendingText;
       case ReportStatus.inProgress:
-        return AppColors.statusInProgressText;
+        return context.colors.statusInProgressText;
       case ReportStatus.resolved:
-        return AppColors.statusResolvedText;
+        return context.colors.statusResolvedText;
       case ReportStatus.rejected:
-        return AppColors.statusRejectedText;
+        return context.colors.statusRejectedText;
       case ReportStatus.unknown:
-        return AppColors.statusUnknownText;
+        return context.colors.statusUnknownText;
     }
   }
 
-  Color get bgColor {
+  Color bgColor(BuildContext context) {
     switch (this) {
       case ReportStatus.pending:
-        return AppColors.statusPendingBg;
+        return context.colors.statusPendingBg;
       case ReportStatus.inProgress:
-        return AppColors.statusInProgressBg;
+        return context.colors.statusInProgressBg;
       case ReportStatus.resolved:
-        return AppColors.statusResolvedBg;
+        return context.colors.statusResolvedBg;
       case ReportStatus.rejected:
-        return AppColors.statusRejectedBg;
+        return context.colors.statusRejectedBg;
       case ReportStatus.unknown:
-        return AppColors.statusUnknownBg;
+        return context.colors.statusUnknownBg;
     }
   }
 }
@@ -231,19 +231,19 @@ class ReportCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: context.colors.surface,
       borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        splashColor: AppColors.primaryLight,
-        highlightColor: AppColors.primaryLight.withValues(alpha: 0.5),
+        splashColor: context.colors.primaryLight,
+        highlightColor: context.colors.primaryLight.withValues(alpha: 0.5),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
             border: Border.all(
-              color: data.highlighted ? AppColors.primary : AppColors.divider,
+              color: data.highlighted ? context.colors.primary : context.colors.divider,
               width: data.highlighted ? 1.5 : 1.0,
             ),
             boxShadow: [
@@ -277,10 +277,10 @@ class ReportCard extends StatelessWidget {
                     // Title
                     Text(
                       data.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.colors.textPrimary,
                         height: 1.3,
                       ),
                       maxLines: 1,
@@ -292,16 +292,16 @@ class ReportCard extends StatelessWidget {
                     // Location row
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on_outlined,
                           size: 12,
-                          color: AppColors.textSecondary,
+                          color: context.colors.textSecondary,
                         ),
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
                             data.location,
-                            style: AppTextStyles.bodySmall,
+                            style: context.textStyles.bodySmall,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -319,7 +319,7 @@ class ReportCard extends StatelessWidget {
                         Flexible(
                           child: Text(
                             data.timeAgo,
-                            style: AppTextStyles.bodySmall,
+                            style: context.textStyles.bodySmall,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -335,10 +335,10 @@ class ReportCard extends StatelessWidget {
               // ----------------------------------------------------------------
               if (showChevron) ...[
                 const SizedBox(width: 8),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                 ),
               ],
             ],
@@ -402,7 +402,7 @@ class _IconBox extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: data.iconBgColor,
+        color: _tintFor(context, data.iconBgColor),
         borderRadius: BorderRadius.circular(AppConstants.radiusSm),
       ),
       child: Icon(
@@ -426,7 +426,7 @@ class _LoadingBox extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: context.colors.background,
         borderRadius: BorderRadius.circular(AppConstants.radiusSm),
       ),
     );
@@ -449,7 +449,7 @@ class StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: status.bgColor,
+        color: status.bgColor(context),
         borderRadius: BorderRadius.circular(AppConstants.radiusButton),
       ),
       child: Text(
@@ -457,10 +457,17 @@ class StatusBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: status.textColor,
+          color: status.textColor(context),
           height: 1.2,
         ),
       ),
     );
   }
+}
+
+/// Light pastel tints (category / icon backgrounds) glare on a dark surface,
+/// so in dark mode they are blended mostly into the surface colour.
+Color _tintFor(BuildContext context, Color tint) {
+  if (Theme.of(context).brightness != Brightness.dark) return tint;
+  return Color.lerp(tint, context.colors.surface, 0.82)!;
 }

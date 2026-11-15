@@ -1,10 +1,9 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/error_banner.dart';
@@ -100,15 +99,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final history = context.watch<ReportHistoryProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       // -----------------------------------------------------------------------
       // AppBar
       // -----------------------------------------------------------------------
       appBar: AppBar(
-        title: const Text('My Reports', style: AppTextStyles.heading2),
+        title: Text('My Reports', style: context.textStyles.heading2),
         centerTitle: false,
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.colors.surface,
+        foregroundColor: context.colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         // Back arrow — only shown when navigated to from inside the app
@@ -155,8 +154,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     // The spinner owns the screen only on the very first load. Afterwards the
     // list stays put and the refresh indicator does the talking.
     if (history.isLoading && !history.hasLoaded) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
+      return Center(
+        child: CircularProgressIndicator(color: context.colors.primary),
       );
     }
 
@@ -168,7 +167,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return false;
       },
       child: RefreshIndicator(
-        color: AppColors.primary,
+        color: context.colors.primary,
         onRefresh: () async {
           await Future.wait([
             context.read<ReportHistoryProvider>().refresh(),
@@ -198,11 +197,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     index--;
                   }
                   if (index == reports.length && history.isLoadingMore) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
                       child: Center(
                         child: CircularProgressIndicator(
-                          color: AppColors.primary,
+                          color: context.colors.primary,
                         ),
                       ),
                     );
@@ -243,7 +242,7 @@ class _FilterChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.surface,
+      color: context.colors.surface,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -292,10 +291,10 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : AppColors.surface,
+          color: isActive ? context.colors.primary : context.colors.surface,
           borderRadius: BorderRadius.circular(AppConstants.radiusButton),
           border: Border.all(
-            color: isActive ? AppColors.primary : AppColors.inputBorder,
+            color: isActive ? context.colors.primary : context.colors.inputBorder,
           ),
         ),
         child: Text(
@@ -303,7 +302,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: isActive ? AppColors.surface : AppColors.textSecondary,
+            color: isActive ? context.colors.surface : context.colors.textSecondary,
             height: 1.2,
           ),
         ),
@@ -348,14 +347,14 @@ class _EmptyState extends StatelessWidget {
           child: Container(
             width: 64,
             height: 64,
-            decoration: const BoxDecoration(
-              color: AppColors.primaryLight,
+            decoration: BoxDecoration(
+              color: context.colors.primaryLight,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.inbox_rounded,
               size: 30,
-              color: AppColors.primary,
+              color: context.colors.primary,
             ),
           ),
         ),
@@ -363,16 +362,16 @@ class _EmptyState extends StatelessWidget {
         Text(
           label,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: context.colors.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           'Reports you submit will appear here.',
-          style: AppTextStyles.bodyMedium,
+          style: context.textStyles.bodyMedium,
           textAlign: TextAlign.center,
         ),
       ],

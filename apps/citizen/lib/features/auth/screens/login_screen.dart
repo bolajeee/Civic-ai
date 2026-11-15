@@ -1,9 +1,8 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/error_banner.dart';
@@ -47,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
@@ -64,27 +63,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   width: 60,
                   height: 60,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryLight,
+                  decoration: BoxDecoration(
+                    color: context.colors.primaryLight,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.shield_outlined,
                     size: 30,
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                 ),
 
                 const SizedBox(height: AppConstants.spacingLg),
 
                 // Heading
-                const Text('Welcome Back', style: AppTextStyles.heading1),
+                Text('Welcome Back', style: context.textStyles.heading1),
 
                 const SizedBox(height: AppConstants.spacingSm),
 
-                const Text(
+                Text(
                   'Sign in to report and track infrastructure issues',
-                  style: AppTextStyles.bodyMedium,
+                  style: context.textStyles.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
 
@@ -176,9 +175,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         vertical: AppConstants.spacingSm,
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Forgot Password?',
-                      style: AppTextStyles.link,
+                      style: context.textStyles.link,
                     ),
                   ),
                 ),
@@ -218,8 +217,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 Consumer<AuthProvider>(
                   builder: (_, auth, __) => _SocialButton(
                     label: 'Continue with Apple',
-                    icon: const Icon(Icons.apple,
-                        size: 20, color: AppColors.textPrimary),
+                    icon: Icon(Icons.apple,
+                        size: 20, color: context.colors.textPrimary),
                     onPressed:
                         auth.isLoading ? null : () => auth.socialLogin('apple'),
                   ),
@@ -231,13 +230,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       "Don't have an account? ",
-                      style: AppTextStyles.bodyMedium,
+                      style: context.textStyles.bodyMedium,
                     ),
                     GestureDetector(
                       onTap: () => context.push(AppRoutes.register),
-                      child: const Text('Sign Up', style: AppTextStyles.link),
+                      child: Text('Sign Up', style: context.textStyles.link),
                     ),
                   ],
                 ),
@@ -269,8 +268,8 @@ class _OrDivider extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
           child: Text(
             'OR',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+            style: context.textStyles.bodySmall.copyWith(
+              color: context.colors.textSecondary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -308,7 +307,7 @@ class _SocialButton extends StatelessWidget {
           children: [
             icon,
             const SizedBox(width: AppConstants.spacingSm),
-            Text(label, style: AppTextStyles.label),
+            Text(label, style: context.textStyles.label),
           ],
         ),
       ),

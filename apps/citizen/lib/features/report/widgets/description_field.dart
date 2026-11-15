@@ -1,9 +1,8 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../providers/report_draft_provider.dart';
 
 /// The Description section of the report form.
@@ -61,24 +60,24 @@ class _DescriptionFieldState extends State<DescriptionField> {
           maxLength: DescriptionField.maxLength,
           textInputAction: TextInputAction.newline,
           keyboardType: TextInputType.multiline,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
-            color: AppColors.textPrimary,
+            color: context.colors.textPrimary,
             height: 1.5,
           ),
           decoration: InputDecoration(
             hintText: 'Provide more details about the issue '
                 '(e.g. depth, impact on traffic)…',
-            hintStyle: AppTextStyles.bodyMedium,
+            hintStyle: context.textStyles.bodyMedium,
             filled: true,
-            fillColor: AppColors.inputFill,
+            fillColor: context.colors.inputFill,
             // The default counter sits in the field's padding and pushes the
             // layout around; this one is placed below, quietly.
             counterText: '',
             contentPadding: const EdgeInsets.all(AppConstants.spacingMd),
-            border: _border(AppColors.inputBorder),
-            enabledBorder: _border(AppColors.inputBorder),
-            focusedBorder: _border(AppColors.primary, width: 1.5),
+            border: _border(context.colors.inputBorder),
+            enabledBorder: _border(context.colors.inputBorder),
+            focusedBorder: _border(context.colors.primary, width: 1.5),
           ),
         ),
         Align(
@@ -87,7 +86,7 @@ class _DescriptionFieldState extends State<DescriptionField> {
             padding: const EdgeInsets.only(top: AppConstants.spacingXs),
             child: Text(
               '$length / ${DescriptionField.maxLength}',
-              style: AppTextStyles.bodySmall,
+              style: context.textStyles.bodySmall,
             ),
           ),
         ),

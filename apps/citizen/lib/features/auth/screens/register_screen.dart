@@ -1,12 +1,11 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/error_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -87,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
@@ -107,14 +106,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryLight,
+                      decoration: BoxDecoration(
+                        color: context.colors.primaryLight,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.shield_outlined,
                         size: 22,
-                        color: AppColors.primary,
+                        color: context.colors.primary,
                       ),
                     ),
                     const SizedBox(width: AppConstants.spacingMd),
@@ -122,15 +121,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Create Account',
-                            style: AppTextStyles.heading2,
+                            style: context.textStyles.heading2,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Join to start building a functional Nigeria.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
+                            style: context.textStyles.bodySmall.copyWith(
+                              color: context.colors.textSecondary,
                             ),
                           ),
                         ],
@@ -350,13 +349,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'Already have an account? ',
-                        style: AppTextStyles.bodyMedium,
+                        style: context.textStyles.bodyMedium,
                       ),
                       GestureDetector(
                         onTap: () => context.pop(),
-                        child: const Text('Sign In', style: AppTextStyles.link),
+                        child: Text('Sign In', style: context.textStyles.link),
                       ),
                     ],
                   ),
@@ -432,18 +431,18 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
             onTap: () => widget.onChanged(!widget.value),
             child: RichText(
               text: TextSpan(
-                style: AppTextStyles.bodySmall,
+                style: context.textStyles.bodySmall,
                 children: [
                   const TextSpan(text: 'I agree to the '),
                   TextSpan(
                     text: 'Terms & Conditions',
-                    style: AppTextStyles.link,
+                    style: context.textStyles.link,
                     recognizer: _termsTap,
                   ),
                   const TextSpan(text: ' and '),
                   TextSpan(
                     text: 'Privacy Policy',
-                    style: AppTextStyles.link,
+                    style: context.textStyles.link,
                     recognizer: _privacyTap,
                   ),
                 ],

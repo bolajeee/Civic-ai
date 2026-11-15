@@ -1,6 +1,6 @@
+import '../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/constants/app_text_styles.dart';
 
 /// Full-width green pill button used for primary CTAs.
 class PrimaryButton extends StatelessWidget {
@@ -31,7 +31,7 @@ class PrimaryButton extends StatelessWidget {
                   color: Colors.white,
                 ),
               )
-            : Text(label, style: AppTextStyles.button),
+            : Text(label, style: context.textStyles.button),
       ),
     );
   }

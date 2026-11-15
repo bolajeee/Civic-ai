@@ -1,12 +1,11 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/error_banner.dart';
@@ -114,13 +113,13 @@ class _ReportScreenState extends State<ReportScreen> {
     final draft = context.watch<ReportDraftProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       // -----------------------------------------------------------------------
       // AppBar
       // -----------------------------------------------------------------------
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.colors.surface,
+        foregroundColor: context.colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -133,7 +132,7 @@ class _ReportScreenState extends State<ReportScreen> {
             }
           },
         ),
-        title: const Text('Report an Issue', style: AppTextStyles.heading2),
+        title: Text('Report an Issue', style: context.textStyles.heading2),
       ),
       // -----------------------------------------------------------------------
       // Body
@@ -151,7 +150,7 @@ class _ReportScreenState extends State<ReportScreen> {
               // Select Category — the tiles are the server's categories, not a
               // hardcoded list, because the submission carries their UUIDs.
               // ---------------------------------------------------------------
-              const Text('Select Category', style: AppTextStyles.label),
+              Text('Select Category', style: context.textStyles.label),
               const SizedBox(height: AppConstants.spacingSm),
               const CategoryGrid(),
 
@@ -161,7 +160,7 @@ class _ReportScreenState extends State<ReportScreen> {
               // Location — optional. A citizen indoors still has a pothole
               // worth reporting, so a failed fix is guidance, not a blocker.
               // ---------------------------------------------------------------
-              const Text('Location', style: AppTextStyles.label),
+              Text('Location', style: context.textStyles.label),
               const SizedBox(height: AppConstants.spacingSm),
               const LocationField(),
 
@@ -179,7 +178,7 @@ class _ReportScreenState extends State<ReportScreen> {
               // ---------------------------------------------------------------
               // Description — optional.
               // ---------------------------------------------------------------
-              const Text('Description', style: AppTextStyles.label),
+              Text('Description', style: context.textStyles.label),
               const SizedBox(height: AppConstants.spacingSm),
               const DescriptionField(),
 
@@ -257,7 +256,7 @@ class _SubmitHint extends StatelessWidget {
 
     return Text(
       'Add ${missing.join(' and ')} to submit.',
-      style: AppTextStyles.bodySmall,
+      style: context.textStyles.bodySmall,
       textAlign: TextAlign.center,
     );
   }

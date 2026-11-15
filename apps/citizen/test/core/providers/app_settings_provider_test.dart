@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('loads and persists theme, notification and language settings', () async {
+  test('loads and persists theme, notification and language settings',
+      () async {
     SharedPreferences.setMockInitialValues({
       AppConstants.keyDarkMode: true,
       AppConstants.keyNotificationsEnabled: false,
@@ -18,6 +19,8 @@ void main() {
     expect(settings.notificationsEnabled, isFalse);
     expect(settings.languageCode, 'yo');
 
+    await settings.setThemeMode(ThemeMode.system);
+    expect(settings.themeMode, ThemeMode.system);
     await settings.setDarkMode(false);
     await settings.setNotificationsEnabled(true);
     await settings.setLanguage('en');

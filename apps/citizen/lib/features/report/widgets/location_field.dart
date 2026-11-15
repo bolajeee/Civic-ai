@@ -1,3 +1,4 @@
+import '../../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../models/report_location.dart';
 import '../providers/report_draft_provider.dart';
 import '../services/location_service.dart';
@@ -43,12 +43,12 @@ class LocationField extends StatelessWidget {
               Expanded(child: _Readout(draft: draft)),
               if (draft.isLocating) ...[
                 const SizedBox(width: AppConstants.spacingSm),
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                 ),
               ],
@@ -67,16 +67,16 @@ class LocationField extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
+              Icon(
                 Icons.info_outline_rounded,
                 size: 15,
-                color: AppColors.textSecondary,
+                color: context.colors.textSecondary,
               ),
               const SizedBox(width: AppConstants.spacingXs),
               Expanded(
                 child: Text(
                   draft.locationFailure!.message,
-                  style: AppTextStyles.bodySmall,
+                  style: context.textStyles.bodySmall,
                 ),
               ),
             ],
@@ -87,7 +87,7 @@ class LocationField extends StatelessWidget {
                 onPressed: () =>
                     context.read<ReportDraftProvider>().captureLocation(),
                 style: _compactButtonStyle,
-                child: const Text('Try again', style: AppTextStyles.link),
+                child: Text('Try again', style: context.textStyles.link),
               ),
               if (draft.locationFailure!.requiresSettings)
                 TextButton(
@@ -95,7 +95,7 @@ class LocationField extends StatelessWidget {
                       .read<ReportDraftProvider>()
                       .openLocationSettings(),
                   style: _compactButtonStyle,
-                  child: const Text('Open Settings', style: AppTextStyles.link),
+                  child: Text('Open Settings', style: context.textStyles.link),
                 ),
             ],
           ),
@@ -126,15 +126,15 @@ class _Readout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (draft.isLocating) {
-      return const Text('Finding your location…',
-          style: AppTextStyles.bodyMedium);
+      return Text('Finding your location…',
+          style: context.textStyles.bodyMedium);
     }
 
     final location = draft.location ?? draft.locationCandidate;
     if (location == null) {
-      return const Text(
+      return Text(
         'Tap to attach your current location',
-        style: AppTextStyles.bodyMedium,
+        style: context.textStyles.bodyMedium,
       );
     }
 
@@ -145,7 +145,7 @@ class _Readout extends StatelessWidget {
       children: [
         Text(
           location.displayLabel,
-          style: AppTextStyles.label,
+          style: context.textStyles.label,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -156,12 +156,12 @@ class _Readout extends StatelessWidget {
           accuracy == null
               ? location.coordinateLabel
               : '${location.coordinateLabel}  ·  $accuracy',
-          style: AppTextStyles.bodySmall,
+          style: context.textStyles.bodySmall,
         ),
         if (draft.locationCandidate != null)
-          const Text(
+          Text(
             'Check the pin below before using this location.',
-            style: AppTextStyles.bodySmall,
+            style: context.textStyles.bodySmall,
           ),
       ],
     );
@@ -185,9 +185,9 @@ class _LocationConfirmation extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacingSm),
       decoration: BoxDecoration(
-        color: AppColors.inputFill,
+        color: context.colors.inputFill,
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(color: AppColors.inputBorder),
+        border: Border.all(color: context.colors.inputBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,9 +222,9 @@ class _LocationConfirmation extends StatelessWidget {
                           point: point,
                           radius: accuracy,
                           useRadiusInMeter: true,
-                          color: AppColors.primary.withValues(alpha: 0.12),
+                          color: context.colors.primary.withValues(alpha: 0.12),
                           borderColor:
-                              AppColors.primary.withValues(alpha: 0.55),
+                              context.colors.primary.withValues(alpha: 0.55),
                           borderStrokeWidth: 1.5,
                         ),
                       ],
@@ -236,10 +236,10 @@ class _LocationConfirmation extends StatelessWidget {
                         width: 44,
                         height: 44,
                         alignment: Alignment.topCenter,
-                        child: const Icon(
+                        child: Icon(
                           Icons.location_pin,
                           size: 42,
-                          color: AppColors.primary,
+                          color: context.colors.primary,
                         ),
                       ),
                     ],
@@ -266,7 +266,7 @@ class _LocationConfirmation extends StatelessWidget {
                 : accuracy == null
                     ? 'Tap the map if the pin is not on the issue.'
                     : 'GPS uncertainty: about ${accuracy.round()} m. Tap the map to correct the pin.',
-            style: AppTextStyles.bodySmall,
+            style: context.textStyles.bodySmall,
           ),
           const SizedBox(height: AppConstants.spacingSm),
           Row(
@@ -314,7 +314,7 @@ class _Surface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.inputFill,
+      color: context.colors.inputFill,
       borderRadius: BorderRadius.circular(AppConstants.radiusMd),
       child: InkWell(
         onTap: onTap,
@@ -326,7 +326,7 @@ class _Surface extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            border: Border.all(color: AppColors.inputBorder),
+            border: Border.all(color: context.colors.inputBorder),
           ),
           child: child,
         ),
@@ -344,10 +344,10 @@ class _LeadingIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isBusy) {
-      return const Icon(
+      return Icon(
         Icons.my_location_rounded,
         size: 18,
-        color: AppColors.primary,
+        color: context.colors.primary,
       );
     }
 
@@ -359,10 +359,10 @@ class _LeadingIcon extends StatelessWidget {
       );
     }
 
-    return const Icon(
+    return Icon(
       Icons.location_on_outlined,
       size: 18,
-      color: AppColors.inputIcon,
+      color: context.colors.inputIcon,
     );
   }
 }

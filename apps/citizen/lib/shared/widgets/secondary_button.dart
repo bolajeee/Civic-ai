@@ -1,5 +1,5 @@
+import '../../core/theme/app_colors_extension.dart';
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 
 /// Full-width outlined button for the secondary action on a screen — the one
@@ -19,8 +19,8 @@ class SecondaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = onPressed == null
-        ? AppColors.inputIcon
-        : AppColors.primary;
+        ? context.colors.inputIcon
+        : context.colors.primary;
     final iconData = icon;
 
     return SizedBox(
@@ -30,7 +30,7 @@ class SecondaryButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(
-            color: onPressed == null ? AppColors.inputBorder : AppColors.primary,
+            color: onPressed == null ? context.colors.inputBorder : context.colors.primary,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusButton),
