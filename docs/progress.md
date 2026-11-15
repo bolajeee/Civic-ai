@@ -74,7 +74,7 @@ Citizen encounters pothole -> Opens Flutter app -> Takes photo -> GPS captured -
 
 - [x] Login: password reset plus verified Google and Apple sign-in flows (social identities link to an existing NIN-backed citizen account)
 - [x] Home notification bell opens an in-app report-status inbox; activity rows open report details (push delivery remains separately scoped below)
-- [x] Profile: Edit Profile, Notifications, Language, Help & Support, and About have routed screens and working actions
+- [x] Profile: Edit Profile, Notifications, Help & Support, and About have routed screens and working actions
 - [x] Profile: Dark Mode changes `ThemeMode`, includes a dark palette, and persists through `SharedPreferences`
 - [x] Profile: Impact Score is returned by `/api/reports/summary` using a documented 0–100 contribution/engagement/resolution model
 - [x] Home/Profile: names use stored `full_name`; location uses the newest report with a saved location (or an honest empty state); version/build comes from the installed package

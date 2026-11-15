@@ -144,7 +144,7 @@ The citizen client is a Flutter application designed for Android-first deploymen
 - AI category suggestion shown as a second opinion without changing the citizen's chosen category.
 - Text receipt generation and native share sheet.
 - Durable in-app notification inbox, preferences, report deep links, and FCM device registration.
-- Profile editing, dark mode, language screen, help/support, about, and installed app version.
+- Profile editing, dark mode, help/support, about, and installed app version.
 
 Physical-device push delivery and production Firebase/APNs setup remain release gates rather than completed production evidence.
 

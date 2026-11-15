@@ -130,7 +130,6 @@ class _AppViewState extends State<_AppView> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: settings.themeMode,
-      locale: settings.locale,
       routerConfig: router,
     );
   }

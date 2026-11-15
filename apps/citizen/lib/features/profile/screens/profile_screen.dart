@@ -264,10 +264,6 @@ class _SettingsCard extends StatelessWidget {
               label: 'Notifications',
               onTap: () => context.push(AppRoutes.notifications)),
           _SettingsRow(
-              icon: Icons.language_rounded,
-              label: 'Language',
-              onTap: () => context.push(AppRoutes.language)),
-          _SettingsRow(
               icon: Icons.dark_mode_outlined,
               label: 'Appearance',
               trailing: Text(_themeLabel(themeMode),
