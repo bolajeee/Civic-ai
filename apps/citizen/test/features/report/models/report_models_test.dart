@@ -1,4 +1,5 @@
 import 'package:civic_report/features/report/models/ai_classification.dart';
+import 'package:civic_report/features/report/models/location_suggestion.dart';
 import 'package:civic_report/features/report/models/report_category.dart';
 import 'package:civic_report/features/report/models/report_location.dart';
 import 'package:civic_report/features/report/models/submitted_report.dart';
@@ -35,6 +36,62 @@ void main() {
       expect(ReportStatus.pending.label, 'Pending');
       expect(ReportStatus.inProgress.label, 'In Progress');
       expect(ReportStatus.resolved.label, 'Resolved');
+    });
+  });
+
+  group('LocationSuggestion', () {
+    test('parses a /api/geo/search result', () {
+      final suggestion = LocationSuggestion.fromJson(const {
+        'id': 'place-1',
+        'label': 'Computer Village, Ikeja, Lagos',
+        'address': 'Ikeja, Lagos',
+        'latitude': 6.5965,
+        'longitude': 3,
+        'category': null,
+      });
+
+      expect(suggestion.id, 'place-1');
+      expect(suggestion.label, 'Computer Village, Ikeja, Lagos');
+      expect(suggestion.latitude, 6.5965);
+      // Whole-number coordinates arrive as ints in JSON.
+      expect(suggestion.longitude, 3.0);
+      expect(suggestion.subtitle, 'Ikeja, Lagos');
+      expect(suggestion.category, isNull);
+    });
+
+    test('drops a subtitle that only repeats the label', () {
+      final suggestion = LocationSuggestion.fromJson(const {
+        'id': 'place-2',
+        'label': 'Wuse 2, Abuja',
+        'address': 'Wuse 2, Abuja',
+        'latitude': 9.08,
+        'longitude': 7.47,
+      });
+      expect(suggestion.subtitle, isNull);
+    });
+  });
+
+  group('ReportLocationSource', () {
+    test('manual sources are the citizen-placed ones', () {
+      expect(ReportLocationSource.userSelected.isManual, isTrue);
+      expect(ReportLocationSource.userAdjusted.isManual, isTrue);
+      expect(ReportLocationSource.deviceGps.isManual, isFalse);
+      expect(ReportLocationSource.cachedGps.isManual, isFalse);
+    });
+
+    test('a manually picked location round-trips through the offline queue',
+        () {
+      const picked = ReportLocation(
+        latitude: 6.5965,
+        longitude: 3.3421,
+        address: 'Computer Village, Ikeja, Lagos',
+        source: ReportLocationSource.userSelected,
+      );
+      final restored = ReportLocation.fromJson(picked.toJson());
+      expect(restored.source, ReportLocationSource.userSelected);
+      expect(restored.address, picked.address);
+      // Not a GPS fix, so the submission carries no accuracy.
+      expect(picked.toFormFields().containsKey('accuracy'), isFalse);
     });
   });
 

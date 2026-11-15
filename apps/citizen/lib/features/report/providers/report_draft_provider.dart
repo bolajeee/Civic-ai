@@ -49,6 +49,10 @@ class ReportDraftProvider extends ChangeNotifier {
   bool _isConfirmingLocation = false;
   LocationFailure? _locationFailure;
 
+  /// Bumped by every location request so a slow GPS fix cannot overwrite a
+  /// location the citizen picked manually in the meantime.
+  int _locationRequest = 0;
+
   // --- Submission -----------------------------------------------------------
   bool _isSubmitting = false;
 
@@ -179,16 +183,23 @@ class ReportDraftProvider extends ChangeNotifier {
 
     _isLocating = true;
     _locationFailure = null;
+    final request = ++_locationRequest;
     notifyListeners();
 
     try {
-      _locationCandidate = await _locationService.capture();
+      final candidate = await _locationService.capture();
+      // A manual pick made while the fix was resolving wins: the citizen
+      // chose it deliberately, and GPS indoors is the reason they did.
+      if (request != _locationRequest) return;
+      _locationCandidate = candidate;
       _location = null;
     } on LocationException catch (e) {
+      if (request != _locationRequest) return;
       _locationFailure = e.failure;
       _location = null;
       _locationCandidate = null;
     } catch (_) {
+      if (request != _locationRequest) return;
       _locationFailure = LocationFailure.unavailable;
       _location = null;
       _locationCandidate = null;
@@ -216,6 +227,30 @@ class ReportDraftProvider extends ChangeNotifier {
     try {
       _location = await _locationService.reverseGeocode(candidate);
       _locationCandidate = null;
+    } finally {
+      _isConfirmingLocation = false;
+      notifyListeners();
+    }
+  }
+
+  /// Uses a location chosen on the manual picker as the report's location.
+  ///
+  /// A search result already carries its place name; a pin dropped on the map
+  /// does not, so it is reverse-geocoded like a confirmed GPS fix — falling
+  /// back to coordinates when the platform geocoder has nothing.
+  Future<void> useManualLocation(ReportLocation picked) async {
+    ++_locationRequest;
+    _locationCandidate = null;
+    _locationFailure = null;
+    _isConfirmingLocation = true;
+    notifyListeners();
+    try {
+      final address = picked.address;
+      _location = address == null || address.isEmpty
+          ? await _locationService.reverseGeocode(picked)
+          : picked;
+    } catch (_) {
+      _location = picked;
     } finally {
       _isConfirmingLocation = false;
       notifyListeners();
@@ -307,6 +342,7 @@ class ReportDraftProvider extends ChangeNotifier {
     _photos = <ReportPhoto>[];
     _category = null;
     _description = '';
+    ++_locationRequest;
     _location = null;
     _locationCandidate = null;
     _locationFailure = null;

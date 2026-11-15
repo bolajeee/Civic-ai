@@ -8,7 +8,14 @@ enum ReportLocationSource {
   deviceGps('DEVICE_GPS'),
   cachedGps('CACHED_GPS'),
   userAdjusted('USER_ADJUSTED'),
+
+  /// Chosen on the manual picker — a search result or a pin dropped on the
+  /// map — with no GPS fix behind it.
+  userSelected('USER_SELECTED'),
   unknown('UNKNOWN');
+
+  /// True when the citizen placed the pin rather than the device.
+  bool get isManual => this == userAdjusted || this == userSelected;
 
   const ReportLocationSource(this.apiValue);
   final String apiValue;
