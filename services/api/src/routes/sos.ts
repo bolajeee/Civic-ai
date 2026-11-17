@@ -14,6 +14,7 @@ import { isSmsEnabled } from '../lib/sms';
 import {
   buildAlertSms,
   buildSafeSms,
+  displayName,
   buildUpdateSms,
   buildUpdatesStoppedSms,
   distanceMeters,
@@ -151,10 +152,10 @@ function citizenKey(request: FastifyRequest): string {
 }
 
 async function loadSender(db: PoolClient | typeof pool, citizen: string): Promise<SmsSender> {
-  const result = await db.query(`SELECT full_name, phone FROM users WHERE id = $1`, [citizen]);
+  const result = await db.query(`SELECT full_name, email, phone FROM users WHERE id = $1`, [citizen]);
   const row = result.rows[0];
   return {
-    name: row?.full_name ?? null,
+    name: displayName(row?.full_name, row?.email),
     phone: row?.phone ? normalizePhone(row.phone) ?? row.phone : null,
   };
 }

@@ -30,6 +30,10 @@
 	<string>Civic Report uses your camera to photograph infrastructure issues when submitting a report.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Civic Report accesses your photo library so you can attach existing photos of an infrastructure issue to your report.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>If you turn on app lock, Civic Report uses Face ID to unlock the app.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>During an active SOS, Civic Report keeps sharing your location with your trusted contacts while the app is in the background, until you mark yourself safe.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Civic Report uses your location to attach precise GPS coordinates to your report so officers can find the issue.</string>
 	<key>NSUserNotificationsUsageDescription</key>
@@ -62,6 +66,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

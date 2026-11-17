@@ -199,6 +199,15 @@ uncertainty, and record corrections. See [cluster report review requirements](ai
   - [x] Paginated reporting history combines append-only version-created and version-approved events with actor, WAT timestamp, version, captured review readiness, and approval statement; active operators have read access and only active administrators can approve
   - [x] API build and all 167 API tests; government production build and all 21 web tests pass (2026-10-15)
 
+### SOS (In Progress) — see [SOS](sos.md)
+- [x] API: trusted contacts (max 5, E.164 normalisation), help-nearby (Geoapify places + curated facilities, de-duplicated and distance-sorted), idempotent alerts, server-throttled location updates (15/30 min, 100 m, capped at 12 texts / 6 h), "I'm safe", SMS queue + worker (Termii, dev console fallback); 39 API tests
+- [ ] Migration `20261116120000_create_sos.sql` applied to the development database
+- [ ] Citizen app: SOS screen, trusted contacts, nearby help, background location updates, offline SMS fallback, on-device tests
+  - [x] Phone-sent texts go to one contact at a time (a multi-recipient text became a group MMS that failed to send); texts name the citizen from their email when they have no full name; "I'm safe" is the only way to stop sharing (2026-11-17)
+- [x] Citizen app: optional app lock (Profile → App Lock) using the phone's fingerprint, face or PIN; asks on launch and after 1 min in the background, never for the app's own trips to Messages or the dialer; "Emergency call 112" on the lock screen (2026-11-17)
+- [ ] Curated facility data collected from official sources; additional hotlines verified
+- [ ] SMS provider account and approved sender ID
+
 ### Phase 6: Hardening (Pending)
 - [ ] Security audits & least privilege (done: `JWT_SECRET` and the reset pepper are required when `NODE_ENV=production`, CORS uses a `CORS_ORIGINS` allowlist, `/api/test-upload` removed; broader audit and least-privilege review still pending)
 - [x] Rate limiting (`@fastify/rate-limit`: 300/min per IP, 30/min on auth routes; set `TRUST_PROXY=true` behind a proxy; in-memory, so per instance)

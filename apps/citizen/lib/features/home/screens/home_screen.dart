@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -364,6 +365,38 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        // Always one tap from Home, and visually distinct from everything
+        // else on the screen.
+        Semantics(
+          button: true,
+          label: 'SOS emergency help',
+          child: Material(
+            color: AppColors.error,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => context.push(AppRoutes.sos),
+              child: const SizedBox(
+                height: 40,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: Text(
+                      'SOS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         Material(
           color: Theme.of(context).colorScheme.surface,
           shape: CircleBorder(

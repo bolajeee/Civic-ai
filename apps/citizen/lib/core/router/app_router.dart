@@ -17,6 +17,8 @@ import '../../features/report/providers/report_history_provider.dart';
 import '../../features/report/screens/history_screen.dart';
 import '../../features/report/screens/report_screen.dart';
 import '../../features/report/screens/report_details_screen.dart';
+import '../../features/sos/screens/sos_screen.dart';
+import '../../features/sos/screens/trusted_contacts_screen.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/';
@@ -33,6 +35,8 @@ abstract final class AppRoutes {
   static const String helpSupport = '/profile/help';
   static const String about = '/profile/about';
   static const String reportDetails = '/report-details/:id';
+  static const String sos = '/sos';
+  static const String sosContacts = '/sos/contacts';
 }
 /// Decides where a navigation to [location] should actually land.
 ///
@@ -193,6 +197,14 @@ GoRouter buildRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.about,
         builder: (_, __) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sos,
+        builder: (_, __) => const SosScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sosContacts,
+        builder: (_, __) => const TrustedContactsScreen(),
       ),
     ],
   );

@@ -1,0 +1,10 @@
+# Curated emergency facilities for the SOS "help nearby" list.
+# Load with: cd services/api && npx tsx scripts/import-facilities.ts ../../supabase/seed/emergency_facilities.csv
+#
+# Only add entries copied from an official source (agency .gov.ng site or
+# official social account) and put that page in source_url. Re-check
+# phone numbers before each release and update verified_at.
+#
+# Example (commented out, NOT real data):
+# PARAMILITARY,NSCDC,NSCDC Example State Command,"Example Road, Example City",08000000000,LA,6.5000,3.3500,https://nscdc.gov.ng/command-structure/,2026-11-16
+kind,agency,name,address,phones,state_code,latitude,longitude,source_url,verified_at
