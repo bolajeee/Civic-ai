@@ -5,6 +5,7 @@ import {
   buildSafeSms,
   buildUpdateSms,
   buildUpdatesStoppedSms,
+  displayName,
   distanceMeters,
   normalizePhone,
   SMS_MAX_LENGTH,
@@ -55,6 +56,19 @@ test('an alert without a location says so and promises no updates', () => {
   const sms = buildAlertSms({ sender: { name: null, phone: null }, type: 'ACCIDENT', location: null, updateIntervalMinutes: 30, at });
   assert.match(sms, /^SOS from A CivicAI user via CivicAI: ROAD ACCIDENT emergency\. Location: not available/);
   assert.doesNotMatch(sms, /maps\.google|Updates every|Call them/);
+});
+
+test('a citizen without a full name is named from their email', () => {
+  assert.equal(displayName('  Ada Obi ', 'x@y.com'), 'Ada Obi');
+  assert.equal(displayName(null, 'ibrahim.o_ibrahim@gmail.com'), 'Ibrahim O Ibrahim');
+  assert.equal(displayName('', 'bolajeee99@gmail.com'), 'Bolajeee');
+  assert.equal(displayName(null, '123@x.com'), null);
+  assert.equal(displayName(null, null), null);
+  const sms = buildAlertSms({
+    sender: { name: displayName(null, 'ada.obi@example.com'), phone: null },
+    type: 'MEDICAL', location: null, updateIntervalMinutes: 30, at,
+  });
+  assert.match(sms, /^SOS from Ada Obi via CivicAI/);
 });
 
 test('long notes and addresses are trimmed but the link and callback survive', () => {

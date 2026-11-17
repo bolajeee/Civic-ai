@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { query } from '../db';
-import { EmergencyType } from '../lib/sos-messages';
+import { displayName, EmergencyType } from '../lib/sos-messages';
 import { shareTokenSchema } from '../schemas/sos';
 import { MAX_UPDATE_HOURS } from './sos';
 
@@ -42,7 +42,7 @@ export default async function sosTrackRoutes(fastify: FastifyInstance) {
 
     const alerts = await query(
       `SELECT a.id, a.emergency_type, a.status, a.created_at, a.resolved_at, a.updates_stopped_at,
-              u.full_name
+              u.full_name, u.email
        FROM sos_alerts a JOIN users u ON u.id = a.citizen_id
        WHERE a.share_token = $1`,
       [token.data],
@@ -72,7 +72,7 @@ export default async function sosTrackRoutes(fastify: FastifyInstance) {
       }
     }
 
-    const firstName = String(alert.full_name ?? '').trim().split(/\s+/)[0] || null;
+    const firstName = (displayName(alert.full_name, alert.email) ?? '').split(/\s+/)[0] || null;
     return reply.send({
       type: alert.emergency_type,
       typeLabel: TYPE_LABELS[alert.emergency_type as EmergencyType] ?? 'Emergency',

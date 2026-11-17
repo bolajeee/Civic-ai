@@ -95,6 +95,24 @@ export interface SmsLocation {
   address?: string | null;
 }
 
+/**
+ * The name contacts see: the citizen's full name, or one built from their
+ * email ("ada.obi@x.com" -> "Ada Obi"), the same rule the app uses on its
+ * home and profile screens. Many accounts (social sign-in, older sign-ups)
+ * have no full name.
+ */
+export function displayName(fullName: string | null | undefined, email: string | null | undefined): string | null {
+  const name = (fullName ?? '').trim();
+  if (name) return name;
+  const local = (email ?? '').split('@')[0] ?? '';
+  const words = local
+    .split(/[._\-+]/)
+    .map((word) => word.replace(/\d+/g, ''))
+    .filter((word) => word.length > 0)
+    .map((word) => `${word[0].toUpperCase()}${word.slice(1).toLowerCase()}`);
+  return words.length ? words.join(' ') : null;
+}
+
 function senderName(sender: SmsSender): string {
   const name = sender.name ? toSmsText(sender.name) : '';
   return name || 'A CivicAI user';
