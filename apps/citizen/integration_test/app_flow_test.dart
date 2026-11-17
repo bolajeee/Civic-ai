@@ -4,6 +4,8 @@ import 'package:civic_report/core/services/api_client.dart';
 import 'package:civic_report/core/services/token_storage_service.dart';
 import 'package:civic_report/features/auth/providers/auth_provider.dart';
 import 'package:civic_report/features/report/screens/location_picker_screen.dart';
+import 'package:civic_report/features/sos/screens/sos_screen.dart';
+import 'package:civic_report/features/sos/services/sos_location_tracker.dart';
 import 'package:civic_report/main.dart';
 import 'package:civic_report/shared/widgets/app_bottom_nav.dart';
 import 'package:civic_report/shared/widgets/primary_button.dart';
@@ -15,6 +17,7 @@ import 'package:geolocator_platform_interface/geolocator_platform_interface.dart
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'support/fake_backend.dart';
 import 'support/fake_platforms.dart';
@@ -36,6 +39,7 @@ void main() {
   late FakeBackend api;
   late FakeImagePicker picker;
   late FakeGeolocator gps;
+  late FakeUrlLauncher launcher;
 
   setUp(() {
     api = FakeBackend();
@@ -45,10 +49,13 @@ void main() {
     ImagePickerPlatform.instance = picker;
     GeolocatorPlatform.instance = gps;
     GeocodingPlatform.instance = FakeGeocoding();
+    launcher = FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
   });
 
   tearDown(() {
     ApiClient.instance.dio.interceptors.remove(api);
+    SosLocationTracker.debugIntervalOverride = null;
     expect(api.unhandled, isEmpty,
         reason: 'The app called endpoints the fake backend does not serve');
   });
@@ -747,6 +754,270 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // SOS
+  // ---------------------------------------------------------------------------
+
+  group('sos', () {
+    const chidi = {'id': 'tc-a', 'name': 'Chidi', 'phone': '+2348055551234', 'relationship': null};
+    const ngozi = {'id': 'tc-b', 'name': 'Ngozi', 'phone': '+2348066661234', 'relationship': 'Sister'};
+
+    Future<void> openSos(WidgetTester tester) async {
+      await tapOn(tester, find.text('SOS'));
+      await waitFor(tester, find.text('Call 112'));
+    }
+
+    /// Holds the SOS button through the hold, then waits out the countdown.
+    Future<void> holdToSend(WidgetTester tester) async {
+      final button = find.text('Hold to send SOS');
+      await tester.ensureVisible(button);
+      await pumpFor(tester, const Duration(milliseconds: 300));
+      final gesture = await tester.startGesture(tester.getCenter(button));
+      await pumpFor(tester, SosScreen.holdDuration + const Duration(milliseconds: 600));
+      await gesture.up();
+      await waitFor(tester, find.textContaining('Sending in'));
+      await pumpFor(tester, const Duration(seconds: SosScreen.countdownSeconds + 1));
+    }
+
+    Future<void> waitForRequest(WidgetTester tester, String method, String path) async {
+      final end = DateTime.now().add(const Duration(seconds: 20));
+      while (DateTime.now().isBefore(end)) {
+        await tester.pump(const Duration(milliseconds: 200));
+        if (api.sent(method, path).isNotEmpty) return;
+      }
+      fail('Timed out waiting for $method $path\nRequests: ${api.requests}');
+    }
+
+    testWidgets('trusted contacts: add, edit, remove, and the limit of five',
+        (tester) async {
+      await bootSignedIn(tester);
+      await tapNav(tester, 'Profile');
+      await tapOn(tester, find.text('Trusted Contacts'));
+      await waitFor(tester, find.text('No trusted contacts yet.'));
+
+      // Add, with a bad number first.
+      await tapOn(tester, find.text('Add contact'));
+      await typeInto(tester, find.byKey(const ValueKey('contact-name')), 'Chidi Obi');
+      await typeInto(tester, find.byKey(const ValueKey('contact-phone')), '12345');
+      await tapOn(tester, find.text('Save'));
+      expect(find.text('Enter a valid phone number, e.g. 0803 123 4567'), findsOneWidget);
+      await typeInto(tester, find.byKey(const ValueKey('contact-phone')), '0805 555 1234');
+      await tapOn(tester, find.text('Save'));
+      await waitFor(tester, find.text('+2348055551234'));
+      expect(api.sent('POST', '/api/sos/contacts').single.json['phone'], '0805 555 1234');
+
+      // Edit.
+      await tapOn(tester, find.text('Chidi Obi'));
+      await typeInto(tester, find.byKey(const ValueKey('contact-name')), 'Chidi O.');
+      await typeInto(tester, find.byKey(const ValueKey('contact-relationship')), 'Brother');
+      await tapOn(tester, find.text('Save'));
+      await waitFor(tester, find.text('+2348055551234 · Brother'));
+      expect(find.text('Chidi O.'), findsOneWidget);
+      expect(api.sent('PATCH', '/api/sos/contacts/tc-1').single.json['name'], 'Chidi O.');
+
+      // Remove.
+      await tapOn(tester, find.byTooltip('Remove Chidi O.'));
+      await tapOn(tester, find.text('Remove'));
+      await waitFor(tester, find.text('No trusted contacts yet.'));
+      expect(api.sent('DELETE', '/api/sos/contacts/tc-1'), hasLength(1));
+
+      // At five contacts there is no way to add a sixth.
+      api.sosContacts = [
+        for (var i = 1; i <= 5; i++)
+          {'id': 'tc-x$i', 'name': 'Contact $i', 'phone': '+23480555500$i$i', 'relationship': null},
+      ];
+      await pageBack(tester);
+      await tapOn(tester, find.text('Trusted Contacts'));
+      await waitFor(tester, find.text('Contact 5'));
+      expect(find.text('Add contact'), findsNothing);
+      expect(find.text("You've added the maximum of 5 contacts."), findsOneWidget);
+    });
+
+    testWidgets('medical SOS: help nearby, call, hold to alert contacts, then safe',
+        (tester) async {
+      api.sosContacts = [Map.of(chidi), Map.of(ngozi)];
+      await bootSignedIn(tester);
+      await openSos(tester);
+
+      // Help nearby for the default (medical) type, nearest first.
+      await waitFor(tester, find.text('Ikeja Medical Centre'),
+          reason: 'Nearby hospitals did not load');
+      final nearby = api.sent('GET', '/api/sos/nearby').last.options.queryParameters;
+      expect(nearby['type'], 'MEDICAL');
+      expect(nearby['lat'], FakeGeolocator.latitude);
+      expect(nearby['lon'], FakeGeolocator.longitude);
+      expect(
+        tester.getTopLeft(find.text('Ikeja Medical Centre')).dy,
+        lessThan(tester.getTopLeft(find.text('Lagos State University Teaching Hospital')).dy),
+      );
+      expect(find.text('Hospital · 140 m\nAllen Avenue, Ikeja'), findsOneWidget);
+      expect(find.text('Alerts go to Chidi, Ngozi.'), findsOneWidget);
+
+      // Calling 112 and a facility open the dialer with the right numbers.
+      await tapOn(tester, find.text('Call 112'));
+      expect(launcher.launched.last, 'tel:112');
+      await tapOn(tester, find.byTooltip('Call Ikeja Medical Centre'));
+      expect(launcher.launched.last, 'tel:08011112222');
+
+      await tapOn(tester, find.text('Every 15 min'));
+      await holdToSend(tester);
+      await waitFor(tester, find.text('SOS active · Medical'));
+      expect(find.text('2 trusted contacts alerted by text.'), findsOneWidget);
+      expect(find.text('No responder has been sent. Call 112 for emergency services.'), findsOneWidget);
+
+      final alert = api.sent('POST', '/api/sos/alerts').single.json;
+      expect(alert['type'], 'MEDICAL');
+      expect(alert['updateIntervalMinutes'], 15);
+      expect(alert['lat'], FakeGeolocator.latitude);
+      expect(alert['lon'], FakeGeolocator.longitude);
+      expect(alert['clientAlertId'], matches(RegExp(r'^[0-9a-f-]{36}$')));
+
+      await tapOn(tester, find.text("I'm safe"));
+      await waitFor(tester, find.text("You're marked safe. Your contacts have been told."));
+      expect(api.sent('POST', '/api/sos/alerts/SOS-1000/safe'), hasLength(1));
+      expect(find.text('Hold to send SOS'), findsOneWidget);
+    });
+
+    testWidgets('without server SMS the phone sends the alert, a live link and the safe text',
+        (tester) async {
+      api.sosSmsEnabled = false;
+      api.sosContacts = [Map.of(chidi), Map.of(ngozi)];
+      await bootSignedIn(tester);
+      await openSos(tester);
+      await waitFor(tester, find.text('Ikeja Medical Centre'));
+      // No update texts to space out: contacts follow the live link instead.
+      expect(find.text('Every 15 min'), findsNothing);
+
+      await holdToSend(tester);
+      await waitFor(tester, find.text('SOS active · Medical'));
+      // One text per contact: a text to both at once becomes a group MMS.
+      final alertSms = launcher.launched.last;
+      expect(alertSms, startsWith('sms:+2348055551234?body='));
+      expect(Uri.decodeComponent(alertSms), contains('Live location: ${FakeBackend.sosTrackingUrl}'));
+      expect(find.textContaining('then come back here to text Ngozi'), findsOneWidget);
+      expect(find.textContaining('for 1 of 2 contacts'), findsOneWidget);
+      expect(find.text('Your contacts can follow your live location from the link in your alert.'),
+          findsOneWidget);
+
+      await tapOn(tester, find.text('Text Ngozi (2 of 2)'));
+      expect(launcher.launched.last, startsWith('sms:+2348066661234?body='));
+      expect(launcher.launched.last.substring(launcher.launched.last.indexOf('?')),
+          alertSms.substring(alertSms.indexOf('?')));
+      await waitFor(tester, find.textContaining('for all 2 contacts'));
+      expect(find.textContaining('Text Ngozi'), findsNothing);
+
+      // Left the messages app without sending: send it again, from the top.
+      final launches = launcher.launched.length;
+      await tapOn(tester, find.text('Resend link'));
+      expect(launcher.launched, hasLength(launches + 1));
+      expect(launcher.launched.last, alertSms);
+      await tapOn(tester, find.text('Text Ngozi (2 of 2)'));
+
+      // No way to stop sharing except marking safe.
+      expect(find.text('Stop sharing location'), findsNothing);
+      await tapOn(tester, find.text("I'm safe"));
+      await waitFor(tester, find.textContaining("You're marked safe. Tap Send to tell Chidi"));
+      expect(launcher.launched.last, startsWith('sms:+2348055551234?body='));
+      expect(Uri.decodeComponent(launcher.launched.last),
+          contains('Ada Obi has marked themselves safe via CivicAI'));
+      await tapOn(tester, find.text('Text Ngozi (2 of 2)'));
+      expect(launcher.launched.last, startsWith('sms:+2348066661234?body='));
+      expect(find.text('Hold to send SOS'), findsOneWidget);
+    });
+
+    testWidgets('releasing early or cancelling the countdown sends nothing',
+        (tester) async {
+      api.sosContacts = [Map.of(chidi)];
+      await bootSignedIn(tester);
+      await openSos(tester);
+      final button = find.text('Hold to send SOS');
+      await tester.ensureVisible(button);
+      await pumpFor(tester, const Duration(milliseconds: 300));
+
+      // A short press is not enough.
+      final quick = await tester.startGesture(tester.getCenter(button));
+      await pumpFor(tester, const Duration(milliseconds: 700));
+      await quick.up();
+      await pumpFor(tester, const Duration(seconds: 2));
+      expect(find.textContaining('Sending in'), findsNothing);
+
+      // A full hold starts the countdown, which can still be cancelled.
+      final hold = await tester.startGesture(tester.getCenter(button));
+      await pumpFor(tester, SosScreen.holdDuration + const Duration(milliseconds: 600));
+      await hold.up();
+      await waitFor(tester, find.textContaining('Sending in'));
+      await tapOn(tester, find.text('Cancel'));
+      await pumpFor(tester, const Duration(seconds: SosScreen.countdownSeconds + 1));
+      expect(api.sent('POST', '/api/sos/alerts'), isEmpty);
+      expect(find.text('Hold to send SOS'), findsOneWidget);
+    });
+
+    testWidgets('offline: the messages app opens for each contact in turn',
+        (tester) async {
+      api.sosContacts = [Map.of(chidi), Map.of(ngozi)];
+      await bootSignedIn(tester);
+      await openSos(tester);
+      await waitFor(tester, find.text('Ikeja Medical Centre'));
+      await tapOn(tester, find.text('Security'));
+
+      api.failNetworkNext.add('POST /api/sos/alerts');
+      await holdToSend(tester);
+      await waitFor(tester, find.textContaining('No internet, so your messages app opened'));
+
+      final sms = launcher.launched.last;
+      expect(sms, startsWith('sms:+2348055551234?body='));
+      await tapOn(tester, find.text('Text Ngozi (2 of 2)'));
+      expect(launcher.launched.last, startsWith('sms:+2348066661234?body='));
+      final body = Uri.decodeComponent(sms.substring(sms.indexOf('body=') + 5));
+      expect(body, contains('SOS: Ada Obi needs help - SECURITY emergency.'));
+      expect(body, contains('https://maps.google.com/?q=6.60180,3.35150'));
+      // No alert exists server-side, so the screen stays ready to try again.
+      expect(find.text('Hold to send SOS'), findsOneWidget);
+    });
+
+    testWidgets('location updates are reported and stop when the server ends them',
+        (tester) async {
+      SosLocationTracker.debugIntervalOverride = const Duration(seconds: 1);
+      api.sosContacts = [Map.of(chidi)];
+      api.sosStopUpdates = true;
+      await bootSignedIn(tester);
+      await openSos(tester);
+      await waitFor(tester, find.text('Ikeja Medical Centre'));
+
+      await holdToSend(tester);
+      await waitFor(tester, find.text('SOS active · Medical'));
+      expect(api.sent('POST', '/api/sos/alerts').single.json['updateIntervalMinutes'], 30);
+
+      await waitForRequest(tester, 'POST', '/api/sos/alerts/SOS-1000/location');
+      final update = api.sent('POST', '/api/sos/alerts/SOS-1000/location').first.json;
+      expect(update['lat'], FakeGeolocator.latitude);
+      expect(update['lon'], FakeGeolocator.longitude);
+      expect(update['recordedAt'], isNotEmpty);
+
+      await waitFor(tester, find.text('Location updates have stopped.'));
+      expect(find.text('Stop sharing location'), findsNothing);
+      // The alert itself is still active until the citizen is safe.
+      expect(find.text("I'm safe"), findsOneWidget);
+    });
+
+    testWidgets('an alert still running is shown when SOS is reopened',
+        (tester) async {
+      api.sosActiveAlert = {
+        'publicId': 'SOS-1000', 'type': 'FIRE', 'status': 'ACTIVE',
+        'latitude': null, 'longitude': null, 'accuracy': null,
+        'updateIntervalMinutes': 30, 'lastPingedAt': null, 'pingCount': 0,
+        'updatesStoppedAt': null, 'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'resolvedAt': null,
+      };
+      await bootSignedIn(tester);
+      await openSos(tester);
+      await waitFor(tester, find.text('SOS active · Fire'));
+      expect(find.text('Your location was not available, so no location updates will be sent.'),
+          findsOneWidget);
+      expect(find.text('Hold to send SOS'), findsNothing);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Dark theme
   // ---------------------------------------------------------------------------
 
@@ -792,6 +1063,11 @@ void main() {
     Future<void> walkScreens(
         WidgetTester tester, void Function(String screen) check) async {
       check('Home');
+
+      await tapOn(tester, find.text('SOS'));
+      await waitFor(tester, find.text('Ikeja Medical Centre'));
+      check('SOS');
+      await pageBack(tester);
 
       await tapOn(tester, find.byIcon(Icons.notifications_outlined));
       await waitFor(tester, find.text('Report CR-1001 resolved'));

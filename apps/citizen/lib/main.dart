@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/app_settings_provider.dart';
+import 'core/security/app_lock.dart';
+import 'core/security/app_lock_gate.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/notifications/providers/notification_provider.dart';
 import 'features/notifications/services/notification_service.dart';
@@ -13,6 +15,9 @@ import 'features/report/providers/report_draft_provider.dart';
 import 'features/report/providers/report_history_provider.dart';
 import 'features/report/providers/report_summary_provider.dart';
 import 'features/report/providers/report_sync_provider.dart';
+import 'features/sos/providers/sos_provider.dart';
+import 'features/sos/providers/trusted_contacts_provider.dart';
+import 'features/sos/services/sos_text.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +42,7 @@ void main() {
     DeviceOrientation.portraitDown,
   ]));
   unawaited(settingsProvider.initialize());
+  unawaited(AppLock.instance.initialize());
   unawaited(authProvider.initialize());
 }
 
@@ -58,6 +64,7 @@ class CivicReportApp extends StatelessWidget {
         ChangeNotifierProvider<AppSettingsProvider>.value(
           value: settingsProvider,
         ),
+        ChangeNotifierProvider<AppLock>.value(value: AppLock.instance),
         ChangeNotifierProxyProvider<AuthProvider, ReportSummaryProvider>(
           create: (_) => ReportSummaryProvider(),
           update: (_, auth, summary) =>
@@ -88,6 +95,21 @@ class CivicReportApp extends StatelessWidget {
           create: (_) => ReportHistoryProvider(),
           update: (_, auth, history) =>
               history!..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
+        ),
+        // App-wide so an active SOS (and its location updates) keeps running
+        // while the citizen moves around the app.
+        ChangeNotifierProxyProvider<AuthProvider, TrustedContactsProvider>(
+          create: (_) => TrustedContactsProvider(),
+          update: (_, auth, contacts) => contacts!
+            ..setCitizen(auth.isAuthenticated ? auth.user?.id : null),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, SosProvider>(
+          create: (_) => SosProvider(),
+          update: (_, auth, sos) => sos!
+            ..setCitizen(
+              auth.isAuthenticated ? auth.user?.id : null,
+              citizenDisplayName(auth.user?.fullName, auth.user?.email),
+            ),
         ),
       ],
       child: _AppView(authProvider: authProvider),
@@ -131,6 +153,7 @@ class _AppViewState extends State<_AppView> {
       darkTheme: AppTheme.dark,
       themeMode: settings.themeMode,
       routerConfig: router,
+      builder: (_, child) => AppLockGate(child: child ?? const SizedBox()),
     );
   }
 }

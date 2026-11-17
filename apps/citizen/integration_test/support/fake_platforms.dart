@@ -6,6 +6,41 @@ import 'package:geocoding_platform_interface/geocoding_platform_interface.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+/// Records every URL the app opens — calls, texts, directions — instead of
+/// leaving the app for the dialer or messages, which would end the test.
+class FakeUrlLauncher extends UrlLauncherPlatform {
+  final List<String> launched = [];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => true;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launched.add(url);
+    return true;
+  }
+
+  @override
+  Future<bool> launch(
+    String url, {
+    required bool useSafariVC,
+    required bool useWebView,
+    required bool enableJavaScript,
+    required bool enableDomStorage,
+    required bool universalLinksOnly,
+    required Map<String, String> headers,
+    String? webOnlyWindowName,
+  }) async {
+    launched.add(url);
+    return true;
+  }
+}
 
 /// Stands in for the system photo picker, which an integration test cannot
 /// drive. Returns a real image file so the app's decode, thumbnail and

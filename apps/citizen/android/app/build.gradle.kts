@@ -56,3 +56,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // AppCompat themes (res/values*/styles.xml): local_auth's fingerprint/PIN
+    // prompt for the app lock crashes on Android 8 and below without them.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}

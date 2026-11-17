@@ -61,6 +61,7 @@ dependencies:
   share_plus: ^12.0.2
   connectivity_plus: ^7.0.0
   path_provider: ^2.1.5
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +74,8 @@ dev_dependencies:
   image_picker_platform_interface: ^2.11.1
   geolocator_platform_interface: ^4.4.0
   geocoding_platform_interface: ^3.2.0
+  # Records tel:/sms: launches from SOS instead of opening the dialer.
+  url_launcher_platform_interface: ^2.3.2
 
 flutter:
   uses-material-design: true

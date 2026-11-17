@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:civic_report/features/sos/services/sos_text.dart'
+    show normalizePhone;
 import 'package:dio/dio.dart';
 
 /// A recorded request, for asserting on what the app actually sent.
@@ -89,10 +91,43 @@ class FakeBackend extends Interceptor {
   static Map<String, dynamic> category(String id) =>
       categories.firstWhere((c) => c['id'] == id);
 
+  // --- SOS -------------------------------------------------------------------
+
+  /// Keyed `METHOD /path`. The next matching request fails as if offline.
+  final Set<String> failNetworkNext = {};
+  late List<Map<String, dynamic>> sosContacts;
+  Map<String, dynamic>? sosActiveAlert;
+  bool sosSmsEnabled = true;
+  static const sosTrackingUrl = 'https://civic.example/t/AbCdEfGhIjKlMnOpQrStUv';
+
+  /// What `/location` answers with `stopUpdates`.
+  bool sosStopUpdates = false;
+  int _nextContact = 1;
+
+  /// Nearest first, as the API returns them.
+  static const sosFacilities = <Map<String, dynamic>>[
+    {
+      'id': 'osm-h1', 'name': 'Ikeja Medical Centre', 'kind': 'HOSPITAL',
+      'agency': null, 'address': 'Allen Avenue, Ikeja', 'phones': ['08011112222'],
+      'latitude': 6.6030, 'longitude': 3.3520, 'distanceMeters': 140, 'source': 'OSM',
+    },
+    {
+      'id': 'osm-h2', 'name': 'Lagos State University Teaching Hospital', 'kind': 'HOSPITAL',
+      'agency': null, 'address': 'Oba Akinjobi Way, Ikeja', 'phones': <String>[],
+      'latitude': 6.5960, 'longitude': 3.3530, 'distanceMeters': 2400, 'source': 'OSM',
+    },
+  ];
+
   void reset() {
     requests.clear();
     unhandled.clear();
     failNext.clear();
+    failNetworkNext.clear();
+    sosContacts = [];
+    sosActiveAlert = null;
+    sosSmsEnabled = true;
+    sosStopUpdates = false;
+    _nextContact = 1;
     reportUpdatesEnabled = true;
     _nextReport = 2001;
     user = {
@@ -195,6 +230,18 @@ class FakeBackend extends Interceptor {
     final path = options.path;
     requests.add(RecordedRequest(method, path, options));
 
+    if (failNetworkNext.remove('$method $path')) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.connectionError,
+          message: 'Simulated offline',
+        ),
+        true,
+      );
+      return;
+    }
+
     final failure = failNext.remove('$method $path');
     if (failure != null) {
       _reject(handler, options, failure.status, failure.body);
@@ -271,8 +318,93 @@ class FakeBackend extends Interceptor {
         return ok({'reportUpdatesEnabled': reportUpdatesEnabled});
       case 'GET /api/geo/search':
         return ok({'results': placeResults});
+      case 'GET /api/sos/contacts':
+        return ok({'contacts': sosContacts, 'max': 5, 'smsEnabled': sosSmsEnabled});
+      case 'POST /api/sos/contacts':
+        if (sosContacts.length >= 5) {
+          return (status: 409, body: {'error': 'You can add up to 5 trusted contacts'});
+        }
+        final body = Map<String, dynamic>.from(o.data as Map);
+        final contact = {
+          'id': 'tc-${_nextContact++}',
+          'name': body['name'],
+          'phone': normalizePhone(body['phone'] as String),
+          'relationship': body['relationship'],
+        };
+        sosContacts.add(contact);
+        return (status: 201, body: {'contact': contact});
+      case 'GET /api/sos/nearby':
+        return ok({
+          'facilities': sosFacilities,
+          'hotlines': [
+            {'id': 'ng-112', 'label': 'National Emergency', 'number': '112',
+              'description': 'Toll-free from any network.', 'sourceUrl': 'https://www.ncc.gov.ng/'},
+          ],
+          'partial': false,
+        });
+      case 'GET /api/sos/alerts/active':
+        return ok({'alert': sosActiveAlert});
+      case 'POST /api/sos/alerts':
+        final body = Map<String, dynamic>.from(o.data as Map);
+        sosActiveAlert = {
+          'publicId': 'SOS-1000',
+          'type': body['type'],
+          'status': 'ACTIVE',
+          'latitude': body['lat'],
+          'longitude': body['lon'],
+          'accuracy': body['accuracy'],
+          'updateIntervalMinutes': body['updateIntervalMinutes'],
+          'lastPingedAt': body['lat'] == null ? null : DateTime.now().toUtc().toIso8601String(),
+          'pingCount': 0,
+          'updatesStoppedAt': null,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'resolvedAt': null,
+          'trackingUrl': sosTrackingUrl,
+        };
+        return (status: 201, body: {
+          'alert': sosActiveAlert!,
+          'contactsQueued': sosSmsEnabled ? sosContacts.length : 0,
+          'smsEnabled': sosSmsEnabled,
+          'message': 'SOS from Ada Obi via CivicAI: ${body['type']} emergency. '
+              'Live location: $sosTrackingUrl',
+        });
+      case 'POST /api/sos/alerts/SOS-1000/location':
+        return ok({
+          'pinged': true,
+          'stopUpdates': sosStopUpdates,
+          'nextUpdateAfter': sosStopUpdates
+              ? null
+              : DateTime.now().toUtc().add(const Duration(minutes: 15)).toIso8601String(),
+        });
+      case 'POST /api/sos/alerts/SOS-1000/safe':
+        final resolved = {...?sosActiveAlert, 'status': 'RESOLVED'};
+        sosActiveAlert = null;
+        return ok({
+          'alert': resolved,
+          'smsEnabled': sosSmsEnabled,
+          'message': 'Ada Obi has marked themselves safe via CivicAI. No further SOS updates will be sent.',
+        });
       case 'GET /api/notifications/':
         return ok({'notifications': notifications});
+    }
+
+    final contact = RegExp(r'^/api/sos/contacts/([^/]+)$').firstMatch(path);
+    if (contact != null && (method == 'PATCH' || method == 'DELETE')) {
+      final index = sosContacts.indexWhere((c) => c['id'] == contact.group(1));
+      if (index < 0) return (status: 404, body: {'error': 'Contact not found'});
+      if (method == 'DELETE') {
+        sosContacts.removeAt(index);
+        return (status: 204, body: <String, dynamic>{});
+      }
+      final body = Map<String, dynamic>.from(o.data as Map);
+      final relationship = body['relationship'] as String?;
+      sosContacts[index] = {
+        ...sosContacts[index],
+        'name': body['name'],
+        'phone': normalizePhone(body['phone'] as String),
+        'relationship': (relationship == null || relationship.isEmpty) ? null : relationship,
+      };
+      return ok({'contact': sosContacts[index]});
     }
 
     final read = RegExp(r'^/api/notifications/([^/]+)/read$').firstMatch(path);

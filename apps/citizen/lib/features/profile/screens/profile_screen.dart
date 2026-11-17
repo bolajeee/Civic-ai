@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/providers/app_settings_provider.dart';
+import '../../../core/security/app_lock.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../report/models/relative_time.dart';
@@ -264,6 +265,11 @@ class _SettingsCard extends StatelessWidget {
               label: 'Notifications',
               onTap: () => context.push(AppRoutes.notifications)),
           _SettingsRow(
+              icon: Icons.contact_emergency_outlined,
+              label: 'Trusted Contacts',
+              onTap: () => context.push(AppRoutes.sosContacts)),
+          const _AppLockRow(),
+          _SettingsRow(
               icon: Icons.dark_mode_outlined,
               label: 'Appearance',
               trailing: Text(_themeLabel(themeMode),
@@ -284,6 +290,41 @@ class _SettingsCard extends StatelessWidget {
               onTap: () => context.read<AuthProvider>().logout()),
         ]),
       );
+}
+
+/// Turns the optional app lock on or off. Either way the phone checks it is
+/// the citizen first.
+class _AppLockRow extends StatelessWidget {
+  const _AppLockRow();
+
+  Future<void> _toggle(BuildContext context, bool value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final problem = await context.read<AppLock>().setEnabled(value);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(problem ??
+            (value
+                ? 'App lock is on. Civic Report will ask to unlock when you '
+                    'open it.'
+                : 'App lock is off.')),
+      ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lock = context.watch<AppLock>();
+    return _SettingsRow(
+      icon: Icons.lock_outline_rounded,
+      label: 'App Lock',
+      onTap: lock.authenticating ? null : () => _toggle(context, !lock.enabled),
+      trailing: Switch(
+        value: lock.enabled,
+        onChanged:
+            lock.authenticating ? null : (value) => _toggle(context, value),
+      ),
+    );
+  }
 }
 
 class _SettingsRow extends StatelessWidget {
