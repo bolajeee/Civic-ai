@@ -112,6 +112,15 @@ following release gates remain open:
 
 ## 7. Citizen mobile application
 
+### SOS (see [SOS](sos.md))
+
+- [ ] Configure the SMS provider with an approved sender ID and send a real alert, update and safe message to a test phone (including one on the DND register).
+- [ ] Verify every hotline shown against the agency's official source; record the source URL.
+- [ ] Load curated facilities (paramilitary commands at minimum) from official sources, each with `source_url` and `verified_at`.
+- [ ] Agree and implement a retention period for `sos_location_updates`, `sos_alerts` and `sos_sms_deliveries`.
+- [ ] Test background location updates on a physical iPhone (and on Android with the screen off) for the full update cycle.
+- [ ] Confirm the offline SMS fallback opens the messaging app with all contacts on Android and iOS.
+
 ### Shared
 
 - [ ] Replace the `com.example` Android/iOS identifiers with the registered production application identifiers.
