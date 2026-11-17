@@ -9,6 +9,8 @@ import authRoutes from './routes/auth';
 import govAuthRoutes from './routes/gov-auth';
 import reportRoutes from './routes/reports';
 import geoRoutes from './routes/geo';
+import sosRoutes from './routes/sos';
+import sosTrackRoutes from './routes/sos-track';
 import { startClassificationWorker } from './ai/classification_worker';
 import { isClassificationEnabled } from './ai/classification';
 import { startEmbeddingWorker } from './ai/embedding_worker';
@@ -33,6 +35,8 @@ import govStatesRoutes from './routes/gov-states';
 import observabilityRoutes from './routes/observability';
 import notificationRoutes from './routes/notifications';
 import { startPushWorker } from './notifications/push_worker';
+import { startSmsWorker } from './notifications/sms_worker';
+import { isSmsEnabled, isSmsProviderConfigured } from './lib/sms';
 import { isPushDeliveryEnabled } from './lib/firebase-push';
 import { startVisualEmbeddingWorker } from './ai/visual_embedding_worker';
 import { isVisualEmbeddingEnabled } from './ai/visual_embedding';
@@ -62,6 +66,7 @@ let stopClusteringWorker = () => {};
 let stopSeverityWorker = () => {};
 let stopPriorityWorker = () => {};
 let stopPushWorker = () => {};
+let stopSmsWorker = () => {};
 
 fastify.addHook('onClose', async () => {
   stopAIClassificationWorker();
@@ -72,6 +77,7 @@ fastify.addHook('onClose', async () => {
   stopSeverityWorker();
   stopPriorityWorker();
   stopPushWorker();
+  stopSmsWorker();
   await pool.end();
 });
 
@@ -110,6 +116,7 @@ fastify.register(rateLimit, {
   max: (request) => {
     if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/gov/auth')) return 30;
     if (request.url.startsWith('/api/geo/search')) return 20;
+    if (request.url.startsWith('/api/sos/nearby')) return 30;
     return 300;
   },
   timeWindow: '1 minute',
@@ -135,6 +142,9 @@ fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(govAuthRoutes, { prefix: '/api/gov/auth' });
 fastify.register(reportRoutes, { prefix: '/api/reports' });
 fastify.register(geoRoutes, { prefix: '/api/geo' });
+fastify.register(sosRoutes, { prefix: '/api/sos' });
+// Public: the live tracking page trusted contacts open from the SOS text.
+fastify.register(sosTrackRoutes);
 fastify.register(notificationRoutes, { prefix: '/api/notifications' });
 fastify.register(govPriorityRoutes, { prefix: '/api/gov/issue-clusters' });
 fastify.register(govDashboardRoutes, { prefix: '/api/gov/dashboard' });
@@ -173,6 +183,11 @@ const start = async () => {
     stopSeverityWorker = startSeverityWorker(fastify.log);
     stopPriorityWorker = startPriorityWorker(fastify.log);
     stopPushWorker = startPushWorker(fastify.log);
+    stopSmsWorker = startSmsWorker(fastify.log);
+    fastify.log.info(
+      { enabled: isSmsEnabled(), provider: isSmsProviderConfigured() ? process.env.SMS_PROVIDER : 'device' },
+      'SOS SMS worker configuration',
+    );
     fastify.log.info({ enabled: isPushDeliveryEnabled() }, 'Citizen push worker configuration');
     fastify.log.info({ enabled: isPriorityEnabled() }, 'Cluster priority worker configuration');
     fastify.log.info({ enabled: isSeverityEnabled() }, 'AI severity worker configuration');
