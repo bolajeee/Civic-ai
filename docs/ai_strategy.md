@@ -48,6 +48,8 @@ features already delivered by the clustering worker.
 ## Model Strategy (MVP)
 Do not train five sophisticated models from scratch for the MVP. Start with pretrained vision models tailored with Nigerian civic datasets and standard embedding models for similarity.
 
+For hosted APIs versus open-source models (CLIP/SigLIP for photo comparison), what a switch would change, and candidate test datasets, see [AI Models: Hosted APIs vs Open-Source](ai-models.md). That proposal is on hold.
+
 ## Phase 3 First Slice: Image Classification
 
 - Classify the first supported uploaded photo into the category table's current slugs, or UNSURE.
