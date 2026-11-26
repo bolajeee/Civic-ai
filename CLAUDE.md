@@ -49,6 +49,10 @@ Each package is installed and run from its own directory. CI (`.github/workflows
 - `go_router` for navigation, `provider` for state, `dio` for HTTP, `flutter_secure_storage` for tokens.
 - API base URL comes from `--dart-define=API_BASE_URL` (default `10.0.2.2:3000` on the Android emulator, `127.0.0.1:3000` elsewhere). Google/Apple sign-in and push also need `--dart-define` values (`docs/citizen-auth.md`, `docs/notifications.md`).
 
+## Claude Code setup (`.claude/`)
+- Skills: `new-migration` (any schema change) and `new-gov-route` (any `/api/gov/*` endpoint). They hold the RLS and state-scoping checklists; follow them rather than improvising.
+- Hook: after any edit to a `.ts`/`.tsx` file in `services/api` or `apps/government`, `.claude/hooks/typecheck.sh` runs `tsc --noEmit` for that package and reports errors back. It stays silent until that package's `node_modules` is installed.
+
 ## Conventions
 - Comments explain *why* (constraints, failure modes), not what. Follow the existing style in `src/db.ts` and the migrations.
 - Use sentence case for UI copy in both apps.
